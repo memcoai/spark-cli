@@ -6,7 +6,6 @@ export {
   shareFeedback,
   getCurrentUser,
   getApiKey,
-  getAuthToken,
   apiRequest,
   callTool,
 } from './api.js';
