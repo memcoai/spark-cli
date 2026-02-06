@@ -6,15 +6,12 @@ import { randomBytes, createHash } from 'crypto';
 import { URL } from 'url';
 import open from 'open';
 import { getCurrentUser } from '../api.js';
+import { getClientId, getOAuthEndpoints } from '../oauth.js';
 import { output, outputError, outputSuccess } from '../output.js';
 import { printBanner, printSuccess, printError, printInfo, createSpinner } from '../banner.js';
 
 const SPARK_DIR = join(homedir(), '.spark');
 const CREDENTIALS_PATH = join(SPARK_DIR, 'credentials.json');
-const WORKOS_AUTH_URL = 'https://api.workos.com/user_management/authorize';
-const WORKOS_TOKEN_URL = 'https://api.workos.com/user_management/authenticate';
-const API_BASE = 'https://spark.memco.ai';
-const CLIENT_ID = 'client_01K9FH88F84YY50V7RA6YW6KDF'; // TODO: Replace with CLI-specific client_id
 const CALLBACK_PORT = 8789;
 
 /**
@@ -136,17 +133,20 @@ function startCallbackServer(expectedState, codeVerifier) {
 /**
  * Exchange authorization code for tokens via WorkOS
  */
-async function exchangeCodeForTokens(code, codeVerifier) {
-  const response = await fetch(WORKOS_TOKEN_URL, {
+async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
+  const { tokenEndpoint } = await getOAuthEndpoints();
+  const clientId = await getClientId(redirectUri);
+  const response = await fetch(tokenEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       grant_type: 'authorization_code',
-      client_id: CLIENT_ID,
+      client_id: clientId,
       code,
       code_verifier: codeVerifier,
+      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
     }),
   });
 
@@ -171,14 +171,16 @@ async function exchangeCodeForTokens(code, codeVerifier) {
  * Refresh access token using refresh token via WorkOS
  */
 export async function refreshAccessToken(refreshToken) {
-  const response = await fetch(WORKOS_TOKEN_URL, {
+  const { tokenEndpoint } = await getOAuthEndpoints();
+  const clientId = await getClientId();
+  const response = await fetch(tokenEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       grant_type: 'refresh_token',
-      client_id: CLIENT_ID,
+      client_id: clientId,
       refresh_token: refreshToken,
     }),
   });
@@ -258,11 +260,14 @@ export async function loginCommand(options, command) {
     if (serverInfo.server) {
       const { server } = serverInfo;
 
-      // Build WorkOS authorization URL
-      const authUrl = new URL(WORKOS_AUTH_URL);
-      authUrl.searchParams.set('client_id', CLIENT_ID);
+      // Build OAuth authorization URL from discovery
+      const { authorizationEndpoint } = await getOAuthEndpoints();
+      const authUrl = new URL(authorizationEndpoint);
       authUrl.searchParams.set('provider', 'authkit');
-      authUrl.searchParams.set('redirect_uri', `http://localhost:${CALLBACK_PORT}/callback`);
+      const redirectUri = `http://localhost:${CALLBACK_PORT}/callback`;
+      const clientId = await getClientId(redirectUri);
+      authUrl.searchParams.set('client_id', clientId);
+      authUrl.searchParams.set('redirect_uri', redirectUri);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('code_challenge', codeChallenge);
       authUrl.searchParams.set('code_challenge_method', 'S256');
@@ -373,7 +378,11 @@ export async function loginCommand(options, command) {
         const tokenSpinner = createSpinner('Exchanging code for tokens...');
 
         try {
-          const tokens = await exchangeCodeForTokens(result.code, result.codeVerifier);
+          const tokens = await exchangeCodeForTokens(
+            result.code,
+            result.codeVerifier,
+            redirectUri
+          );
 
           // Save credentials
           saveCredentials({

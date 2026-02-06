@@ -1,10 +1,7 @@
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-
-const API_BASE = 'https://spark.memco.ai';
-const WORKOS_TOKEN_URL = 'https://api.workos.com/user_management/authenticate';
-const CLIENT_ID = 'client_01K9FH88F84YY50V7RA6YW6KDF'; // TODO: Replace with CLI-specific client_id
+import { API_BASE, getBearerMethods, getClientId, getOAuthEndpoints } from './oauth.js';
 const SPARK_DIR = join(homedir(), '.spark');
 const CREDENTIALS_PATH = join(SPARK_DIR, 'credentials.json');
 
@@ -47,14 +44,16 @@ async function refreshToken(credentials) {
     throw new Error('No refresh token available');
   }
 
-  const response = await fetch(WORKOS_TOKEN_URL, {
+  const { tokenEndpoint } = await getOAuthEndpoints();
+  const clientId = await getClientId();
+  const response = await fetch(tokenEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       grant_type: 'refresh_token',
-      client_id: CLIENT_ID,
+      client_id: clientId,
       refresh_token: credentials.refreshToken,
     }),
   });
@@ -163,6 +162,7 @@ function getParentOptions(command) {
  * Make an API request to the Spark backend
  */
 export async function apiRequest(endpoint, method = 'GET', body = null, command = null) {
+  let requestEndpoint = endpoint;
   const parentOpts = command ? getParentOptions(command) : {};
   const auth = await getAuthToken({ apiKey: parentOpts.apiKey });
 
@@ -172,7 +172,22 @@ export async function apiRequest(endpoint, method = 'GET', body = null, command 
   };
 
   if (auth) {
-    headers['Authorization'] = `Bearer ${auth.token}`;
+    if (auth.type === 'oauth') {
+      const bearerMethods = await getBearerMethods();
+      const supported = new Set(bearerMethods || ['header', 'authorization_header']);
+
+      if (supported.has('header') || supported.has('authorization_header')) {
+        headers['Authorization'] = `Bearer ${auth.token}`;
+      } else if (supported.has('query')) {
+        const requestUrl = new URL(`${API_BASE}${requestEndpoint}`);
+        requestUrl.searchParams.set('access_token', auth.token);
+        requestEndpoint = `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
+      } else {
+        throw new Error('OAuth bearer method not supported by server');
+      }
+    } else {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    }
   }
 
   const options = {
@@ -184,7 +199,7 @@ export async function apiRequest(endpoint, method = 'GET', body = null, command 
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, options);
+  const response = await fetch(`${API_BASE}${requestEndpoint}`, options);
 
   if (!response.ok) {
     const error = await response.text();
@@ -198,7 +213,7 @@ export async function apiRequest(endpoint, method = 'GET', body = null, command 
  * Call a Spark API tool (mirrors MCP tool interface)
  */
 export async function callTool(toolName, params, command = null) {
-  return apiRequest('/api/tools/' + toolName, 'POST', params, command);
+  return apiRequest(`/api/internal/v1/tools/${toolName}`, 'POST', params, command);
 }
 
 /**
@@ -212,7 +227,7 @@ export async function getRecommendation(query, environment = [], task = [], comm
  * Get detailed insights for a task
  */
 export async function getInsights(sessionId, taskIdx, command = null) {
-  return callTool('get_insights', { session_id: sessionId, task_idx: taskIdx }, command);
+  return callTool('get_insights', { session_id: sessionId, task_idx: String(taskIdx) }, command);
 }
 
 /**
@@ -233,5 +248,5 @@ export async function shareFeedback(sessionId, feedback, command = null) {
  * Get current user info
  */
 export async function getCurrentUser(command = null) {
-  return apiRequest('/api/user', 'GET', null, command);
+  return apiRequest('/api/internal/v1/user', 'GET', null, command);
 }
