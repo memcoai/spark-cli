@@ -12,9 +12,9 @@ const RED = '\x1b[31m';
  */
 function formatLabel(key) {
   return key
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/[_-]/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replaceAll(/([A-Z])/g, ' $1')
+    .replaceAll(/[_-]/g, ' ')
+    .replaceAll(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 }
 

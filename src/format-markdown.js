@@ -35,8 +35,7 @@ export function formatMarkdown(text) {
     // Headings
     const headingMatch = line.match(/^(#{1,3})\s+(.+)/);
     if (headingMatch) {
-      result.push('');
-      result.push(colorize(BOLD + YELLOW, headingMatch[2]));
+      result.push('', colorize(BOLD + YELLOW, headingMatch[2]));
       continue;
     }
 
@@ -80,19 +79,19 @@ function applyInlineFormatting(line) {
   let formatted = line;
 
   // Bold: **text**
-  formatted = formatted.replace(/\*\*(.+?)\*\*/g, (_, t) => colorize(BOLD, t));
+  formatted = formatted.replaceAll(/\*\*(.+?)\*\*/g, (_, t) => colorize(BOLD, t));
 
   // Italic: *text* (not preceded/followed by *)
-  formatted = formatted.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, (_, t) => colorize(ITALIC, t));
+  formatted = formatted.replaceAll(/(?<!\*)\*([^*]+?)\*(?!\*)/g, (_, t) => colorize(ITALIC, t));
 
   // Italic: _text_ (not preceded/followed by _)
-  formatted = formatted.replace(/(?<!_)_([^_]+?)_(?!_)/g, (_, t) => colorize(ITALIC, t));
+  formatted = formatted.replaceAll(/(?<!_)_([^_]+?)_(?!_)/g, (_, t) => colorize(ITALIC, t));
 
   // Inline code: `code`
-  formatted = formatted.replace(/`([^`]+)`/g, (_, t) => colorize(DIM, t));
+  formatted = formatted.replaceAll(/`([^`]+)`/g, (_, t) => colorize(DIM, t));
 
   // Links: [text](url)
-  formatted = formatted.replace(
+  formatted = formatted.replaceAll(
     /\[([^\]]+)]\(([^)]+)\)/g,
     (_, text, url) => `${text} (${colorize(CYAN, url)})`,
   );
