@@ -1,20 +1,10 @@
 import { describe, it, mock, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { shareCommand } from '../../src/commands/share.js';
+import { setupCommandMocks, getErrorOutput } from '../helpers.js';
 
 describe('shareCommand', () => {
-  let logMock;
-  let exitMock;
-
-  beforeEach(() => {
-    logMock = mock.method(console, 'log');
-    exitMock = mock.method(process, 'exit', () => {});
-  });
-
-  afterEach(() => {
-    logMock.mock.restore();
-    exitMock.mock.restore();
-  });
+  const mocks = setupCommandMocks();
 
   it('errors on invalid env tag format', async () => {
     await shareCommand(
@@ -27,8 +17,8 @@ describe('shareCommand', () => {
       null,
     );
 
-    assert.strictEqual(exitMock.mock.calls.length, 1);
-    const output = JSON.parse(logMock.mock.calls[0].arguments[0]);
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
     assert.strictEqual(output.error, true);
     assert.match(output.message, /Invalid tag/);
   });
@@ -44,8 +34,8 @@ describe('shareCommand', () => {
       null,
     );
 
-    assert.strictEqual(exitMock.mock.calls.length, 1);
-    const output = JSON.parse(logMock.mock.calls[0].arguments[0]);
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
     assert.match(output.message, /Invalid tag/);
   });
 
@@ -60,40 +50,41 @@ describe('shareCommand', () => {
       null,
     );
 
-    assert.strictEqual(exitMock.mock.calls.length, 1);
-    const output = JSON.parse(logMock.mock.calls[0].arguments[0]);
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
     assert.match(output.message, /Invalid version/);
   });
 
-  it('passes task_idx as string when taskIndex is "new"', async () => {
-    const originalKey = process.env.SPARK_API_KEY;
-    process.env.SPARK_API_KEY = 'test-key';
-    const fetchMock = mock.method(globalThis, 'fetch', () =>
-      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-    );
+  describe('API calls', () => {
+    let fetchMock;
+    let originalKey;
 
-    await shareCommand('session-1', { title: 'T', content: 'C', taskIndex: 'new' }, null);
+    beforeEach(() => {
+      originalKey = process.env.SPARK_API_KEY;
+      process.env.SPARK_API_KEY = 'test-key';
+      fetchMock = mock.method(globalThis, 'fetch', () =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+      );
+    });
 
-    const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
-    assert.strictEqual(body.task_idx, 'new');
-    fetchMock.mock.restore();
-    if (originalKey === undefined) delete process.env.SPARK_API_KEY;
-    else process.env.SPARK_API_KEY = originalKey;
-  });
+    afterEach(() => {
+      fetchMock.mock.restore();
+      if (originalKey === undefined) delete process.env.SPARK_API_KEY;
+      else process.env.SPARK_API_KEY = originalKey;
+    });
 
-  it('passes numeric task_idx as string', async () => {
-    const originalKey = process.env.SPARK_API_KEY;
-    process.env.SPARK_API_KEY = 'test-key';
-    const fetchMock = mock.method(globalThis, 'fetch', () =>
-      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-    );
+    it('passes task_idx as string when taskIndex is "new"', async () => {
+      await shareCommand('session-1', { title: 'T', content: 'C', taskIndex: 'new' }, null);
 
-    await shareCommand('session-1', { title: 'T', content: 'C', taskIndex: '5' }, null);
+      const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
+      assert.strictEqual(body.task_idx, 'new');
+    });
 
-    const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
-    assert.strictEqual(body.task_idx, '5');
-    fetchMock.mock.restore();
-    if (originalKey === undefined) delete process.env.SPARK_API_KEY;
-    else process.env.SPARK_API_KEY = originalKey;
+    it('passes numeric task_idx as string', async () => {
+      await shareCommand('session-1', { title: 'T', content: 'C', taskIndex: '5' }, null);
+
+      const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
+      assert.strictEqual(body.task_idx, '5');
+    });
   });
 });
