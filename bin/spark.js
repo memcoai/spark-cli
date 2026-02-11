@@ -24,8 +24,8 @@ program
 
 // Query command
 program
-  .command('query <error>')
-  .description('Query for solutions to an error or problem')
+  .command('query <query>')
+  .description('Query for solutions to a problem')
   .option('-e, --env <items>', 'Environment tags (comma-separated, e.g., node:20,react:18)')
   .option('-t, --tags <items>', 'Task tags (comma-separated, e.g., typescript,nextjs)')
   .action(queryCommand);

@@ -1,6 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
+import { existsSync, readFileSync, unlinkSync } from 'fs';
 import { createServer } from 'http';
 import { randomBytes, createHash } from 'crypto';
 import { URL } from 'url';
@@ -9,10 +7,8 @@ import { getCurrentUser } from '../api.js';
 import { getClientId, getOAuthEndpoints } from '../oauth.js';
 import { output, outputError, outputSuccess } from '../output.js';
 import { printBanner, printSuccess, printError, printInfo, createSpinner } from '../banner.js';
-
-const SPARK_DIR = join(homedir(), '.spark');
-const CREDENTIALS_PATH = join(SPARK_DIR, 'credentials.json');
-const CALLBACK_PORT = 8789;
+import { CREDENTIALS_PATH, CALLBACK_PORT } from '../constants.js';
+import { saveCredentials } from '../credentials.js';
 
 /**
  * Generate PKCE code verifier (random string)
@@ -36,85 +32,12 @@ function generateState() {
 }
 
 /**
- * Start local server to receive OAuth callback
+ * Start local server to receive OAuth callback.
+ * Returns { server, port } — request handling is done by the caller.
  */
-function startCallbackServer(expectedState, codeVerifier) {
+function startCallbackServer() {
   return new Promise((resolve, reject) => {
-    const server = createServer((req, res) => {
-      const url = new URL(req.url, `http://localhost:${CALLBACK_PORT}`);
-
-      if (url.pathname === '/callback') {
-        const code = url.searchParams.get('code');
-        const state = url.searchParams.get('state');
-        const error = url.searchParams.get('error');
-        const errorDescription = url.searchParams.get('error_description');
-
-        if (error) {
-          res.writeHead(400, { 'Content-Type': 'text/html' });
-          res.end(`
-            <html>
-              <body style="font-family: system-ui; padding: 40px; text-align: center;">
-                <h1>Authentication Failed</h1>
-                <p>${errorDescription || error}</p>
-                <p>You can close this window.</p>
-              </body>
-            </html>
-          `);
-          server.close();
-          reject(new Error(errorDescription || error));
-          return;
-        }
-
-        if (state !== expectedState) {
-          res.writeHead(400, { 'Content-Type': 'text/html' });
-          res.end(`
-            <html>
-              <body style="font-family: system-ui; padding: 40px; text-align: center;">
-                <h1>Authentication Failed</h1>
-                <p>Invalid state parameter. This could be a CSRF attack.</p>
-                <p>You can close this window.</p>
-              </body>
-            </html>
-          `);
-          server.close();
-          reject(new Error('Invalid state parameter'));
-          return;
-        }
-
-        if (!code) {
-          res.writeHead(400, { 'Content-Type': 'text/html' });
-          res.end(`
-            <html>
-              <body style="font-family: system-ui; padding: 40px; text-align: center;">
-                <h1>Authentication Failed</h1>
-                <p>No authorization code received.</p>
-                <p>You can close this window.</p>
-              </body>
-            </html>
-          `);
-          server.close();
-          reject(new Error('No authorization code received'));
-          return;
-        }
-
-        // Success response
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`
-          <html>
-            <body style="font-family: system-ui; padding: 40px; text-align: center;">
-              <h1>Authentication Successful</h1>
-              <p>You can close this window and return to the terminal.</p>
-            </body>
-          </html>
-        `);
-
-        server.close();
-        resolve({ code, codeVerifier });
-      } else {
-        res.writeHead(404);
-        res.end('Not found');
-      }
-    });
+    const server = createServer();
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
@@ -131,7 +54,78 @@ function startCallbackServer(expectedState, codeVerifier) {
 }
 
 /**
- * Exchange authorization code for tokens via WorkOS
+ * Send an HTML response
+ */
+function sendHtml(res, statusCode, title, message) {
+  res.writeHead(statusCode, { 'Content-Type': 'text/html' });
+  res.end(`
+    <html>
+      <body style="font-family: system-ui; padding: 40px; text-align: center;">
+        <h1>${title}</h1>
+        <p>${message}</p>
+        <p>You can close this window.</p>
+      </body>
+    </html>
+  `);
+}
+
+/**
+ * Wait for the OAuth callback on the server.
+ * Returns { code, codeVerifier } on success.
+ */
+function waitForCallback(server, expectedState, codeVerifier) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      server.close();
+      reject(new Error('Authentication timed out after 5 minutes'));
+    }, 5 * 60 * 1000);
+
+    server.on('request', (req, res) => {
+      const url = new URL(req.url, `http://localhost:${CALLBACK_PORT}`);
+
+      if (url.pathname !== '/callback') {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+
+      clearTimeout(timeout);
+
+      const code = url.searchParams.get('code');
+      const state = url.searchParams.get('state');
+      const error = url.searchParams.get('error');
+      const errorDescription = url.searchParams.get('error_description');
+
+      if (error) {
+        sendHtml(res, 400, 'Authentication Failed', errorDescription || error);
+        server.close();
+        reject(new Error(errorDescription || error));
+        return;
+      }
+
+      if (state !== expectedState) {
+        sendHtml(res, 400, 'Authentication Failed', 'Security validation failed. Please try again.');
+        server.close();
+        reject(new Error('Invalid state parameter'));
+        return;
+      }
+
+      if (!code) {
+        sendHtml(res, 400, 'Authentication Failed', 'No authorization code received.');
+        server.close();
+        reject(new Error('No authorization code received'));
+        return;
+      }
+
+      sendHtml(res, 200, 'Authentication Successful', 'You can close this window and return to the terminal.');
+      server.close();
+      resolve({ code, codeVerifier });
+    });
+  });
+}
+
+/**
+ * Exchange authorization code for tokens
  */
 async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
   const { tokenEndpoint } = await getOAuthEndpoints();
@@ -157,41 +151,6 @@ async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
 
   const data = await response.json();
 
-  // WorkOS returns { user, accessToken, refreshToken, ... }
-  return {
-    access_token: data.accessToken || data.access_token,
-    refresh_token: data.refreshToken || data.refresh_token,
-    expires_in: data.expiresIn || data.expires_in,
-    token_type: 'Bearer',
-    user: data.user,
-  };
-}
-
-/**
- * Refresh access token using refresh token via WorkOS
- */
-export async function refreshAccessToken(refreshToken) {
-  const { tokenEndpoint } = await getOAuthEndpoints();
-  const clientId = await getClientId();
-  const response = await fetch(tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      grant_type: 'refresh_token',
-      client_id: clientId,
-      refresh_token: refreshToken,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Token refresh failed: ${error}`);
-  }
-
-  const data = await response.json();
-
   return {
     access_token: data.accessToken || data.access_token,
     refresh_token: data.refreshToken || data.refresh_token,
@@ -203,9 +162,8 @@ export async function refreshAccessToken(refreshToken) {
 /**
  * Login command handler - OAuth PKCE flow
  */
-export async function loginCommand(options, command) {
+export async function loginCommand(_options, _command) {
   try {
-    // Show the banner
     printBanner();
     console.log('');
 
@@ -245,185 +203,90 @@ export async function loginCommand(options, command) {
     // Start local callback server
     let serverInfo;
     try {
-      serverInfo = await startCallbackServer(state, codeVerifier);
+      serverInfo = await startCallbackServer();
     } catch (err) {
       printError(`Failed to start callback server: ${err.message}`);
       console.log('');
-      console.log('\x1b[33mAlternative:\x1b[0m Use an API key instead:');
-      console.log('  1. Visit: \x1b[36mhttps://spark.memco.ai/settings/api\x1b[0m');
-      console.log('  2. Generate an API key');
-      console.log('  3. Run: \x1b[33mexport SPARK_API_KEY=your_api_key\x1b[0m');
+      printApiKeyFallback();
       return;
     }
 
-    // If we got a server back, we need to wait for the callback
-    if (serverInfo.server) {
-      const { server } = serverInfo;
+    const { server } = serverInfo;
+    const redirectUri = `http://localhost:${CALLBACK_PORT}/callback`;
 
-      // Build OAuth authorization URL from discovery
-      const { authorizationEndpoint } = await getOAuthEndpoints();
-      const authUrl = new URL(authorizationEndpoint);
-      authUrl.searchParams.set('provider', 'authkit');
-      const redirectUri = `http://localhost:${CALLBACK_PORT}/callback`;
-      const clientId = await getClientId(redirectUri);
-      authUrl.searchParams.set('client_id', clientId);
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('code_challenge', codeChallenge);
-      authUrl.searchParams.set('code_challenge_method', 'S256');
-      authUrl.searchParams.set('state', state);
+    // Build OAuth authorization URL
+    const { authorizationEndpoint } = await getOAuthEndpoints();
+    const authUrl = new URL(authorizationEndpoint);
+    authUrl.searchParams.set('provider', 'authkit');
+    const clientId = await getClientId(redirectUri);
+    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('code_challenge', codeChallenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+    authUrl.searchParams.set('state', state);
 
-      console.log('Opening browser for authentication...');
-      console.log('');
-      console.log(`If the browser doesn't open, visit:\n\x1b[36m${authUrl.toString()}\x1b[0m`);
-      console.log('');
+    console.log('Opening browser for authentication...');
+    console.log('');
+    console.log(`If the browser doesn't open, visit:\n\x1b[36m${authUrl.toString()}\x1b[0m`);
+    console.log('');
 
-      // Open browser
-      await open(authUrl.toString());
+    await open(authUrl.toString());
 
-      const spinner = createSpinner('Waiting for authentication...');
+    const spinner = createSpinner('Waiting for authentication...');
 
-      // Wait for callback
+    try {
+      const result = await waitForCallback(server, state, codeVerifier);
+      spinner.stop('Browser authentication complete');
+
+      // Exchange code for tokens
+      const tokenSpinner = createSpinner('Exchanging code for tokens...');
+
       try {
-        const result = await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            server.close();
-            reject(new Error('Authentication timed out after 5 minutes'));
-          }, 5 * 60 * 1000);
+        const tokens = await exchangeCodeForTokens(
+          result.code,
+          result.codeVerifier,
+          redirectUri
+        );
 
-          // Replace the server's request handler to capture the result
-          server.removeAllListeners('request');
-          server.on('request', async (req, res) => {
-            const url = new URL(req.url, `http://localhost:${CALLBACK_PORT}`);
-
-            if (url.pathname === '/callback') {
-              clearTimeout(timeout);
-
-              const code = url.searchParams.get('code');
-              const returnedState = url.searchParams.get('state');
-              const error = url.searchParams.get('error');
-              const errorDescription = url.searchParams.get('error_description');
-
-              if (error) {
-                res.writeHead(400, { 'Content-Type': 'text/html' });
-                res.end(`
-                  <html>
-                    <body style="font-family: system-ui; padding: 40px; text-align: center;">
-                      <h1>Authentication Failed</h1>
-                      <p>${errorDescription || error}</p>
-                      <p>You can close this window.</p>
-                    </body>
-                  </html>
-                `);
-                server.close();
-                reject(new Error(errorDescription || error));
-                return;
-              }
-
-              if (returnedState !== state) {
-                res.writeHead(400, { 'Content-Type': 'text/html' });
-                res.end(`
-                  <html>
-                    <body style="font-family: system-ui; padding: 40px; text-align: center;">
-                      <h1>Authentication Failed</h1>
-                      <p>Security validation failed. Please try again.</p>
-                      <p>You can close this window.</p>
-                    </body>
-                  </html>
-                `);
-                server.close();
-                reject(new Error('Invalid state parameter'));
-                return;
-              }
-
-              if (!code) {
-                res.writeHead(400, { 'Content-Type': 'text/html' });
-                res.end(`
-                  <html>
-                    <body style="font-family: system-ui; padding: 40px; text-align: center;">
-                      <h1>Authentication Failed</h1>
-                      <p>No authorization code received.</p>
-                      <p>You can close this window.</p>
-                    </body>
-                  </html>
-                `);
-                server.close();
-                reject(new Error('No authorization code received'));
-                return;
-              }
-
-              // Success
-              res.writeHead(200, { 'Content-Type': 'text/html' });
-              res.end(`
-                <html>
-                  <body style="font-family: system-ui; padding: 40px; text-align: center;">
-                    <h1>Authentication Successful</h1>
-                    <p>You can close this window and return to the terminal.</p>
-                  </body>
-                </html>
-              `);
-
-              server.close();
-              resolve({ code, codeVerifier });
-            } else {
-              res.writeHead(404);
-              res.end('Not found');
-            }
-          });
+        saveCredentials({
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+          tokenType: tokens.token_type || 'Bearer',
         });
 
-        spinner.stop('Browser authentication complete');
-
-        // Exchange code for tokens
-        const tokenSpinner = createSpinner('Exchanging code for tokens...');
-
-        try {
-          const tokens = await exchangeCodeForTokens(
-            result.code,
-            result.codeVerifier,
-            redirectUri
-          );
-
-          // Save credentials
-          saveCredentials({
-            accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token,
-            expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
-            tokenType: tokens.token_type || 'Bearer',
-          });
-
-          tokenSpinner.stop('Credentials saved');
-          console.log('');
-          printSuccess('Successfully logged in to Spark!');
-          console.log('');
-          console.log('Run \x1b[33mspark whoami\x1b[0m to see your account info.');
-
-        } catch (tokenErr) {
-          tokenSpinner.fail('Token exchange failed');
-          throw tokenErr;
-        }
-
-      } catch (authErr) {
-        spinner.fail('Authentication failed');
-        throw authErr;
+        tokenSpinner.stop('Credentials saved');
+        console.log('');
+        printSuccess('Successfully logged in to Spark!');
+        console.log('');
+        console.log('Run \x1b[33mspark whoami\x1b[0m to see your account info.');
+      } catch (tokenErr) {
+        tokenSpinner.fail('Token exchange failed');
+        throw tokenErr;
       }
-
+    } catch (authErr) {
+      spinner.fail('Authentication failed');
+      throw authErr;
     }
-
   } catch (err) {
     printError(err.message);
     console.log('');
-    console.log('\x1b[33mAlternative:\x1b[0m Use an API key instead:');
-    console.log('  1. Visit: \x1b[36mhttps://spark.memco.ai/settings/api\x1b[0m');
-    console.log('  2. Generate an API key');
-    console.log('  3. Run: \x1b[33mexport SPARK_API_KEY=your_api_key\x1b[0m');
+    printApiKeyFallback();
   }
+}
+
+function printApiKeyFallback() {
+  console.log('\x1b[33mAlternative:\x1b[0m Use an API key instead:');
+  console.log('  1. Visit: \x1b[36mhttps://spark.memco.ai/settings/api\x1b[0m');
+  console.log('  2. Generate an API key');
+  console.log('  3. Run: \x1b[33mexport SPARK_API_KEY=your_api_key\x1b[0m');
 }
 
 /**
  * Logout command handler
  */
-export async function logoutCommand(options, command) {
+export async function logoutCommand(_options, command) {
   try {
     if (existsSync(CREDENTIALS_PATH)) {
       unlinkSync(CREDENTIALS_PATH);
@@ -442,12 +305,11 @@ export async function logoutCommand(options, command) {
 /**
  * Whoami command handler
  */
-export async function whoamiCommand(options, command) {
+export async function whoamiCommand(_options, command) {
   try {
     const user = await getCurrentUser(command);
     output(user, command);
   } catch (err) {
-    // If we get an error, check what auth method is being used
     const apiKey = process.env.SPARK_API_KEY;
     if (apiKey) {
       output({
@@ -470,38 +332,4 @@ export async function whoamiCommand(options, command) {
       }, command);
     }
   }
-}
-
-/**
- * Save credentials to file
- */
-export function saveCredentials(credentials) {
-  if (!existsSync(SPARK_DIR)) {
-    mkdirSync(SPARK_DIR, { recursive: true, mode: 0o700 });
-  }
-  writeFileSync(CREDENTIALS_PATH, JSON.stringify(credentials, null, 2), { mode: 0o600 });
-}
-
-/**
- * Load credentials from file
- */
-export function loadCredentials() {
-  if (!existsSync(CREDENTIALS_PATH)) {
-    return null;
-  }
-  try {
-    return JSON.parse(readFileSync(CREDENTIALS_PATH, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Check if token is expired (with 5 min buffer)
- */
-export function isTokenExpired(credentials) {
-  if (!credentials?.expiresAt) {
-    return false; // No expiry info, assume valid
-  }
-  return Date.now() >= credentials.expiresAt - 5 * 60 * 1000;
 }

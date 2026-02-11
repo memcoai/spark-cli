@@ -1,29 +1,6 @@
 import { shareInsight } from '../api.js';
 import { output, outputError } from '../output.js';
-
-/**
- * Parse environment tags from comma-separated string
- */
-function parseEnvTags(envString) {
-  if (!envString) return [];
-  return envString.split(',').map(tag => tag.trim()).filter(Boolean);
-}
-
-/**
- * Parse task tags from comma-separated string
- */
-function parseTaskTags(tagsString) {
-  if (!tagsString) return [];
-  return tagsString.split(',').map(tag => tag.trim()).filter(Boolean);
-}
-
-/**
- * Parse source URLs from comma-separated string
- */
-function parseSources(sourcesString) {
-  if (!sourcesString) return [];
-  return sourcesString.split(',').map(url => url.trim()).filter(Boolean);
-}
+import { parseTags, parseSources } from '../parse-tags.js';
 
 /**
  * Share command handler
@@ -35,7 +12,6 @@ export async function shareCommand(options, command) {
       content: options.content,
     };
 
-    // Optional parameters
     if (options.session) {
       params.session_id = options.session;
     }
@@ -43,10 +19,10 @@ export async function shareCommand(options, command) {
       params.task_idx = parseInt(options.taskIndex, 10);
     }
     if (options.env) {
-      params.environment = parseEnvTags(options.env);
+      params.environment = parseTags(options.env);
     }
     if (options.tags) {
-      params.task = parseTaskTags(options.tags);
+      params.task = parseTags(options.tags);
     }
     if (options.sources) {
       params.sources = parseSources(options.sources);

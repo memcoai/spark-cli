@@ -1,11 +1,7 @@
 /**
- * Output utilities for consistent JSON formatting
+ * Get parent command options (walks up the commander chain)
  */
-
-/**
- * Get parent command options
- */
-function getParentOptions(command) {
+export function getParentOptions(command) {
   let current = command;
   while (current?.parent) {
     current = current.parent;
@@ -14,8 +10,8 @@ function getParentOptions(command) {
 }
 
 /**
- * Output data as JSON
- * Uses --pretty flag from parent command for formatting
+ * Output data as JSON.
+ * Uses --pretty flag from parent command for formatting.
  */
 export function output(data, command = null) {
   const opts = getParentOptions(command);

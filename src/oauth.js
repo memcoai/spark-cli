@@ -1,12 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
+import { API_BASE, SPARK_DIR, CLIENT_PATH } from './constants.js';
 
-const API_BASE = 'https://spark.memco.ai';
 const PROTECTED_RESOURCE_WELL_KNOWN = '/.well-known/oauth-protected-resource';
 const AUTHORIZATION_SERVER_WELL_KNOWN = '/.well-known/oauth-authorization-server';
-const SPARK_DIR = join(homedir(), '.spark');
-const CLIENT_PATH = join(SPARK_DIR, 'oauth-client.json');
 
 let oauthMetadataPromise = null;
 

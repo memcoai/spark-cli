@@ -5,3 +5,5 @@ node_modules/
 .env.local
 coverage/
 dist/
+.claude
+.idea/
