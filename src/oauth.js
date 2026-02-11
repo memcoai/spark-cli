@@ -138,5 +138,3 @@ export async function getClientId(redirectUri = null) {
   saveClient(client);
   return client.client_id;
 }
-
-export { API_BASE };

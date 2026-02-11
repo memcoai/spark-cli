@@ -1,12 +1,12 @@
-import { createServer } from 'http';
-import { randomBytes, createHash } from 'crypto';
-import { URL } from 'url';
+import { createServer } from 'node:http';
+import { randomBytes, createHash } from 'node:crypto';
+import { URL } from 'node:url';
 import open from 'open';
 import { getCurrentUser } from '../api.js';
 import { getClientId, getOAuthEndpoints } from '../oauth.js';
 import { output, outputError, outputSuccess } from '../output.js';
 import { printBanner, printSuccess, printError, printInfo, createSpinner } from '../banner.js';
-import { CALLBACK_PORT } from '../constants.js';
+import { API_BASE, CALLBACK_PORT } from '../constants.js';
 import {
   loadCredentials, loadLocalCredentials, saveCredentials, credentialsExist, removeCredentials,
 } from '../credentials.js';
@@ -60,7 +60,7 @@ function startCallbackServer() {
 function sendHtml(res, statusCode, title, message) {
   res.writeHead(statusCode, { 'Content-Type': 'text/html' });
   res.end(`
-    <html>
+    <html lang="en">
       <body style="font-family: system-ui; padding: 40px; text-align: center;">
         <h1>${title}</h1>
         <p>${message}</p>
@@ -258,13 +258,13 @@ export async function loginCommand(options, _command) {
         printSuccess('Successfully logged in to Spark!');
         console.log('');
         console.log('Run \x1b[33mspark whoami\x1b[0m to see your account info.');
-      } catch (tokenErr) {
+      } catch (error) {
         tokenSpinner.fail('Token exchange failed');
-        throw tokenErr;
+        throw error;
       }
-    } catch (authErr) {
+    } catch (error) {
       spinner.fail('Authentication failed');
-      throw authErr;
+      throw error;
     }
   } catch (err) {
     printError(err.message);
@@ -285,6 +285,25 @@ function printApiKeyFallback() {
  */
 export async function logoutCommand(_options, command) {
   try {
+    // Server-side logout (best-effort)
+    const credentials = loadCredentials();
+    if (credentials?.accessToken) {
+      console.log('Logging out of Spark server...');
+      try {
+        const response = await fetch(`${API_BASE}/auth/logout-all`, {
+          headers: { 'Authorization': `Bearer ${credentials.accessToken}` },
+          redirect: 'manual',
+        });
+
+        const redirectUrl = response.headers.get('location');
+        if (redirectUrl) {
+          await open(redirectUrl);
+        }
+      } catch (err) {
+        console.log(`Warning: Failed to reach Spark server: ${err.message}`);
+      }
+    }
+
     const removed = removeCredentials();
     if (removed) {
       const location = removed === 'local' ? 'local (.spark/)' : 'global (~/.spark/)';

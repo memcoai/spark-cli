@@ -1,6 +1,7 @@
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
 import { API_BASE } from './constants.js';
 import { loadCredentials, saveCredentials, isTokenExpired } from './credentials.js';
 import { getOAuthEndpoints, getBearerMethods, getClientId } from './oauth.js';

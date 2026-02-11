@@ -6,9 +6,9 @@ import { insightsCommand } from '../src/commands/insights.js';
 import { shareCommand } from '../src/commands/share.js';
 import { feedbackCommand } from '../src/commands/feedback.js';
 import { loginCommand, logoutCommand, whoamiCommand } from '../src/commands/auth.js';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

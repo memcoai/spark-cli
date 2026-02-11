@@ -1,5 +1,5 @@
-import { homedir } from 'os';
-import { join } from 'path';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 export const API_BASE = 'https://spark.memco.ai';
 export const SPARK_DIR = join(homedir(), '.spark');
