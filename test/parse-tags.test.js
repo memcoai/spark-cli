@@ -181,24 +181,24 @@ describe('parseSources', () => {
     assert.deepStrictEqual(parseSources(''), []);
   });
 
-  it('splits comma-separated URLs', () => {
+  it('splits comma-separated source IDs', () => {
     assert.deepStrictEqual(
-      parseSources('https://a.com,https://b.com'),
-      ['https://a.com', 'https://b.com']
+      parseSources('DOC-1,INSIGHT-2'),
+      ['DOC-1', 'INSIGHT-2']
     );
   });
 
   it('trims whitespace', () => {
     assert.deepStrictEqual(
-      parseSources(' https://a.com , https://b.com '),
-      ['https://a.com', 'https://b.com']
+      parseSources(' DOC-1 , INSIGHT-2 '),
+      ['DOC-1', 'INSIGHT-2']
     );
   });
 
   it('filters empty strings from trailing commas', () => {
     assert.deepStrictEqual(
-      parseSources('https://a.com,'),
-      ['https://a.com']
+      parseSources('DOC-1,'),
+      ['DOC-1']
     );
   });
 });

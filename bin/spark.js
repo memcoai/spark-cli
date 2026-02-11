@@ -25,34 +25,34 @@ program
 // Query command
 program
   .command('query <query>')
-  .description('Query for solutions to a problem')
-  .option('-e, --env <items>', 'Environment tags (comma-separated, e.g., node:20,react:18)')
-  .option('-t, --tags <items>', 'Task tags (comma-separated, e.g., typescript,nextjs)')
+  .description('Query the knowledge network for proven solutions and community insights')
+  .option('-e, --env <items>', 'Environment key:value pairs describing your stack (comma-separated, e.g., language_version:python:3.11,framework_version:django:4.2)')
+  .option('-t, --tags <items>', 'Task key:value pairs describing your task (comma-separated, e.g., task-type:bug_fix,method:DataFrame.apply())')
   .action(queryCommand);
 
 // Insights command
 program
   .command('insights <session-id> <task-index>')
-  .description('Get detailed insights for a specific recommendation')
+  .description('Get detailed insights for a task from a previous query session')
   .action(insightsCommand);
 
 // Share command
 program
   .command('share')
-  .description('Share a solution you discovered')
-  .requiredOption('--title <title>', 'Title of the insight')
-  .requiredOption('--content <content>', 'Content/description of the solution')
+  .description('Share an insight or solution with the knowledge network')
+  .requiredOption('--title <title>', 'Short title describing the insight')
+  .requiredOption('--content <content>', 'The insight content (supports markdown)')
   .option('--session <id>', 'Session ID from a previous query')
-  .option('--task-index <index>', 'Task index from the session')
-  .option('-e, --env <items>', 'Environment tags (comma-separated)')
-  .option('-t, --tags <items>', 'Task tags (comma-separated)')
-  .option('--sources <urls>', 'Source URLs (comma-separated)')
+  .option('--task-index <index>', 'Task index to attach insight to (use "new" for a new task)')
+  .option('-e, --env <items>', 'Environment key:value pairs (comma-separated, e.g., language_version:python:3.11)')
+  .option('-t, --tags <items>', 'Task key:value pairs (comma-separated, e.g., task-type:bug_fix)')
+  .option('--sources <items>', 'Source insight/document IDs from Spark (comma-separated)')
   .action(shareCommand);
 
 // Feedback command
 program
   .command('feedback <session-id>')
-  .description('Provide feedback on recommendations')
+  .description('Provide feedback on recommendations from a previous query session')
   .option('--helpful', 'Mark recommendations as helpful')
   .option('--not-helpful', 'Mark recommendations as not helpful')
   .action(feedbackCommand);
