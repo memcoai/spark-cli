@@ -6,36 +6,21 @@ import { setupCommandMocks, getErrorOutput } from '../helpers.js';
 describe('insightsCommand', () => {
   const mocks = setupCommandMocks();
 
-  it('errors on non-numeric task index', async () => {
-    await insightsCommand('session-1', 'abc', {}, null);
+  const invalidIndices = [
+    ['non-numeric', 'abc'],
+    ['negative', '-1'],
+    ['float', '3.14'],
+    ['empty string', ''],
+  ];
 
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.strictEqual(output.error, true);
-    assert.match(output.message, /task-index must be a non-negative integer/);
-  });
+  for (const [label, value] of invalidIndices) {
+    it(`errors on ${label} task index`, async () => {
+      await insightsCommand('session-1', value, {}, null);
 
-  it('errors on negative task index', async () => {
-    await insightsCommand('session-1', '-1', {}, null);
-
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.match(output.message, /task-index must be a non-negative integer/);
-  });
-
-  it('errors on float task index', async () => {
-    await insightsCommand('session-1', '3.14', {}, null);
-
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.match(output.message, /task-index must be a non-negative integer/);
-  });
-
-  it('errors on empty string task index', async () => {
-    await insightsCommand('session-1', '', {}, null);
-
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.match(output.message, /task-index must be a non-negative integer/);
-  });
+      assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+      const output = getErrorOutput(mocks.logMock);
+      assert.strictEqual(output.error, true);
+      assert.match(output.message, /task-index must be a non-negative integer/);
+    });
+  }
 });
