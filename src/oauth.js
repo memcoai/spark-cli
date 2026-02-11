@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { API_BASE, SPARK_DIR, CLIENT_PATH } from './constants.js';
 
 const PROTECTED_RESOURCE_WELL_KNOWN = '/.well-known/oauth-protected-resource';
