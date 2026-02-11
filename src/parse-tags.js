@@ -1,7 +1,7 @@
 /**
- * Validate and normalize a semver version string.
- * Strips leading 'v', validates MAJOR.MINOR.PATCH format.
- * Major and minor must be integers, patch can contain strings (e.g. 3-beta).
+ * Validate and normalize a version string.
+ * Strips leading 'v'. Accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH.
+ * Major and minor must be integers. Patch can have a pre-release suffix (e.g. 0-beta).
  */
 function normalizeVersion(version) {
   const stripped = version.replace(/^v/, '');
@@ -12,14 +12,12 @@ function normalizeVersion(version) {
   const preRelease = hyphenIdx === -1 ? '' : stripped.substring(hyphenIdx);
 
   const parts = core.split('.');
-  if (parts.length !== 3) return null;
+  if (parts.length < 1 || parts.length > 3) return null;
 
-  const [major, minor, patch] = parts;
-  if (!/^\d+$/.test(major) || !/^\d+$/.test(minor) || !/^\d+$/.test(patch)) {
-    return null;
-  }
+  // All core parts must be integers
+  if (!parts.every(p => /^\d+$/.test(p))) return null;
 
-  return `${major}.${minor}.${patch}${preRelease}`;
+  return parts.join('.') + preRelease;
 }
 
 /**
@@ -52,7 +50,7 @@ export function parseTags(input) {
       }
       const normalized = normalizeVersion(version);
       if (!normalized) {
-        throw new Error(`Invalid version "${version}" in tag "${trimmed}": expected MAJOR.MINOR.PATCH (e.g. 1.2.3)`);
+        throw new Error(`Invalid version "${version}" in tag "${trimmed}": expected a numeric version (e.g. 3, 3.11, 3.11.0)`);
       }
       return `${type}:${name}:${normalized}`;
     }

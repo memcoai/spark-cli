@@ -73,6 +73,34 @@ describe('parseTags', () => {
       );
     });
 
+    it('accepts major-only version', () => {
+      assert.deepStrictEqual(
+        parseTags('language_version:node:22'),
+        ['language_version:node:22']
+      );
+    });
+
+    it('accepts major-only version with v prefix', () => {
+      assert.deepStrictEqual(
+        parseTags('language_version:node:v22'),
+        ['language_version:node:22']
+      );
+    });
+
+    it('accepts major.minor version', () => {
+      assert.deepStrictEqual(
+        parseTags('language_version:node:22.11'),
+        ['language_version:node:22.11']
+      );
+    });
+
+    it('accepts major.minor version with v prefix', () => {
+      assert.deepStrictEqual(
+        parseTags('language_version:node:v22.11'),
+        ['language_version:node:22.11']
+      );
+    });
+
     it('mixes TYPE:NAME and TYPE:NAME:VERSION tags', () => {
       assert.deepStrictEqual(
         parseTags('task_type:bug_fix,language_version:node:20.0.0'),
@@ -110,24 +138,10 @@ describe('parseTags', () => {
       );
     });
 
-    it('throws on non-semver version', () => {
+    it('throws on non-numeric version', () => {
       assert.throws(
         () => parseTags('language_version:node:latest'),
-        { message: /Invalid version "latest".*expected MAJOR\.MINOR\.PATCH/ }
-      );
-    });
-
-    it('throws on version with only major', () => {
-      assert.throws(
-        () => parseTags('language_version:node:20'),
-        { message: /Invalid version "20".*expected MAJOR\.MINOR\.PATCH/ }
-      );
-    });
-
-    it('throws on version with only major.minor', () => {
-      assert.throws(
-        () => parseTags('language_version:node:20.0'),
-        { message: /Invalid version "20.0".*expected MAJOR\.MINOR\.PATCH/ }
+        { message: /Invalid version "latest".*expected a numeric version/ }
       );
     });
 
