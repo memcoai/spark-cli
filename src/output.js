@@ -41,9 +41,12 @@ export function outputError(error, command = null) {
  * Output a success message
  */
 export function outputSuccess(message, data = {}, command = null) {
-  output({
-    success: true,
-    message,
-    ...data,
-  }, command);
+  output(
+    {
+      success: true,
+      message,
+      ...data,
+    },
+    command,
+  );
 }

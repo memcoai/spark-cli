@@ -118,7 +118,7 @@ export function createSpinner(message) {
     fail: (errorMessage) => {
       clearInterval(interval);
       process.stdout.write(`\r\x1b[31m✗\x1b[0m ${errorMessage || message}\n`);
-    }
+    },
   };
 }
 
@@ -127,7 +127,7 @@ export function createSpinner(message) {
  */
 export function printBox(title, content) {
   const lines = content.split('\n');
-  const maxLen = Math.max(title.length, ...lines.map(l => l.length));
+  const maxLen = Math.max(title.length, ...lines.map((l) => l.length));
   const width = maxLen + 4;
 
   console.log('┌' + '─'.repeat(width) + '┐');

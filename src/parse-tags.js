@@ -15,7 +15,7 @@ function normalizeVersion(version) {
   if (parts.length < 1 || parts.length > 3) return null;
 
   // All core parts must be integers
-  if (!parts.every(p => /^\d+$/.test(p))) return null;
+  if (!parts.every((p) => /^\d+$/.test(p))) return null;
 
   return parts.join('.') + preRelease;
 }
@@ -29,34 +29,39 @@ function normalizeVersion(version) {
 export function parseTags(input) {
   if (!input) return [];
 
-  return input.split(',').map(raw => {
-    const trimmed = raw.trim();
-    if (!trimmed) return null;
+  return input
+    .split(',')
+    .map((raw) => {
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
 
-    const parts = trimmed.split(':');
+      const parts = trimmed.split(':');
 
-    if (parts.length === 2) {
-      const [type, name] = parts;
-      if (!type || !name) {
-        throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
+      if (parts.length === 2) {
+        const [type, name] = parts;
+        if (!type || !name) {
+          throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
+        }
+        return `${type}:${name}`;
       }
-      return `${type}:${name}`;
-    }
 
-    if (parts.length === 3) {
-      const [type, name, version] = parts;
-      if (!type || !name || !version) {
-        throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
+      if (parts.length === 3) {
+        const [type, name, version] = parts;
+        if (!type || !name || !version) {
+          throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
+        }
+        const normalized = normalizeVersion(version);
+        if (!normalized) {
+          throw new Error(
+            `Invalid version "${version}" in tag "${trimmed}": expected a numeric version (e.g. 3, 3.11, 3.11.0)`,
+          );
+        }
+        return `${type}:${name}:${normalized}`;
       }
-      const normalized = normalizeVersion(version);
-      if (!normalized) {
-        throw new Error(`Invalid version "${version}" in tag "${trimmed}": expected a numeric version (e.g. 3, 3.11, 3.11.0)`);
-      }
-      return `${type}:${name}:${normalized}`;
-    }
 
-    throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
-  }).filter(Boolean);
+      throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -64,5 +69,8 @@ export function parseTags(input) {
  */
 export function parseSources(sourcesString) {
   if (!sourcesString) return [];
-  return sourcesString.split(',').map(url => url.trim()).filter(Boolean);
+  return sourcesString
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean);
 }

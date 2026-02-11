@@ -17,11 +17,15 @@ describe('shareCommand', () => {
   });
 
   it('errors on invalid env tag format', async () => {
-    await shareCommand('session-1', {
-      title: 'Test',
-      content: 'Content',
-      env: 'bare-tag',
-    }, null);
+    await shareCommand(
+      'session-1',
+      {
+        title: 'Test',
+        content: 'Content',
+        env: 'bare-tag',
+      },
+      null,
+    );
 
     assert.strictEqual(exitMock.mock.calls.length, 1);
     const output = JSON.parse(logMock.mock.calls[0].arguments[0]);
@@ -30,11 +34,15 @@ describe('shareCommand', () => {
   });
 
   it('errors on invalid task tag format', async () => {
-    await shareCommand('session-1', {
-      title: 'Test',
-      content: 'Content',
-      tags: 'no-colon',
-    }, null);
+    await shareCommand(
+      'session-1',
+      {
+        title: 'Test',
+        content: 'Content',
+        tags: 'no-colon',
+      },
+      null,
+    );
 
     assert.strictEqual(exitMock.mock.calls.length, 1);
     const output = JSON.parse(logMock.mock.calls[0].arguments[0]);
@@ -42,11 +50,15 @@ describe('shareCommand', () => {
   });
 
   it('errors on invalid version in env tag', async () => {
-    await shareCommand('session-1', {
-      title: 'Test',
-      content: 'Content',
-      env: 'language_version:python:latest',
-    }, null);
+    await shareCommand(
+      'session-1',
+      {
+        title: 'Test',
+        content: 'Content',
+        env: 'language_version:python:latest',
+      },
+      null,
+    );
 
     assert.strictEqual(exitMock.mock.calls.length, 1);
     const output = JSON.parse(logMock.mock.calls[0].arguments[0]);

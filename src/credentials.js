@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import {
-  SPARK_DIR, CREDENTIALS_PATH,
-  LOCAL_SPARK_DIR, LOCAL_CREDENTIALS_PATH,
+  SPARK_DIR,
+  CREDENTIALS_PATH,
+  LOCAL_SPARK_DIR,
+  LOCAL_CREDENTIALS_PATH,
 } from './constants.js';
 
 /**

@@ -44,7 +44,10 @@ async function refreshToken(credentials) {
     ...credentials,
     accessToken: data.accessToken || data.access_token,
     refreshToken: data.refreshToken || data.refresh_token || credentials.refreshToken,
-    expiresAt: (data.expiresIn || data.expires_in) ? Date.now() + (data.expiresIn || data.expires_in) * 1000 : null,
+    expiresAt:
+      data.expiresIn || data.expires_in
+        ? Date.now() + (data.expiresIn || data.expires_in) * 1000
+        : null,
     tokenType: 'Bearer',
   };
 

@@ -36,9 +36,7 @@ async function resolveOAuthMetadata() {
     }
   }
 
-  const authorizationMetadata = await fetchJson(
-    `${issuerBase}${AUTHORIZATION_SERVER_WELL_KNOWN}`
-  );
+  const authorizationMetadata = await fetchJson(`${issuerBase}${AUTHORIZATION_SERVER_WELL_KNOWN}`);
 
   return { protectedMetadata, authorizationMetadata };
 }
@@ -54,8 +52,7 @@ export async function getOAuthEndpoints() {
   const { authorizationMetadata } = await getOAuthMetadata();
   const authorizationEndpoint =
     authorizationMetadata.authorization_endpoint || authorizationMetadata.authorizationEndpoint;
-  const tokenEndpoint =
-    authorizationMetadata.token_endpoint || authorizationMetadata.tokenEndpoint;
+  const tokenEndpoint = authorizationMetadata.token_endpoint || authorizationMetadata.tokenEndpoint;
 
   if (!authorizationEndpoint || !tokenEndpoint) {
     throw new Error('OAuth discovery missing authorization_endpoint or token_endpoint');
@@ -68,9 +65,11 @@ export async function getOAuthEndpoints() {
 
 export async function getBearerMethods() {
   const { protectedMetadata, authorizationMetadata } = await getOAuthMetadata();
-  return protectedMetadata.bearer_methods_supported
-    || authorizationMetadata.bearer_methods_supported
-    || null;
+  return (
+    protectedMetadata.bearer_methods_supported ||
+    authorizationMetadata.bearer_methods_supported ||
+    null
+  );
 }
 
 function loadClient() {
@@ -97,8 +96,8 @@ async function registerClient(redirectUri) {
   }
 
   const { authorizationMetadata } = await getOAuthMetadata();
-  const registrationEndpoint = authorizationMetadata.registration_endpoint
-    || authorizationMetadata.registrationEndpoint;
+  const registrationEndpoint =
+    authorizationMetadata.registration_endpoint || authorizationMetadata.registrationEndpoint;
 
   if (!registrationEndpoint) {
     throw new Error('OAuth server does not support dynamic client registration');

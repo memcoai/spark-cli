@@ -26,8 +26,14 @@ program
 program
   .command('query <query>')
   .description('Query the knowledge network for proven solutions and community insights')
-  .option('-e, --env <items>', 'Environment key:value pairs describing your stack (comma-separated, e.g., language_version:python:3.11,framework_version:django:4.2)')
-  .option('-t, --tags <items>', 'Task key:value pairs describing your task (comma-separated, e.g., task-type:bug_fix,method:DataFrame.apply())')
+  .option(
+    '-e, --env <items>',
+    'Environment key:value pairs describing your stack (comma-separated, e.g., language_version:python:3.11,framework_version:django:4.2)',
+  )
+  .option(
+    '-t, --tags <items>',
+    'Task key:value pairs describing your task (comma-separated, e.g., task-type:bug_fix,method:DataFrame.apply())',
+  )
   .action(queryCommand);
 
 // Insights command
@@ -43,7 +49,10 @@ program
   .requiredOption('--title <title>', 'Short title describing the insight')
   .requiredOption('--content <content>', 'The insight content (supports markdown)')
   .option('--task-index <index>', 'Task index to attach insight to (use "new" for a new task)')
-  .option('-e, --env <items>', 'Environment key:value pairs (comma-separated, e.g., language_version:python:3.11)')
+  .option(
+    '-e, --env <items>',
+    'Environment key:value pairs (comma-separated, e.g., language_version:python:3.11)',
+  )
   .option('-t, --tags <items>', 'Task key:value pairs (comma-separated, e.g., task-type:bug_fix)')
   .option('--sources <items>', 'Source insight/document IDs from Spark (comma-separated)')
   .action(shareCommand);
@@ -63,14 +72,8 @@ program
   .option('--local', 'Store credentials in current directory (.spark/)')
   .action(loginCommand);
 
-program
-  .command('logout')
-  .description('Remove stored credentials')
-  .action(logoutCommand);
+program.command('logout').description('Remove stored credentials').action(logoutCommand);
 
-program
-  .command('whoami')
-  .description('Show current authenticated user')
-  .action(whoamiCommand);
+program.command('whoami').description('Show current authenticated user').action(whoamiCommand);
 
 program.parse();

@@ -8,7 +8,11 @@ import { output, outputError, outputSuccess } from '../output.js';
 import { printBanner, printSuccess, printError, printInfo, createSpinner } from '../banner.js';
 import { API_BASE, CALLBACK_PORT } from '../constants.js';
 import {
-  loadCredentials, loadLocalCredentials, saveCredentials, credentialsExist, removeCredentials,
+  loadCredentials,
+  loadLocalCredentials,
+  saveCredentials,
+  credentialsExist,
+  removeCredentials,
 } from '../credentials.js';
 
 /**
@@ -42,7 +46,11 @@ function startCallbackServer() {
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        reject(new Error(`Port ${CALLBACK_PORT} is already in use. Please close any other applications using this port.`));
+        reject(
+          new Error(
+            `Port ${CALLBACK_PORT} is already in use. Please close any other applications using this port.`,
+          ),
+        );
       } else {
         reject(err);
       }
@@ -76,10 +84,13 @@ function sendHtml(res, statusCode, title, message) {
  */
 function waitForCallback(server, expectedState, codeVerifier) {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      server.close();
-      reject(new Error('Authentication timed out after 5 minutes'));
-    }, 5 * 60 * 1000);
+    const timeout = setTimeout(
+      () => {
+        server.close();
+        reject(new Error('Authentication timed out after 5 minutes'));
+      },
+      5 * 60 * 1000,
+    );
 
     server.on('request', (req, res) => {
       const url = new URL(req.url, `http://localhost:${CALLBACK_PORT}`);
@@ -105,7 +116,12 @@ function waitForCallback(server, expectedState, codeVerifier) {
       }
 
       if (state !== expectedState) {
-        sendHtml(res, 400, 'Authentication Failed', 'Security validation failed. Please try again.');
+        sendHtml(
+          res,
+          400,
+          'Authentication Failed',
+          'Security validation failed. Please try again.',
+        );
         server.close();
         reject(new Error('Invalid state parameter'));
         return;
@@ -118,7 +134,12 @@ function waitForCallback(server, expectedState, codeVerifier) {
         return;
       }
 
-      sendHtml(res, 200, 'Authentication Successful', 'You can close this window and return to the terminal.');
+      sendHtml(
+        res,
+        200,
+        'Authentication Successful',
+        'You can close this window and return to the terminal.',
+      );
       server.close();
       resolve({ code, codeVerifier });
     });
@@ -236,19 +257,18 @@ export async function loginCommand(options, _command) {
     spinner.stop('Browser authentication complete');
 
     tokenSpinner = createSpinner('Exchanging code for tokens...');
-    const tokens = await exchangeCodeForTokens(
-      result.code,
-      result.codeVerifier,
-      redirectUri
-    );
+    const tokens = await exchangeCodeForTokens(result.code, result.codeVerifier, redirectUri);
 
     const local = options.local || false;
-    saveCredentials({
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
-      tokenType: tokens.token_type || 'Bearer',
-    }, { local });
+    saveCredentials(
+      {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+        tokenType: tokens.token_type || 'Bearer',
+      },
+      { local },
+    );
 
     const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
     tokenSpinner.stop(`Credentials saved ${location}`);
@@ -286,7 +306,7 @@ export async function logoutCommand(_options, command) {
       console.log('Logging out of Spark server...');
       try {
         const response = await fetch(`${API_BASE}/auth/logout-all`, {
-          headers: { 'Authorization': `Bearer ${credentials.accessToken}` },
+          headers: { Authorization: `Bearer ${credentials.accessToken}` },
           redirect: 'manual',
         });
 
@@ -304,10 +324,14 @@ export async function logoutCommand(_options, command) {
       const location = removed === 'local' ? 'local (.spark/)' : 'global (~/.spark/)';
       outputSuccess(`Logged out successfully. Removed ${location} credentials.`, {}, command);
     } else {
-      output({
-        success: true,
-        message: 'No credentials file found. You may still be authenticated via SPARK_API_KEY environment variable.',
-      }, command);
+      output(
+        {
+          success: true,
+          message:
+            'No credentials file found. You may still be authenticated via SPARK_API_KEY environment variable.',
+        },
+        command,
+      );
     }
   } catch (err) {
     outputError(err, command);
@@ -324,24 +348,33 @@ export async function whoamiCommand(_options, command) {
   } catch (err) {
     const apiKey = process.env.SPARK_API_KEY;
     if (apiKey) {
-      output({
-        authenticated: true,
-        method: 'environment_variable',
-        message: 'Authenticated via SPARK_API_KEY, but could not fetch user info',
-        error: err.message,
-      }, command);
+      output(
+        {
+          authenticated: true,
+          method: 'environment_variable',
+          message: 'Authenticated via SPARK_API_KEY, but could not fetch user info',
+          error: err.message,
+        },
+        command,
+      );
     } else if (credentialsExist()) {
-      output({
-        authenticated: true,
-        method: 'oauth',
-        message: 'Credentials file exists, but could not fetch user info',
-        error: err.message,
-      }, command);
+      output(
+        {
+          authenticated: true,
+          method: 'oauth',
+          message: 'Credentials file exists, but could not fetch user info',
+          error: err.message,
+        },
+        command,
+      );
     } else {
-      output({
-        authenticated: false,
-        message: 'Not authenticated. Run `spark login` to authenticate.',
-      }, command);
+      output(
+        {
+          authenticated: false,
+          message: 'Not authenticated. Run `spark login` to authenticate.',
+        },
+        command,
+      );
     }
   }
 }

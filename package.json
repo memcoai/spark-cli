@@ -11,6 +11,8 @@
     "test": "node --test",
     "test:coverage": "c8 node --test",
     "lint": "eslint src/",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "prepare": "chmod +x bin/spark.js",
     "prepublishOnly": "npm run test && npm run lint"
   },
@@ -42,7 +44,9 @@
   },
   "devDependencies": {
     "c8": "^10.0.0",
-    "eslint": "^9.0.0"
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1"
   },
   "files": [
     "bin/",
