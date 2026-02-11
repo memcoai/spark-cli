@@ -22,6 +22,12 @@ program
   .option('--pretty', 'Pretty-print JSON output')
   .option('--no-color', 'Disable colored output');
 
+program.hook('preAction', () => {
+  if (program.opts().color === false) {
+    process.env.NO_COLOR = '1';
+  }
+});
+
 // Query command
 program
   .command('query <query>')

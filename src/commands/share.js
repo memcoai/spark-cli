@@ -13,7 +13,7 @@ export async function shareCommand(sessionId, options, command) {
       session_id: sessionId,
     };
     if (options.taskIndex !== undefined) {
-      params.task_idx = Number.parseInt(options.taskIndex, 10);
+      params.task_idx = options.taskIndex;
     }
     if (options.env) {
       params.environment = parseTags(options.env);

@@ -32,7 +32,7 @@ src/
   constants.js        Shared constants (API_BASE, paths, port)
   output.js           JSON output helpers (getParentOptions, output, outputError, outputSuccess)
   parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION)
-  banner.js           Terminal UI (logos, spinners, colored output)
+  banner.js           Terminal UI (logos, spinners, colored output via colorize())
   index.js            Public API re-exports from api.js
 ```
 

@@ -64,4 +64,36 @@ describe('shareCommand', () => {
     const output = JSON.parse(logMock.mock.calls[0].arguments[0]);
     assert.match(output.message, /Invalid version/);
   });
+
+  it('passes task_idx as string when taskIndex is "new"', async () => {
+    const originalKey = process.env.SPARK_API_KEY;
+    process.env.SPARK_API_KEY = 'test-key';
+    const fetchMock = mock.method(globalThis, 'fetch', () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+    );
+
+    await shareCommand('session-1', { title: 'T', content: 'C', taskIndex: 'new' }, null);
+
+    const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
+    assert.strictEqual(body.task_idx, 'new');
+    fetchMock.mock.restore();
+    if (originalKey === undefined) delete process.env.SPARK_API_KEY;
+    else process.env.SPARK_API_KEY = originalKey;
+  });
+
+  it('passes numeric task_idx as string', async () => {
+    const originalKey = process.env.SPARK_API_KEY;
+    process.env.SPARK_API_KEY = 'test-key';
+    const fetchMock = mock.method(globalThis, 'fetch', () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+    );
+
+    await shareCommand('session-1', { title: 'T', content: 'C', taskIndex: '5' }, null);
+
+    const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
+    assert.strictEqual(body.task_idx, '5');
+    fetchMock.mock.restore();
+    if (originalKey === undefined) delete process.env.SPARK_API_KEY;
+    else process.env.SPARK_API_KEY = originalKey;
+  });
 });

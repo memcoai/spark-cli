@@ -50,54 +50,62 @@ const INFO_BOX = `
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 /**
+ * Wrap text in ANSI color codes, respecting NO_COLOR env var.
+ * See https://no-color.org
+ */
+export function colorize(code, text) {
+  if (process.env.NO_COLOR) return text;
+  return `${code}${text}\x1b[0m`;
+}
+
+/**
  * Print the Memco logo with colors
  */
 export function printMemcoLogo() {
-  // Use cyan/blue for Memco branding
-  console.log('\x1b[36m' + MEMCO_LOGO + '\x1b[0m');
+  console.log(colorize('\x1b[36m', MEMCO_LOGO));
 }
 
 /**
  * Print the Spark logo
  */
 export function printSparkLogo() {
-  console.log('\x1b[33m' + SPARK_LOGO + '\x1b[0m');
+  console.log(colorize('\x1b[33m', SPARK_LOGO));
 }
 
 /**
  * Print the full banner with logo and info
  */
 export function printBanner() {
-  console.log('\x1b[36m' + MEMCO_LOGO + '\x1b[0m');
-  console.log('\x1b[2m' + INFO_BOX + '\x1b[0m');
+  console.log(colorize('\x1b[36m', MEMCO_LOGO));
+  console.log(colorize('\x1b[2m', INFO_BOX));
 }
 
 /**
  * Print a success message with styling
  */
 export function printSuccess(message) {
-  console.log('\x1b[32m✓\x1b[0m ' + message);
+  console.log(colorize('\x1b[32m', '✓') + ' ' + message);
 }
 
 /**
  * Print an error message with styling
  */
 export function printError(message) {
-  console.log('\x1b[31m✗\x1b[0m ' + message);
+  console.log(colorize('\x1b[31m', '✗') + ' ' + message);
 }
 
 /**
  * Print an info message with styling
  */
 export function printInfo(message) {
-  console.log('\x1b[34mℹ\x1b[0m ' + message);
+  console.log(colorize('\x1b[34m', 'ℹ') + ' ' + message);
 }
 
 /**
  * Print a warning message with styling
  */
 export function printWarning(message) {
-  console.log('\x1b[33m⚠\x1b[0m ' + message);
+  console.log(colorize('\x1b[33m', '⚠') + ' ' + message);
 }
 
 /**
@@ -106,18 +114,18 @@ export function printWarning(message) {
 export function createSpinner(message) {
   let i = 0;
   const interval = setInterval(() => {
-    process.stdout.write(`\r\x1b[36m${SPINNER_FRAMES[i]}\x1b[0m ${message}`);
+    process.stdout.write(`\r${colorize('\x1b[36m', SPINNER_FRAMES[i])} ${message}`);
     i = (i + 1) % SPINNER_FRAMES.length;
   }, 80);
 
   return {
     stop: (finalMessage) => {
       clearInterval(interval);
-      process.stdout.write(`\r\x1b[32m✓\x1b[0m ${finalMessage || message}\n`);
+      process.stdout.write(`\r${colorize('\x1b[32m', '✓')} ${finalMessage || message}\n`);
     },
     fail: (errorMessage) => {
       clearInterval(interval);
-      process.stdout.write(`\r\x1b[31m✗\x1b[0m ${errorMessage || message}\n`);
+      process.stdout.write(`\r${colorize('\x1b[31m', '✗')} ${errorMessage || message}\n`);
     },
   };
 }
@@ -131,7 +139,7 @@ export function printBox(title, content) {
   const width = maxLen + 4;
 
   console.log('┌' + '─'.repeat(width) + '┐');
-  console.log('│ \x1b[1m' + title.padEnd(width - 2) + '\x1b[0m │');
+  console.log('│ ' + colorize('\x1b[1m', title.padEnd(width - 2)) + ' │');
   console.log('├' + '─'.repeat(width) + '┤');
   for (const line of lines) {
     console.log('│ ' + line.padEnd(width - 2) + ' │');

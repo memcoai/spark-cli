@@ -5,7 +5,14 @@ import open from 'open';
 import { getCurrentUser } from '../api.js';
 import { getClientId, getOAuthEndpoints } from '../oauth.js';
 import { output, outputError, outputSuccess } from '../output.js';
-import { printBanner, printSuccess, printError, printInfo, createSpinner } from '../banner.js';
+import {
+  printBanner,
+  printSuccess,
+  printError,
+  printInfo,
+  createSpinner,
+  colorize,
+} from '../banner.js';
 import { API_BASE, CALLBACK_PORT } from '../constants.js';
 import {
   loadCredentials,
@@ -63,6 +70,17 @@ function startCallbackServer() {
 }
 
 /**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
  * Send an HTML response
  */
 function sendHtml(res, statusCode, title, message) {
@@ -70,8 +88,8 @@ function sendHtml(res, statusCode, title, message) {
   res.end(`
     <html lang="en">
       <body style="font-family: system-ui; padding: 40px; text-align: center;">
-        <h1>${title}</h1>
-        <p>${message}</p>
+        <h1>${escapeHtml(title)}</h1>
+        <p>${escapeHtml(message)}</p>
         <p>You can close this window.</p>
       </body>
     </html>
@@ -187,6 +205,7 @@ async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
 export async function loginCommand(options, _command) {
   let spinner;
   let tokenSpinner;
+  let serverInfo;
 
   try {
     printBanner();
@@ -197,8 +216,8 @@ export async function loginCommand(options, _command) {
     if (existing?.accessToken || existing?.apiKey) {
       printInfo('You are already logged in.');
       console.log('');
-      console.log('Run \x1b[33mspark logout\x1b[0m first to log out, then try again.');
-      console.log('Or run \x1b[33mspark whoami\x1b[0m to see your account info.');
+      console.log(`Run ${colorize('\x1b[33m', 'spark logout')} first to log out, then try again.`);
+      console.log(`Or run ${colorize('\x1b[33m', 'spark whoami')} to see your account info.`);
       return;
     }
 
@@ -207,11 +226,11 @@ export async function loginCommand(options, _command) {
       printInfo('You are authenticated via SPARK_API_KEY environment variable.');
       console.log('');
       console.log('To use OAuth instead, unset the environment variable:');
-      console.log('  \x1b[33munset SPARK_API_KEY\x1b[0m');
+      console.log(`  ${colorize('\x1b[33m', 'unset SPARK_API_KEY')}`);
       return;
     }
 
-    console.log('\x1b[1mSpark CLI Authentication\x1b[0m');
+    console.log(colorize('\x1b[1m', 'Spark CLI Authentication'));
     console.log('');
 
     // Generate PKCE values
@@ -220,7 +239,6 @@ export async function loginCommand(options, _command) {
     const state = generateState();
 
     // Start local callback server
-    let serverInfo;
     try {
       serverInfo = await startCallbackServer();
     } catch (err) {
@@ -247,7 +265,7 @@ export async function loginCommand(options, _command) {
 
     console.log('Opening browser for authentication...');
     console.log('');
-    console.log(`If the browser doesn't open, visit:\n\x1b[36m${authUrl.toString()}\x1b[0m`);
+    console.log(`If the browser doesn't open, visit:\n${colorize('\x1b[36m', authUrl.toString())}`);
     console.log('');
 
     await open(authUrl.toString());
@@ -275,8 +293,9 @@ export async function loginCommand(options, _command) {
     console.log('');
     printSuccess('Successfully logged in to Spark!');
     console.log('');
-    console.log('Run \x1b[33mspark whoami\x1b[0m to see your account info.');
+    console.log(`Run ${colorize('\x1b[33m', 'spark whoami')} to see your account info.`);
   } catch (err) {
+    if (serverInfo) serverInfo.server.close();
     if (tokenSpinner) {
       tokenSpinner.fail('Token exchange failed');
     } else if (spinner) {
@@ -289,10 +308,10 @@ export async function loginCommand(options, _command) {
 }
 
 function printApiKeyFallback() {
-  console.log('\x1b[33mAlternative:\x1b[0m Use an API key instead:');
-  console.log('  1. Visit: \x1b[36mhttps://spark.memco.ai/settings/api\x1b[0m');
+  console.log(`${colorize('\x1b[33m', 'Alternative:')} Use an API key instead:`);
+  console.log(`  1. Visit: ${colorize('\x1b[36m', 'https://spark.memco.ai/settings/api')}`);
   console.log('  2. Generate an API key');
-  console.log('  3. Run: \x1b[33mexport SPARK_API_KEY=your_api_key\x1b[0m');
+  console.log(`  3. Run: ${colorize('\x1b[33m', 'export SPARK_API_KEY=your_api_key')}`);
 }
 
 /**

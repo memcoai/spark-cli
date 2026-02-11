@@ -13,7 +13,6 @@
     "lint": "eslint src/",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "chmod +x bin/spark.js",
     "prepublishOnly": "npm run test && npm run lint"
   },
   "keywords": [

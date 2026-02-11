@@ -85,7 +85,7 @@ function loadClient() {
 
 function saveClient(client) {
   if (!existsSync(SPARK_DIR)) {
-    mkdirSync(SPARK_DIR, { recursive: true });
+    mkdirSync(SPARK_DIR, { recursive: true, mode: 0o700 });
   }
   writeFileSync(CLIENT_PATH, JSON.stringify(client, null, 2), { mode: 0o600 });
 }
