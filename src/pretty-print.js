@@ -41,7 +41,8 @@ function formatValue(value, indent = 0) {
     return value
       .map((item, i) => {
         if (typeof item === 'object' && item !== null) {
-          return `${pad}${colorize(DIM, `[${i + 1}]`)}\n${formatObject(item, indent + 1)}`;
+          const label = colorize(DIM, '[' + (i + 1) + ']');
+          return `${pad}${label}\n${formatObject(item, indent + 1)}`;
         }
         return `${pad}  • ${formatValue(item, indent + 1)}`;
       })
