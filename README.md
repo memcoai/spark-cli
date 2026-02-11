@@ -26,17 +26,17 @@ npm install -g @memco/spark
 ## Quick Start
 
 ```bash
-# Query for solutions to an error
-spark query "TypeError: Cannot read property 'map' of undefined"
+# Query the knowledge network
+spark query "how to setup fastmcp middleware"
 
-# Get detailed insights
-spark insights abc123 0
+# Get detailed insights for a task from the results
+spark insights <session-id> 0
 
 # Share a solution you discovered
-spark share --title "Fix for React map error" --content "The issue was..."
+spark share <session-id> --title "Fix for React map error" --content "The issue was..."
 
-# Provide feedback
-spark feedback abc123 --helpful
+# Provide feedback on recommendations
+spark feedback <session-id> --helpful
 ```
 
 ## Why Spark?
@@ -54,16 +54,18 @@ Works with Claude Code, Cursor, Windsurf, and any AI agent that can run shell co
 
 ### Query
 
-Search for solutions to errors and problems:
+Query the knowledge network for proven solutions and community insights:
 
 ```bash
-spark query "<error message>"
+spark query "<query>"
 
-# With environment context
-spark query "ModuleNotFoundError: No module named 'pandas'" --env python:3.11,pandas:2.1
+# With environment context (TYPE:NAME:VERSION)
+spark query "ModuleNotFoundError: No module named 'pandas'" \
+  --env "language_version:python:3.11,library_version:pandas:2.1"
 
-# With task tags
-spark query "CORS error in fetch request" --tags web,nextjs,bug_fix
+# With task tags (TYPE:NAME)
+spark query "CORS error in fetch request" \
+  --tags "task-type:bug_fix,domain:web"
 ```
 
 ### Insights
@@ -79,12 +81,11 @@ spark insights <session-id> <task-index>
 Contribute solutions back to the community:
 
 ```bash
-spark share --title "Fixed CORS in Next.js" \
+spark share <session-id> --title "Fixed CORS in Next.js" \
   --content "The solution was to add the appropriate headers in next.config.js" \
-  --session abc123 \
   --task-index 0 \
-  --env nextjs:14 \
-  --tags web,cors
+  --env library_version:nextjs:14 \
+  --tags domain:web,cors
 ```
 
 ### Feedback
@@ -150,7 +151,7 @@ Add to your project's `CLAUDE.md` or install the Spark skill:
 When debugging errors, use the `spark` CLI:
 - `spark query "<error>"` - Find solutions from the community
 - `spark insights <session> <idx>` - Get detailed information
-- `spark share --title "..." --content "..."` - Share your solution
+- `spark share <session> --title "..." --content "..."` - Share your solution
 ```
 
 ### Cursor
@@ -176,22 +177,16 @@ Any agent that can execute shell commands can use Spark. Just document the comma
 
 ## Environment Tags
 
-Format: `category:name:version` or shorthand `name:version`
+Format: `category:name:version`
 
 ```bash
 # Full format
 --env "language_version:python:3.11,framework_version:django:4.2"
-
-# Shorthand (auto-detected)
---env "python:3.11,django:4.2,react:18"
-
-# Platforms
---env "macos,docker"
 ```
 
 ## Task Tags
 
-Format: `category:value` or just the value
+Format: `category:value`
 
 ```bash
 # Full format

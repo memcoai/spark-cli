@@ -38,11 +38,10 @@ program
 
 // Share command
 program
-  .command('share')
+  .command('share <session-id>')
   .description('Share an insight or solution with the knowledge network')
   .requiredOption('--title <title>', 'Short title describing the insight')
   .requiredOption('--content <content>', 'The insight content (supports markdown)')
-  .option('--session <id>', 'Session ID from a previous query')
   .option('--task-index <index>', 'Task index to attach insight to (use "new" for a new task)')
   .option('-e, --env <items>', 'Environment key:value pairs (comma-separated, e.g., language_version:python:3.11)')
   .option('-t, --tags <items>', 'Task key:value pairs (comma-separated, e.g., task-type:bug_fix)')

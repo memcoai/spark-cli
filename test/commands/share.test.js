@@ -17,7 +17,7 @@ describe('shareCommand', () => {
   });
 
   it('errors on invalid env tag format', async () => {
-    await shareCommand({
+    await shareCommand('session-1', {
       title: 'Test',
       content: 'Content',
       env: 'bare-tag',
@@ -30,7 +30,7 @@ describe('shareCommand', () => {
   });
 
   it('errors on invalid task tag format', async () => {
-    await shareCommand({
+    await shareCommand('session-1', {
       title: 'Test',
       content: 'Content',
       tags: 'no-colon',
@@ -42,7 +42,7 @@ describe('shareCommand', () => {
   });
 
   it('errors on invalid version in env tag', async () => {
-    await shareCommand({
+    await shareCommand('session-1', {
       title: 'Test',
       content: 'Content',
       env: 'language_version:python:latest',
