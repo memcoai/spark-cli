@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 # Colors
 CYAN='\033[0;36m'
@@ -116,13 +116,13 @@ echo ""
 echo -e "${GREEN}${BOLD}Installation complete!${NC}"
 echo ""
 echo -e "${BOLD}Quick Start:${NC}"
-echo "  spark query \"your error message\"     # Find solutions"
+echo "  spark query \"how to setup fastmcp\"   # Find solutions"
 echo "  spark insights <session-id> 0        # Get details"
 echo "  spark share --title \"Fix\" --content \"...\"  # Share solutions"
 echo ""
-echo -e "${BOLD}Authentication (optional):${NC}"
-echo "  export SPARK_API_KEY=your_api_key"
-echo "  Get a key at: ${CYAN}https://spark.memco.ai/settings/api${NC}"
+echo -e "${BOLD}Authentication:${NC}"
+echo "  spark login                              # Login via browser (recommended)"
+echo "  export SPARK_API_KEY=your_api_key        # Or use an API key"
 echo ""
 echo -e "${DIM}Learn more: spark --help${NC}"
 echo ""
