@@ -30,7 +30,9 @@ src/
   oauth.js            OAuth discovery (well-known endpoints) and dynamic client registration
   credentials.js      Load/save/remove credentials (local .spark/ or global ~/.spark/)
   constants.js        Shared constants (API_BASE, paths, port)
-  output.js           JSON output helpers (getParentOptions, output, outputError, outputSuccess)
+  output.js           Output helpers (getParentOptions, output, outputError, outputSuccess)
+  format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
+  pretty-print.js     Human-readable object renderer for --pretty mode
   parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION)
   banner.js           Terminal UI (logos, spinners, colored output via colorize())
   index.js            Public API re-exports from api.js
@@ -41,7 +43,7 @@ src/
 - **Credentials resolution:** local-first (`./.spark/credentials.json`) then global (`~/.spark/credentials.json`). The `--local` flag on `spark login` scopes credentials to the current directory. Token refresh auto-detects which location to save back to.
 - **Auth priority:** CLI `--api-key` flag > `SPARK_API_KEY` env var > OAuth access token > legacy API key in credentials file.
 - **Tag format:** `TYPE:NAME` or `TYPE:NAME:VERSION` where version accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH with optional pre-release suffix. The `v` prefix is stripped. Backend handles semantic validation; CLI only validates structure.
-- **Output:** All command output is JSON via `output()`. Use `--pretty` for indented output. Errors go through `outputError()` which calls `process.exit(1)`.
+- **Output:** Default output is compact JSON via `output()`. Use `--pretty` for human-readable output with markdown rendering and ANSI formatting. Auth commands (login, logout) always use styled terminal output via banner.js. Errors go through `outputError()` which calls `process.exit(1)`.
 - **OAuth client cache:** stored globally at `~/.spark/oauth-client.json` (per-CLI, not per-project).
 
 ## Development
@@ -65,6 +67,8 @@ test/
   parse-tags.test.js          parseTags, parseSources
   credentials.test.js         isTokenExpired
   output.test.js              getParentOptions, output, outputSuccess
+  format-markdown.test.js     Markdown-to-ANSI rendering
+  pretty-print.test.js        Human-readable object formatting
   commands/
     query.test.js             Tag validation errors
     share.test.js             Tag/version validation errors

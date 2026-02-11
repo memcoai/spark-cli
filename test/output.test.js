@@ -53,10 +53,13 @@ describe('output', () => {
     assert.strictEqual(logMock.mock.calls[0].arguments[0], '{"a":1}');
   });
 
-  it('outputs indented JSON when pretty is true', () => {
+  it('outputs human-readable format when pretty is true', () => {
     const command = { parent: null, opts: () => ({ pretty: true }) };
     output({ a: 1 }, command);
-    assert.strictEqual(logMock.mock.calls[0].arguments[0], JSON.stringify({ a: 1 }, null, 2));
+    const result = logMock.mock.calls[0].arguments[0];
+    // Pretty mode renders human-readable output, not JSON
+    assert.ok(result.includes('A:'));
+    assert.ok(result.includes('1'));
   });
 
   it('handles null command', () => {

@@ -4,12 +4,13 @@ import { URL } from 'node:url';
 import open from 'open';
 import { getCurrentUser } from '../api.js';
 import { getClientId, getOAuthEndpoints } from '../oauth.js';
-import { output, outputError, outputSuccess } from '../output.js';
+import { output } from '../output.js';
 import {
   printBanner,
   printSuccess,
   printError,
   printInfo,
+  printWarning,
   createSpinner,
   colorize,
 } from '../banner.js';
@@ -317,12 +318,12 @@ function printApiKeyFallback() {
 /**
  * Logout command handler
  */
-export async function logoutCommand(_options, command) {
+export async function logoutCommand() {
   try {
     // Server-side logout (best-effort)
     const credentials = loadCredentials();
     if (credentials?.accessToken) {
-      console.log('Logging out of Spark server...');
+      printInfo('Logging out of Spark server...');
       try {
         const response = await fetch(`${API_BASE}/auth/logout-all`, {
           headers: { Authorization: `Bearer ${credentials.accessToken}` },
@@ -334,26 +335,22 @@ export async function logoutCommand(_options, command) {
           await open(redirectUrl);
         }
       } catch (err) {
-        console.log(`Warning: Failed to reach Spark server: ${err.message}`);
+        printWarning(`Failed to reach Spark server: ${err.message}`);
       }
     }
 
     const removed = removeCredentials();
     if (removed) {
       const location = removed === 'local' ? 'local (.spark/)' : 'global (~/.spark/)';
-      outputSuccess(`Logged out successfully. Removed ${location} credentials.`, {}, command);
+      printSuccess(`Logged out successfully. Removed ${location} credentials.`);
     } else {
-      output(
-        {
-          success: true,
-          message:
-            'No credentials file found. You may still be authenticated via SPARK_API_KEY environment variable.',
-        },
-        command,
+      printInfo(
+        'No credentials file found. You may still be authenticated via SPARK_API_KEY environment variable.',
       );
     }
   } catch (err) {
-    outputError(err, command);
+    printError(err.message);
+    process.exit(1);
   }
 }
 
