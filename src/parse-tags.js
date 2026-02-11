@@ -5,23 +5,21 @@
  */
 function normalizeVersion(version) {
   const stripped = version.replace(/^v/, '');
-  const parts = stripped.split('.');
 
-  if (parts.length !== 3) {
+  // Separate pre-release suffix (everything after first hyphen)
+  const hyphenIdx = stripped.indexOf('-');
+  const core = hyphenIdx === -1 ? stripped : stripped.substring(0, hyphenIdx);
+  const preRelease = hyphenIdx === -1 ? '' : stripped.substring(hyphenIdx);
+
+  const parts = core.split('.');
+  if (parts.length !== 3) return null;
+
+  const [major, minor, patch] = parts;
+  if (!/^\d+$/.test(major) || !/^\d+$/.test(minor) || !/^\d+$/.test(patch)) {
     return null;
   }
 
-  const [major, minor] = parts;
-
-  if (!/^\d+$/.test(major) || !/^\d+$/.test(minor)) {
-    return null;
-  }
-
-  if (!parts[2]) {
-    return null;
-  }
-
-  return `${major}.${minor}.${parts[2]}`;
+  return `${major}.${minor}.${patch}${preRelease}`;
 }
 
 /**
