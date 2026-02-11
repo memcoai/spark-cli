@@ -229,41 +229,35 @@ export async function loginCommand(options, _command) {
     await open(authUrl.toString());
 
     const spinner = createSpinner('Waiting for authentication...');
+    let tokenSpinner;
 
     try {
       const result = await waitForCallback(server, state, codeVerifier);
       spinner.stop('Browser authentication complete');
 
-      // Exchange code for tokens
-      const tokenSpinner = createSpinner('Exchanging code for tokens...');
+      tokenSpinner = createSpinner('Exchanging code for tokens...');
+      const tokens = await exchangeCodeForTokens(
+        result.code,
+        result.codeVerifier,
+        redirectUri
+      );
 
-      try {
-        const tokens = await exchangeCodeForTokens(
-          result.code,
-          result.codeVerifier,
-          redirectUri
-        );
+      const local = options.local || false;
+      saveCredentials({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+        tokenType: tokens.token_type || 'Bearer',
+      }, { local });
 
-        const local = options.local || false;
-        saveCredentials({
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
-          tokenType: tokens.token_type || 'Bearer',
-        }, { local });
-
-        const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
-        tokenSpinner.stop(`Credentials saved ${location}`);
-        console.log('');
-        printSuccess('Successfully logged in to Spark!');
-        console.log('');
-        console.log('Run \x1b[33mspark whoami\x1b[0m to see your account info.');
-      } catch (error) {
-        tokenSpinner.fail('Token exchange failed');
-        throw error;
-      }
+      const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
+      tokenSpinner.stop(`Credentials saved ${location}`);
+      console.log('');
+      printSuccess('Successfully logged in to Spark!');
+      console.log('');
+      console.log('Run \x1b[33mspark whoami\x1b[0m to see your account info.');
     } catch (error) {
-      spinner.fail('Authentication failed');
+      (tokenSpinner || spinner).fail(tokenSpinner ? 'Token exchange failed' : 'Authentication failed');
       throw error;
     }
   } catch (err) {
