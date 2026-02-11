@@ -61,6 +61,7 @@ program
 program
   .command('login')
   .description('Authenticate with Spark (opens browser)')
+  .option('--local', 'Store credentials in current directory (.spark/)')
   .action(loginCommand);
 
 program

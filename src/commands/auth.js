@@ -1,4 +1,3 @@
-import { existsSync, readFileSync, unlinkSync } from 'fs';
 import { createServer } from 'http';
 import { randomBytes, createHash } from 'crypto';
 import { URL } from 'url';
@@ -7,8 +6,10 @@ import { getCurrentUser } from '../api.js';
 import { getClientId, getOAuthEndpoints } from '../oauth.js';
 import { output, outputError, outputSuccess } from '../output.js';
 import { printBanner, printSuccess, printError, printInfo, createSpinner } from '../banner.js';
-import { CREDENTIALS_PATH, CALLBACK_PORT } from '../constants.js';
-import { saveCredentials } from '../credentials.js';
+import { CALLBACK_PORT } from '../constants.js';
+import {
+  loadCredentials, loadLocalCredentials, saveCredentials, credentialsExist, removeCredentials,
+} from '../credentials.js';
 
 /**
  * Generate PKCE code verifier (random string)
@@ -162,25 +163,19 @@ async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
 /**
  * Login command handler - OAuth PKCE flow
  */
-export async function loginCommand(_options, _command) {
+export async function loginCommand(options, _command) {
   try {
     printBanner();
     console.log('');
 
-    // Check if already authenticated
-    if (existsSync(CREDENTIALS_PATH)) {
-      try {
-        const creds = JSON.parse(readFileSync(CREDENTIALS_PATH, 'utf8'));
-        if (creds.accessToken || creds.apiKey) {
-          printInfo('You are already logged in.');
-          console.log('');
-          console.log('Run \x1b[33mspark logout\x1b[0m first to log out, then try again.');
-          console.log('Or run \x1b[33mspark whoami\x1b[0m to see your account info.');
-          return;
-        }
-      } catch {
-        // Credentials file exists but is invalid, continue with login
-      }
+    // Check if already authenticated (scope-aware when --local is used)
+    const existing = options.local ? loadLocalCredentials() : loadCredentials();
+    if (existing?.accessToken || existing?.apiKey) {
+      printInfo('You are already logged in.');
+      console.log('');
+      console.log('Run \x1b[33mspark logout\x1b[0m first to log out, then try again.');
+      console.log('Or run \x1b[33mspark whoami\x1b[0m to see your account info.');
+      return;
     }
 
     // Check for API key in environment
@@ -249,14 +244,16 @@ export async function loginCommand(_options, _command) {
           redirectUri
         );
 
+        const local = options.local || false;
         saveCredentials({
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,
           expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
           tokenType: tokens.token_type || 'Bearer',
-        });
+        }, { local });
 
-        tokenSpinner.stop('Credentials saved');
+        const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
+        tokenSpinner.stop(`Credentials saved ${location}`);
         console.log('');
         printSuccess('Successfully logged in to Spark!');
         console.log('');
@@ -288,9 +285,10 @@ function printApiKeyFallback() {
  */
 export async function logoutCommand(_options, command) {
   try {
-    if (existsSync(CREDENTIALS_PATH)) {
-      unlinkSync(CREDENTIALS_PATH);
-      outputSuccess('Logged out successfully. Credentials removed.', {}, command);
+    const removed = removeCredentials();
+    if (removed) {
+      const location = removed === 'local' ? 'local (.spark/)' : 'global (~/.spark/)';
+      outputSuccess(`Logged out successfully. Removed ${location} credentials.`, {}, command);
     } else {
       output({
         success: true,
@@ -318,7 +316,7 @@ export async function whoamiCommand(_options, command) {
         message: 'Authenticated via SPARK_API_KEY, but could not fetch user info',
         error: err.message,
       }, command);
-    } else if (existsSync(CREDENTIALS_PATH)) {
+    } else if (credentialsExist()) {
       output({
         authenticated: true,
         method: 'oauth',
