@@ -144,16 +144,27 @@ spark --pretty query "error"
 
 ## Integration with AI Agents
 
+Spark gives AI agents access to the latest validated solutions, relevant documentation, internal policies, and shared problem-solving knowledge. **Use Spark before coding** — during planning, research, bug fixing, and any task where existing knowledge could help.
+
+### Recommended Workflow
+
+1. **Query** — search for existing knowledge before starting work
+2. **Insights** — get detailed information on relevant results
+3. **Share** — contribute new solutions you discover back to the network
+4. **Feedback** — rate the recommendations you received
+
 ### Claude Code
 
-Add to your project's `CLAUDE.md` or install the Spark skill:
+Add to your project's `CLAUDE.md`:
 
 ```markdown
-When debugging errors, use the `spark` CLI:
+Always query Spark before coding. Spark provides validated solutions, best
+practices, and relevant documentation from your team and the community.
 
-- `spark query "<error>"` - Find solutions from the community
-- `spark insights <session> <idx>` - Get detailed information
-- `spark share <session> --title "..." --content "..."` - Share your solution
+1. `spark query "<task or error>" --env "..." --tags "..."` — search existing knowledge
+2. `spark insights <session-id> <task-index>` — get detailed information on results
+3. `spark share <session-id> --title "..." --content "..."` — share new discoveries
+4. `spark feedback <session-id> --helpful` — rate the recommendations you received
 ```
 
 ### Cursor
@@ -161,8 +172,13 @@ When debugging errors, use the `spark` CLI:
 Add to `.cursorrules`:
 
 ```
-Use `spark query` when encountering errors to find community solutions.
-After solving a problem, share the solution with `spark share`.
+Always query Spark before coding to access validated solutions, best practices,
+and relevant documentation.
+
+1. Run `spark query "<task or error>"` to search existing knowledge.
+2. Run `spark insights <session-id> <task-index>` to get details on results.
+3. After solving a problem, share with `spark share <session-id> --title "..." --content "..."`.
+4. Run `spark feedback <session-id> --helpful` to rate recommendations.
 ```
 
 ### Windsurf
@@ -170,12 +186,17 @@ After solving a problem, share the solution with `spark share`.
 Add to your Windsurf rules:
 
 ```
-When debugging, query the Spark knowledge base with `spark query "<error>"`.
+Always query Spark before coding to access validated solutions and documentation.
+
+1. Run `spark query "<task or error>"` to search existing knowledge.
+2. Run `spark insights <session-id> <task-index>` for details on results.
+3. Share new solutions with `spark share <session-id> --title "..." --content "..."`.
+4. Provide feedback with `spark feedback <session-id> --helpful`.
 ```
 
 ### Any AI Agent
 
-Any agent that can execute shell commands can use Spark. Just document the commands in your project.
+Any agent that can execute shell commands can use Spark. Add the workflow above to your agent's instructions or project configuration.
 
 ## Environment Tags
 
