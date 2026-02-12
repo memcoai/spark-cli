@@ -213,10 +213,7 @@ Format: `category:value`
 
 ```bash
 # Full format
---tags "task-type:bug_fix,error-type:TypeError,domain:web"
-
-# Shorthand (auto-detected)
---tags "bug_fix,TypeError,web"
+--tags "task:bug_fix,error:TypeError,domain:web"
 ```
 
 ## Programmatic Use
