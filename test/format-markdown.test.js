@@ -123,7 +123,10 @@ describe('formatMarkdown', () => {
   });
 
   describe('horizontal rules', () => {
-    for (const [label, input] of [['dash', '---'], ['asterisk', '***']]) {
+    for (const [label, input] of [
+      ['dash', '---'],
+      ['asterisk', '***'],
+    ]) {
       it(`renders ${label} horizontal rules`, () => {
         assertIncludes(formatMarkdown(input), '─');
       });
