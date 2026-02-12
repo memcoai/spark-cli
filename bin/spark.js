@@ -9,10 +9,20 @@ import { loginCommand, logoutCommand, whoamiCommand } from '../src/commands/auth
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import {
+  checkForUpdate,
+  getVersionNotification,
+  getCachedVersion,
+  getLocalVersion,
+  compareVersions,
+} from '../src/update-check.js';
+import { setVersionNotification, printVersionNotification } from '../src/output.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
+
+let updateCheckPromise = null;
 
 program
   .name('spark')
@@ -26,6 +36,39 @@ program.hook('preAction', () => {
   if (program.opts().color === false) {
     process.env.NO_COLOR = '1';
   }
+
+  // Block on major version update (uses cached data only — no network delay)
+  const cached = getCachedVersion();
+  if (cached?.version) {
+    const updateType = compareVersions(getLocalVersion(), cached.version);
+    if (updateType === 'major') {
+      const notification = getVersionNotification(cached);
+      process.stderr.write('\n' + notification.message + '\n');
+      process.exit(1);
+    }
+    // Pre-set minor/patch notification so it's available if outputError fires
+    const notification = getVersionNotification(cached);
+    if (notification) {
+      setVersionNotification(notification.message);
+    }
+  }
+
+  // Start background version check
+  updateCheckPromise = checkForUpdate().then((latestInfo) => {
+    if (latestInfo) {
+      const notification = getVersionNotification(latestInfo);
+      if (notification && notification.type !== 'major') {
+        setVersionNotification(notification.message);
+      }
+    }
+  });
+});
+
+program.hook('postAction', async () => {
+  if (updateCheckPromise) {
+    await updateCheckPromise;
+  }
+  printVersionNotification();
 });
 
 // Query command

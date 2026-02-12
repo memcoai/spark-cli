@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { API_BASE, SPARK_DIR, CLIENT_PATH } from './constants.js';
+import { API_BASE, SETTINGS_PATH } from './constants.js';
+import { readSettingsKey, writeSettingsKey } from './settings.js';
 
 const PROTECTED_RESOURCE_WELL_KNOWN = '/.well-known/oauth-protected-resource';
 const AUTHORIZATION_SERVER_WELL_KNOWN = '/.well-known/oauth-authorization-server';
@@ -73,21 +73,11 @@ export async function getBearerMethods() {
 }
 
 function loadClient() {
-  if (!existsSync(CLIENT_PATH)) {
-    return null;
-  }
-  try {
-    return JSON.parse(readFileSync(CLIENT_PATH, 'utf8'));
-  } catch {
-    return null;
-  }
+  return readSettingsKey(SETTINGS_PATH, 'client');
 }
 
 function saveClient(client) {
-  if (!existsSync(SPARK_DIR)) {
-    mkdirSync(SPARK_DIR, { recursive: true, mode: 0o700 });
-  }
-  writeFileSync(CLIENT_PATH, JSON.stringify(client, null, 2), { mode: 0o600 });
+  writeSettingsKey(SETTINGS_PATH, 'client', client);
 }
 
 async function registerClient(redirectUri) {

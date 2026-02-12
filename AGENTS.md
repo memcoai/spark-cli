@@ -18,7 +18,7 @@ Node.js CLI tool (`@memco/spark`) that provides a command-line interface to the 
 ## Architecture
 
 ```
-bin/spark.js          CLI entry point (commander.js)
+bin/spark.js          CLI entry point (commander.js), version check hooks
 src/
   commands/
     auth.js           login (OAuth PKCE), logout, whoami
@@ -28,9 +28,11 @@ src/
     feedback.js       Provide feedback on recommendations
   api.js              HTTP client — getAuthToken, apiRequest, callTool, and API wrappers
   oauth.js            OAuth discovery (well-known endpoints) and dynamic client registration
-  credentials.js      Load/save/remove credentials (local .spark/ or global ~/.spark/)
-  constants.js        Shared constants (API_BASE, paths, port)
-  output.js           Output helpers (getParentOptions, output, outputError, outputSuccess)
+  credentials.js      Load/save/remove credentials via settings.json
+  settings.js         Low-level settings.json read/write helpers
+  update-check.js     Version checking (fetch, compare, cache, notification)
+  constants.js        Shared constants (API_BASE, paths, port, VERSION_CHECK_URL)
+  output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode
   parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION)
@@ -40,11 +42,13 @@ src/
 
 ## Key Patterns
 
-- **Credentials resolution:** local-first (`./.spark/credentials.json`) then global (`~/.spark/credentials.json`). The `--local` flag on `spark login` scopes credentials to the current directory. Token refresh auto-detects which location to save back to.
+- **Settings file:** All persistent state stored in `settings.json` with structure `{ credentials, client, latestVersion }`. Global at `~/.spark/settings.json`, local at `./.spark/settings.json`. Credentials and client data use `readSettingsKey`/`writeSettingsKey` from `settings.js`.
+- **Credentials resolution:** local-first (`./.spark/settings.json`) then global (`~/.spark/settings.json`). The `--local` flag on `spark login` scopes credentials to the current directory. Token refresh auto-detects which location to save back to. Logout removes the `credentials` key, not the file.
 - **Auth priority:** CLI `--api-key` flag > `SPARK_API_KEY` env var > OAuth access token > legacy API key in credentials file.
 - **Tag format:** `TYPE:NAME` or `TYPE:NAME:VERSION` where version accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH with optional pre-release suffix. The `v` prefix is stripped. Backend handles semantic validation; CLI only validates structure.
 - **Output:** Default output is compact JSON via `output()`. Use `--pretty` for human-readable output with markdown rendering and ANSI formatting. Auth commands (login, logout) always use styled terminal output via banner.js. Errors go through `outputError()` which calls `process.exit(1)`.
-- **OAuth client cache:** stored globally at `~/.spark/oauth-client.json` (per-CLI, not per-project).
+- **OAuth client cache:** stored in `~/.spark/settings.json` under the `client` key (global, not per-project).
+- **Version checking:** Non-blocking fetch from GitHub (raw package.json). Cached in `~/.spark/settings.json` under `latestVersion` with 24-hour TTL. Major updates block CLI usage. Minor/patch updates print notification to stderr after command output. Notification also appears on error paths.
 
 ## Development
 
@@ -56,6 +60,7 @@ npm run lint          # eslint src/
 
 - Test framework: `node:test` built-in runner with `node:assert/strict`
 - Mocking: `mock.method()` from `node:test` for `console.log` and `process.exit` in command tests
+- Test helpers: `test/helpers.js` provides `setupCommandMocks()` and `getErrorOutput()`
 - Coverage: `c8`
 - Linting: ESLint 9 flat config (`eslint.config.js`)
 - CI: GitHub Actions on main/dev, matrix Node [18, 20, 22], lint on Node 22 only
@@ -64,9 +69,12 @@ npm run lint          # eslint src/
 
 ```
 test/
+  helpers.js                  Shared test helpers (setupCommandMocks, getErrorOutput)
   parse-tags.test.js          parseTags, parseSources
   credentials.test.js         isTokenExpired
-  output.test.js              getParentOptions, output, outputSuccess
+  settings.test.js            readSettings, writeSettings, readSettingsKey, writeSettingsKey
+  update-check.test.js        parseSemver, compareVersions
+  output.test.js              getParentOptions, output, outputSuccess, printVersionNotification
   format-markdown.test.js     Markdown-to-ANSI rendering
   pretty-print.test.js        Human-readable object formatting
   commands/

@@ -1,6 +1,25 @@
 import { prettyPrint } from './pretty-print.js';
 import { printSuccess, printError } from './banner.js';
 
+let pendingVersionNotification = null;
+
+/**
+ * Set the version notification to display after output.
+ */
+export function setVersionNotification(notification) {
+  pendingVersionNotification = notification;
+}
+
+/**
+ * Print the pending version notification to stderr, then clear it.
+ */
+export function printVersionNotification() {
+  if (pendingVersionNotification) {
+    process.stderr.write('\n' + pendingVersionNotification + '\n');
+    pendingVersionNotification = null;
+  }
+}
+
 /**
  * Get parent command options (walks up the commander chain)
  */
@@ -42,6 +61,7 @@ export function outputError(error, command = null) {
   } else {
     output({ error: true, message: error.message || String(error) }, command);
   }
+  printVersionNotification();
   process.exit(1);
 }
 

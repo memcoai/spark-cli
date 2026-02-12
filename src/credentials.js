@@ -1,23 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
-import {
-  SPARK_DIR,
-  CREDENTIALS_PATH,
-  LOCAL_SPARK_DIR,
-  LOCAL_CREDENTIALS_PATH,
-} from './constants.js';
+import { existsSync } from 'node:fs';
+import { SETTINGS_PATH, LOCAL_SETTINGS_PATH } from './constants.js';
+import { readSettingsKey, writeSettingsKey } from './settings.js';
 
 /**
  * Load credentials from local (.spark/) only — no global fallback.
  */
 export function loadLocalCredentials() {
-  if (existsSync(LOCAL_CREDENTIALS_PATH)) {
-    try {
-      return JSON.parse(readFileSync(LOCAL_CREDENTIALS_PATH, 'utf8'));
-    } catch {
-      return null;
-    }
-  }
-  return null;
+  return readSettingsKey(LOCAL_SETTINGS_PATH, 'credentials');
 }
 
 /**
@@ -25,54 +14,48 @@ export function loadLocalCredentials() {
  * Checks local (.spark/) first, then global (~/.spark/).
  */
 export function loadCredentials() {
-  for (const path of [LOCAL_CREDENTIALS_PATH, CREDENTIALS_PATH]) {
-    if (existsSync(path)) {
-      try {
-        return JSON.parse(readFileSync(path, 'utf8'));
-      } catch {
-        // Invalid file, try next location
-      }
-    }
+  for (const path of [LOCAL_SETTINGS_PATH, SETTINGS_PATH]) {
+    const creds = readSettingsKey(path, 'credentials');
+    if (creds) return creds;
   }
   return null;
 }
 
 /**
- * Save credentials to file.
+ * Save credentials to settings.json.
  * @param {object} credentials
  * @param {object} [options]
  * @param {boolean} [options.local] - true for ./.spark/, false for ~/.spark/.
- *   If omitted, auto-detects: saves to local if local credentials exist, otherwise global.
+ *   If omitted, auto-detects: saves to local if local settings exist, otherwise global.
  */
 export function saveCredentials(credentials, { local } = {}) {
-  const isLocal = local ?? existsSync(LOCAL_CREDENTIALS_PATH);
-  const dir = isLocal ? LOCAL_SPARK_DIR : SPARK_DIR;
-  const path = isLocal ? LOCAL_CREDENTIALS_PATH : CREDENTIALS_PATH;
-
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-  }
-  writeFileSync(path, JSON.stringify(credentials, null, 2), { mode: 0o600 });
+  const isLocal = local ?? existsSync(LOCAL_SETTINGS_PATH);
+  const path = isLocal ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
+  writeSettingsKey(path, 'credentials', credentials);
 }
 
 /**
  * Check if credentials exist in either local or global location.
  */
 export function credentialsExist() {
-  return existsSync(LOCAL_CREDENTIALS_PATH) || existsSync(CREDENTIALS_PATH);
+  return !!(
+    readSettingsKey(LOCAL_SETTINGS_PATH, 'credentials') ||
+    readSettingsKey(SETTINGS_PATH, 'credentials')
+  );
 }
 
 /**
- * Remove credentials. Removes local first if it exists, otherwise global.
+ * Remove credentials. Removes the credentials key from settings.json.
+ * Checks local first, then global.
  * Returns a description of what was removed, or null if nothing found.
  */
 export function removeCredentials() {
-  if (existsSync(LOCAL_CREDENTIALS_PATH)) {
-    unlinkSync(LOCAL_CREDENTIALS_PATH);
+  if (readSettingsKey(LOCAL_SETTINGS_PATH, 'credentials')) {
+    writeSettingsKey(LOCAL_SETTINGS_PATH, 'credentials', null);
     return 'local';
   }
-  if (existsSync(CREDENTIALS_PATH)) {
-    unlinkSync(CREDENTIALS_PATH);
+  if (readSettingsKey(SETTINGS_PATH, 'credentials')) {
+    writeSettingsKey(SETTINGS_PATH, 'credentials', null);
     return 'global';
   }
   return null;

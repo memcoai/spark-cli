@@ -1,6 +1,12 @@
 import { describe, it, mock, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { getParentOptions, output, outputSuccess } from '../src/output.js';
+import {
+  getParentOptions,
+  output,
+  outputSuccess,
+  setVersionNotification,
+  printVersionNotification,
+} from '../src/output.js';
 
 describe('getParentOptions', () => {
   it('returns {} for null command', () => {
@@ -102,5 +108,38 @@ describe('outputSuccess', () => {
     assert.strictEqual(parsed.success, true);
     assert.strictEqual(parsed.message, 'OK');
     assert.strictEqual(Object.keys(parsed).length, 2);
+  });
+});
+
+describe('printVersionNotification', () => {
+  let stderrMock;
+
+  beforeEach(() => {
+    stderrMock = mock.method(process.stderr, 'write');
+  });
+
+  afterEach(() => {
+    stderrMock.mock.restore();
+    // Clear any pending notification
+    setVersionNotification(null);
+  });
+
+  it('writes to stderr when notification is set', () => {
+    setVersionNotification('Update available: v1.0.0 → v1.1.0');
+    printVersionNotification();
+    assert.strictEqual(stderrMock.mock.calls.length, 1);
+    assert.ok(stderrMock.mock.calls[0].arguments[0].includes('Update available'));
+  });
+
+  it('does nothing when no notification is set', () => {
+    printVersionNotification();
+    assert.strictEqual(stderrMock.mock.calls.length, 0);
+  });
+
+  it('clears the notification after printing', () => {
+    setVersionNotification('Update available');
+    printVersionNotification();
+    printVersionNotification();
+    assert.strictEqual(stderrMock.mock.calls.length, 1);
   });
 });
