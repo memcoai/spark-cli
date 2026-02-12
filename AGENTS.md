@@ -31,7 +31,7 @@ src/
   credentials.js      Load/save/remove credentials via settings.json
   settings.js         Low-level settings.json read/write helpers
   update-check.js     Version checking (fetch, compare, cache, notification)
-  constants.js        Shared constants (API_BASE, paths, port, VERSION_CHECK_URL)
+  constants.js        Shared constants (API_BASE, paths, port, auth redirect URLs, VERSION_CHECK_URL)
   output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode

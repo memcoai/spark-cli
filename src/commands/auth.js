@@ -14,7 +14,7 @@ import {
   createSpinner,
   colorize,
 } from '../banner.js';
-import { API_BASE, CALLBACK_PORT } from '../constants.js';
+import { API_BASE, CALLBACK_PORT, AUTH_SUCCESS_URL, AUTH_ERROR_URL } from '../constants.js';
 import {
   loadCredentials,
   loadLocalCredentials,
@@ -71,30 +71,11 @@ function startCallbackServer() {
 }
 
 /**
- * Escape HTML special characters to prevent XSS
+ * Redirect the browser to a URL
  */
-function escapeHtml(str) {
-  return str
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-
-/**
- * Send an HTML response
- */
-function sendHtml(res, statusCode, title, message) {
-  res.writeHead(statusCode, { 'Content-Type': 'text/html' });
-  res.end(`
-    <html lang="en">
-      <body style="font-family: system-ui; padding: 40px; text-align: center;">
-        <h1>${escapeHtml(title)}</h1>
-        <p>${escapeHtml(message)}</p>
-        <p>You can close this window.</p>
-      </body>
-    </html>
-  `);
+function redirect(res, url) {
+  res.writeHead(302, { Location: url });
+  res.end();
 }
 
 /**
@@ -128,37 +109,36 @@ function waitForCallback(server, expectedState, codeVerifier) {
       const errorDescription = url.searchParams.get('error_description');
 
       if (error) {
-        sendHtml(res, 400, 'Authentication Failed', errorDescription || error);
+        const errorUrl = new URL(AUTH_ERROR_URL);
+        errorUrl.searchParams.set('error', error);
+        if (errorDescription) errorUrl.searchParams.set('message', errorDescription);
+        redirect(res, errorUrl.toString());
         server.close();
         reject(new Error(errorDescription || error));
         return;
       }
 
       if (state !== expectedState) {
-        sendHtml(
-          res,
-          400,
-          'Authentication Failed',
-          'Security validation failed. Please try again.',
-        );
+        const errorUrl = new URL(AUTH_ERROR_URL);
+        errorUrl.searchParams.set('error', 'invalid_state');
+        errorUrl.searchParams.set('message', 'Security validation failed. Please try again.');
+        redirect(res, errorUrl.toString());
         server.close();
         reject(new Error('Invalid state parameter'));
         return;
       }
 
       if (!code) {
-        sendHtml(res, 400, 'Authentication Failed', 'No authorization code received.');
+        const errorUrl = new URL(AUTH_ERROR_URL);
+        errorUrl.searchParams.set('error', 'missing_code');
+        errorUrl.searchParams.set('message', 'No authorization code received.');
+        redirect(res, errorUrl.toString());
         server.close();
         reject(new Error('No authorization code received'));
         return;
       }
 
-      sendHtml(
-        res,
-        200,
-        'Authentication Successful',
-        'You can close this window and return to the terminal.',
-      );
+      redirect(res, AUTH_SUCCESS_URL);
       server.close();
       resolve({ code, codeVerifier });
     });
