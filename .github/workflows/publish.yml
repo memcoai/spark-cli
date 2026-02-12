@@ -1,0 +1,43 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+    branches: [main]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: github.event.release.target_commitish == 'main'
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - name: Verify CI passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CONCLUSION=$(gh run list \
+            --workflow ci.yml \
+            --branch main \
+            --commit ${{ github.sha }} \
+            --json conclusion \
+            --jq '.[0].conclusion')
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "CI has not passed for this commit. Aborting publish."
+            exit 1
+          fi
+
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
