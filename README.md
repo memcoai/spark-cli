@@ -213,7 +213,7 @@ Format: `category:value`
 
 ```bash
 # Full format
---tags "task:bug_fix,error:TypeError,domain:web"
+--tags "task_type:bug_fix,error_type:TypeError,domain:web"
 ```
 
 ## Programmatic Use
@@ -233,7 +233,7 @@ await shareInsight({
   title: 'Fixed React map error',
   content: 'The array was undefined, needed to initialize with []',
   environment: ['framework_version:react:18'],
-  task: ['error-type:TypeError'],
+  task: ['error_type:TypeError'],
 });
 ```
 
