@@ -306,6 +306,7 @@ export async function logoutCommand() {
       printInfo('Logging out of Spark server...');
       try {
         const response = await fetch(`${API_BASE}/auth/logout-all`, {
+          method: 'POST',
           headers: { Authorization: `Bearer ${credentials.accessToken}` },
           redirect: 'manual',
         });
