@@ -33,7 +33,17 @@ export async function runUpdate({ exec = execSync, getVersion = getLocalVersion 
     }
   } catch (err) {
     spinner.fail('Update failed');
-    printError(err.stderr?.trim() || err.message);
+
+    if (err.code === 'ENOENT') {
+      printError('npm is not installed or not in PATH');
+    } else if (err.code === 'EACCES') {
+      printError('Permission denied. Try running with sudo: sudo spark update');
+    } else if (err.stderr?.trim()) {
+      printError(err.stderr.trim());
+    } else {
+      printError(err.message);
+    }
+
     process.exit(1);
   }
 }

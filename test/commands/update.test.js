@@ -71,7 +71,7 @@ describe('updateCommand', () => {
 
   it('prints stderr message on npm failure', async () => {
     const err = new Error('command failed');
-    err.stderr = '  npm ERR! permission denied  ';
+    err.stderr = '  npm ERR! network error  ';
     const exec = mock.fn(() => {
       throw err;
     });
@@ -80,7 +80,36 @@ describe('updateCommand', () => {
     await runUpdate({ exec, getVersion });
 
     const output = logMock.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
-    assert.ok(output.includes('npm ERR! permission denied'));
+    assert.ok(output.includes('npm ERR! network error'));
+  });
+
+  it('shows npm-not-found message on ENOENT', async () => {
+    const err = new Error('spawn npm ENOENT');
+    err.code = 'ENOENT';
+    const exec = mock.fn(() => {
+      throw err;
+    });
+    const getVersion = mock.fn(() => '1.0.0');
+
+    await runUpdate({ exec, getVersion });
+
+    const output = logMock.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
+    assert.ok(output.includes('npm is not installed or not in PATH'));
+  });
+
+  it('shows permission message on EACCES', async () => {
+    const err = new Error('permission denied');
+    err.code = 'EACCES';
+    const exec = mock.fn(() => {
+      throw err;
+    });
+    const getVersion = mock.fn(() => '1.0.0');
+
+    await runUpdate({ exec, getVersion });
+
+    const output = logMock.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
+    assert.ok(output.includes('Permission denied'));
+    assert.ok(output.includes('sudo'));
   });
 
   it('falls back to error message when stderr is empty', async () => {
