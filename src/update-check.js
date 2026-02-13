@@ -138,6 +138,34 @@ export async function checkCompatibility() {
 }
 
 /**
+ * Coerce and validate a version string. Returns a valid semver string or null.
+ */
+function coerceVersion(version) {
+  return semver.valid(semver.coerce(version));
+}
+
+/**
+ * Check if localVersion is below the given version string.
+ */
+function isBelow(local, version) {
+  const target = coerceVersion(version);
+  return target && semver.lt(local, target);
+}
+
+/**
+ * Find the first deprecation entry that applies to the local version.
+ */
+function findDeprecation(local, deprecations) {
+  if (!Array.isArray(deprecations)) return null;
+  for (const dep of deprecations) {
+    if (dep.version_below && isBelow(local, dep.version_below)) {
+      return dep;
+    }
+  }
+  return null;
+}
+
+/**
  * Evaluate the compatibility response against the local version.
  *
  * Returns {
@@ -147,40 +175,27 @@ export async function checkCompatibility() {
  * }
  */
 export function evaluateCompatibility(localVersion, compatibility) {
-  const result = {
-    blocked: false,
-    deprecation: null,
-    messages: [],
-  };
+  const result = { blocked: false, deprecation: null, messages: [] };
 
   if (!compatibility || !localVersion) return result;
 
-  const local = semver.valid(semver.coerce(localVersion));
+  const local = coerceVersion(localVersion);
   if (!local) return result;
 
   // Check blocked (below minimum_version)
-  if (compatibility.minimum_version) {
-    const minimum = semver.valid(semver.coerce(compatibility.minimum_version));
-    if (minimum && semver.lt(local, minimum)) {
-      result.blocked = true;
-      result.messages.push(
-        `Spark CLI v${localVersion} is no longer supported. Minimum required: v${compatibility.minimum_version}.\n` +
-          'Please update: spark update',
-      );
-    }
+  if (compatibility.minimum_version && isBelow(local, compatibility.minimum_version)) {
+    result.blocked = true;
+    result.messages.push(
+      `Spark CLI v${localVersion} is no longer supported. Minimum required: v${compatibility.minimum_version}.\n` +
+        'Please update: spark update',
+    );
   }
 
   // Check deprecations
-  if (Array.isArray(compatibility.deprecations)) {
-    for (const dep of compatibility.deprecations) {
-      if (!dep.version_below) continue;
-      const threshold = semver.valid(semver.coerce(dep.version_below));
-      if (threshold && semver.lt(local, threshold)) {
-        result.deprecation = dep;
-        result.messages.push(dep.message || `Versions below ${dep.version_below} are deprecated.`);
-        break;
-      }
-    }
+  const dep = findDeprecation(local, compatibility.deprecations);
+  if (dep) {
+    result.deprecation = dep;
+    result.messages.push(dep.message || `Versions below ${dep.version_below} are deprecated.`);
   }
 
   // Append the backend message field when blocked or deprecated
