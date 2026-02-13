@@ -120,7 +120,7 @@ describe('evaluateCompatibility', () => {
     it('skips empty message', () => {
       const compat = makeCompat({ minimum_version: '2.0.0', message: '' });
       const result = evaluateCompatibility('1.0.0', compat);
-      assert.ok(!result.messages.some((m) => m === ''));
+      assert.ok(!result.messages.includes((m) => m === ''));
     });
   });
 
