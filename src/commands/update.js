@@ -1,6 +1,8 @@
 import { execSync } from 'node:child_process';
 import { getLocalVersion } from '../update-check.js';
 import { printError, printInfo, createSpinner } from '../banner.js';
+import { SETTINGS_PATH } from '../constants.js';
+import { writeSettingsKey } from '../settings.js';
 
 /**
  * spark update — self-update to the latest version.
@@ -19,6 +21,10 @@ export async function updateCommand() {
     });
 
     const newVersion = getLocalVersion();
+
+    // Clear cached compatibility and version data so the next run gets a fresh check
+    writeSettingsKey(SETTINGS_PATH, 'compatibility', null);
+    writeSettingsKey(SETTINGS_PATH, 'latestVersion', null);
 
     if (newVersion === currentVersion) {
       spinner.stop(`Already on the latest version (v${currentVersion})`);

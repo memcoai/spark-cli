@@ -36,10 +36,13 @@ program
   .option('--pretty', 'Pretty-print JSON output')
   .option('--no-color', 'Disable colored output');
 
-program.hook('preAction', () => {
+program.hook('preAction', (thisCommand, actionCommand) => {
   if (program.opts().color === false) {
     process.env.NO_COLOR = '1';
   }
+
+  // Skip version/compatibility checks for the update command
+  if (actionCommand.name() === 'update') return;
 
   const localVersion = getLocalVersion();
 
