@@ -1,21 +1,21 @@
 import { describe, it, mock, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { runUninstall } from '../../src/commands/uninstall.js';
+import { setupCommandMocks } from '../helpers.js';
 
 describe('uninstallCommand', () => {
   let logMock;
   let exitMock;
   let stdoutMock;
+  let restoreMocks;
 
   beforeEach(() => {
-    logMock = mock.method(console, 'log');
-    exitMock = mock.method(process, 'exit', () => {});
+    ({ logMock, exitMock, restoreMocks } = setupCommandMocks(mock));
     stdoutMock = mock.method(process.stdout, 'write', () => true);
   });
 
   afterEach(() => {
-    logMock.mock.restore();
-    exitMock.mock.restore();
+    restoreMocks();
     stdoutMock.mock.restore();
   });
 
