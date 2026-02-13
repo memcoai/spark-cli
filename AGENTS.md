@@ -26,12 +26,13 @@ src/
     insights.js       Get detailed insights for a task
     share.js          Share an insight/solution
     feedback.js       Provide feedback on recommendations
+    update.js         Self-update command (npm install -g @memco/spark@latest)
   api.js              HTTP client — getAuthToken, apiRequest, callTool, and API wrappers
   oauth.js            OAuth discovery (well-known endpoints) and dynamic client registration
   credentials.js      Load/save/remove credentials via settings.json
   settings.js         Low-level settings.json read/write helpers
-  update-check.js     Version checking (fetch, compare, cache, notification)
-  constants.js        Shared constants (API_BASE, paths, port, auth redirect URLs, VERSION_CHECK_URL)
+  update-check.js     Version checking (npm update notifications) and backend compatibility (block/deprecation)
+  constants.js        Shared constants (API_BASE, VERSION_CHECK_URL, paths, port, auth redirect URLs)
   output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode
@@ -42,13 +43,13 @@ src/
 
 ## Key Patterns
 
-- **Settings file:** All persistent state stored in `settings.json` with structure `{ credentials, client, latestVersion }`. Global at `~/.spark/settings.json`, local at `./.spark/settings.json`. Credentials and client data use `readSettingsKey`/`writeSettingsKey` from `settings.js`.
+- **Settings file:** All persistent state stored in `settings.json` with structure `{ credentials, client, latestVersion, compatibility }`. Global at `~/.spark/settings.json`, local at `./.spark/settings.json`. Credentials and client data use `readSettingsKey`/`writeSettingsKey` from `settings.js`.
 - **Credentials resolution:** local-first (`./.spark/settings.json`) then global (`~/.spark/settings.json`). The `--local` flag on `spark login` scopes credentials to the current directory. Token refresh auto-detects which location to save back to. Logout removes the `credentials` key, not the file.
 - **Auth priority:** CLI `--api-key` flag > `SPARK_API_KEY` env var > OAuth access token > legacy API key in credentials file.
 - **Tag format:** `TYPE:NAME` or `TYPE:NAME:VERSION` where version accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH with optional pre-release suffix. The `v` prefix is stripped. Backend handles semantic validation; CLI only validates structure.
 - **Output:** Default output is compact JSON via `output()`. Use `--pretty` for human-readable output with markdown rendering and ANSI formatting. Auth commands (login, logout) always use styled terminal output via banner.js. Errors go through `outputError()` which calls `process.exit(1)`.
 - **OAuth client cache:** stored in `~/.spark/settings.json` under the `client` key (global, not per-project).
-- **Version checking:** Non-blocking fetch from GitHub (raw package.json). Cached in `~/.spark/settings.json` under `latestVersion` with 24-hour TTL. Major updates block CLI usage. Minor/patch updates print notification to stderr after command output. Notification also appears on error paths.
+- **Version checking:** Two separate systems: (1) npm registry check for "update available" notifications — cached under `latestVersion` with 24-hour TTL; (2) backend compatibility check (`GET /api/cli/compatibility`) for blocking outdated CLIs and deprecation warnings — cached under `compatibility` with 4-hour TTL. Both fail open on network errors. Blocking uses `minimum_version` from the backend. Deprecation warnings show on every invocation until updated. Backend `message` field is displayed when blocked or deprecated. Notifications print to stderr after command output.
 
 ## Development
 
@@ -56,6 +57,7 @@ src/
 npm test              # node --test (auto-discovers test/ directory)
 npm run test:coverage # c8 coverage report
 npm run lint          # eslint src/
+npm run format        # eslint --fix src/
 ```
 
 - Test framework: `node:test` built-in runner with `node:assert/strict`
@@ -73,7 +75,7 @@ test/
   parse-tags.test.js          parseTags, parseSources
   credentials.test.js         isTokenExpired
   settings.test.js            readSettings, writeSettings, readSettingsKey, writeSettingsKey
-  update-check.test.js        parseSemver, compareVersions
+  update-check.test.js        evaluateCompatibility (blocked, deprecation, message, edge cases)
   output.test.js              getParentOptions, output, outputSuccess, printVersionNotification
   format-markdown.test.js     Markdown-to-ANSI rendering
   pretty-print.test.js        Human-readable object formatting

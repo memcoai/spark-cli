@@ -1,42 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { VERSION_CHECK_URL, SETTINGS_PATH } from './constants.js';
+import semver from 'semver';
+import { API_BASE, VERSION_CHECK_URL, SETTINGS_PATH } from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
 
-/**
- * Parse a semver string into { major, minor, patch }.
- * Strips leading 'v' and ignores pre-release suffixes.
- */
-export function parseSemver(version) {
-  if (typeof version !== 'string') return null;
-  const match = version.replace(/^v/, '').match(/^(\d+)\.(\d+)\.(\d+)/);
-  if (!match) return null;
-  return {
-    major: parseInt(match[1], 10),
-    minor: parseInt(match[2], 10),
-    patch: parseInt(match[3], 10),
-  };
-}
-
-/**
- * Compare two semver strings.
- * Returns 'major' | 'minor' | 'patch' | null.
- */
-export function compareVersions(current, latest) {
-  const cur = parseSemver(current);
-  const lat = parseSemver(latest);
-  if (!cur || !lat) return null;
-  if (lat.major > cur.major) return 'major';
-  if (lat.major === cur.major && lat.minor > cur.minor) return 'minor';
-  if (lat.major === cur.major && lat.minor === cur.minor && lat.patch > cur.patch) return 'patch';
-  return null;
-}
+// ──────────────────────────────────────────────
+// Shared
+// ──────────────────────────────────────────────
 
 /**
  * Get the current local package version.
@@ -46,6 +23,10 @@ export function getLocalVersion() {
   return pkg.version;
 }
 
+// ──────────────────────────────────────────────
+// npm update check (is a newer version published?)
+// ──────────────────────────────────────────────
+
 /**
  * Read cached version info from global settings.json.
  */
@@ -54,7 +35,7 @@ export function getCachedVersion() {
 }
 
 /**
- * Fetch the latest version from GitHub and cache it.
+ * Fetch the latest version from npm and cache it.
  * Catches all errors silently — never blocks the CLI.
  */
 export async function fetchLatestVersion() {
@@ -96,22 +77,131 @@ export async function checkForUpdate() {
 export function getVersionNotification(latestInfo) {
   if (!latestInfo?.version) return null;
   const current = getLocalVersion();
-  const updateType = compareVersions(current, latestInfo.version);
-  if (!updateType) return null;
-
   const latest = latestInfo.version;
 
-  if (updateType === 'major') {
-    return {
-      type: 'major',
-      message:
-        `Spark CLI v${latest} is available (current: v${current}). This is a major update.\n` +
-        'Please update: npm install -g @memco/spark',
-    };
-  }
+  const cur = semver.valid(semver.coerce(current));
+  const lat = semver.valid(semver.coerce(latest));
+  if (!cur || !lat || !semver.lt(cur, lat)) return null;
 
   return {
-    type: updateType,
-    message: `Update available: v${current} → v${latest}. Run: npm install -g @memco/spark`,
+    type: 'update',
+    message: `Update available: v${current} \u2192 v${latest}. Run: spark update`,
   };
+}
+
+// ──────────────────────────────────────────────
+// Backend compatibility check (block / deprecation)
+// ──────────────────────────────────────────────
+
+/**
+ * Read cached compatibility data from global settings.json.
+ * Returns { data, checkedAt } or null.
+ */
+export function getCachedCompatibility() {
+  return readSettingsKey(SETTINGS_PATH, 'compatibility');
+}
+
+/**
+ * Fetch compatibility info from the backend and cache it.
+ * Returns { data, checkedAt } or null on failure. Never rejects.
+ */
+export async function fetchCompatibility() {
+  try {
+    const response = await fetch(`${API_BASE}/api/cli/compatibility`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data || (!data.minimum_version && !data.deprecations)) return null;
+    const result = { data, checkedAt: Date.now() };
+    writeSettingsKey(SETTINGS_PATH, 'compatibility', result);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check compatibility. Returns cached data if fresh (<4h), otherwise fetches.
+ * Never rejects.
+ */
+export async function checkCompatibility() {
+  try {
+    const cached = getCachedCompatibility();
+    if (cached?.data && cached.checkedAt && Date.now() - cached.checkedAt < FOUR_HOURS_MS) {
+      return cached;
+    }
+    return await fetchCompatibility();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Coerce and validate a version string. Returns a valid semver string or null.
+ */
+function coerceVersion(version) {
+  return semver.valid(semver.coerce(version));
+}
+
+/**
+ * Check if a coerced semver string is below the given version string.
+ */
+function isBelow(local, version) {
+  const target = coerceVersion(version);
+  return target && semver.lt(local, target);
+}
+
+/**
+ * Find the first deprecation entry that applies to the local version.
+ */
+function findDeprecation(local, deprecations) {
+  if (!Array.isArray(deprecations)) return null;
+  for (const dep of deprecations) {
+    if (dep.version_below && isBelow(local, dep.version_below)) {
+      return dep;
+    }
+  }
+  return null;
+}
+
+/**
+ * Evaluate the compatibility response against the local version.
+ *
+ * Returns {
+ *   blocked: boolean,        — true if localVersion < minimum_version
+ *   deprecation: object|null — matching deprecation entry, if any
+ *   messages: string[]       — message strings to display
+ * }
+ */
+export function evaluateCompatibility(localVersion, compatibility) {
+  const result = { blocked: false, deprecation: null, messages: [] };
+
+  if (!compatibility || !localVersion) return result;
+
+  const local = coerceVersion(localVersion);
+  if (!local) return result;
+
+  // Check blocked (below minimum_version)
+  if (compatibility.minimum_version && isBelow(local, compatibility.minimum_version)) {
+    result.blocked = true;
+    result.messages.push(
+      `Spark CLI v${localVersion} is no longer supported. Minimum required: v${compatibility.minimum_version}.\n` +
+        'Please update: spark update',
+    );
+  }
+
+  // Check deprecations
+  const dep = findDeprecation(local, compatibility.deprecations);
+  if (dep) {
+    result.deprecation = dep;
+    result.messages.push(dep.message || `Versions below ${dep.version_below} are deprecated.`);
+  }
+
+  // Append the backend message field when blocked or deprecated
+  if ((result.blocked || result.deprecation) && compatibility.message) {
+    result.messages.push(compatibility.message);
+  }
+
+  return result;
 }

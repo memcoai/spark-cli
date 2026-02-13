@@ -6,6 +6,7 @@ import { insightsCommand } from '../src/commands/insights.js';
 import { shareCommand } from '../src/commands/share.js';
 import { feedbackCommand } from '../src/commands/feedback.js';
 import { loginCommand, logoutCommand, whoamiCommand } from '../src/commands/auth.js';
+import { updateCommand } from '../src/commands/update.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -14,7 +15,9 @@ import {
   getVersionNotification,
   getCachedVersion,
   getLocalVersion,
-  compareVersions,
+  checkCompatibility,
+  getCachedCompatibility,
+  evaluateCompatibility,
 } from '../src/update-check.js';
 import { setVersionNotification, printVersionNotification } from '../src/output.js';
 
@@ -23,6 +26,7 @@ const __dirname = dirname(__filename);
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
 
 let updateCheckPromise = null;
+let compatCheckPromise = null;
 
 program
   .name('spark')
@@ -32,32 +36,54 @@ program
   .option('--pretty', 'Pretty-print JSON output')
   .option('--no-color', 'Disable colored output');
 
-program.hook('preAction', () => {
+program.hook('preAction', (thisCommand, actionCommand) => {
   if (program.opts().color === false) {
     process.env.NO_COLOR = '1';
   }
 
-  // Block on major version update (uses cached data only — no network delay)
-  const cached = getCachedVersion();
-  if (cached?.version) {
-    const updateType = compareVersions(getLocalVersion(), cached.version);
-    if (updateType === 'major') {
-      const notification = getVersionNotification(cached);
-      process.stderr.write('\n' + notification.message + '\n');
+  // Skip version/compatibility checks for the update command
+  if (actionCommand.name() === 'update') return;
+
+  const localVersion = getLocalVersion();
+
+  // Check cached compatibility data synchronously (no network delay)
+  const cachedCompat = getCachedCompatibility();
+  if (cachedCompat?.data) {
+    const evaluation = evaluateCompatibility(localVersion, cachedCompat.data);
+
+    if (evaluation.blocked) {
+      process.stderr.write('\n' + evaluation.messages.join('\n') + '\n');
       process.exit(1);
     }
-    // Pre-set minor/patch notification so it's available if outputError fires
-    const notification = getVersionNotification(cached);
+
+    if (evaluation.deprecation) {
+      setVersionNotification(evaluation.messages.join('\n'));
+    }
+  }
+
+  // Pre-set update notification from cached npm data
+  const cachedVersion = getCachedVersion();
+  if (cachedVersion) {
+    const notification = getVersionNotification(cachedVersion);
     if (notification) {
       setVersionNotification(notification.message);
     }
   }
 
-  // Start background version check
+  // Start background checks
+  compatCheckPromise = checkCompatibility().then((result) => {
+    if (result?.data) {
+      const evaluation = evaluateCompatibility(localVersion, result.data);
+      if (!evaluation.blocked && evaluation.deprecation) {
+        setVersionNotification(evaluation.messages.join('\n'));
+      }
+    }
+  });
+
   updateCheckPromise = checkForUpdate().then((latestInfo) => {
     if (latestInfo) {
       const notification = getVersionNotification(latestInfo);
-      if (notification && notification.type !== 'major') {
+      if (notification) {
         setVersionNotification(notification.message);
       }
     }
@@ -65,6 +91,9 @@ program.hook('preAction', () => {
 });
 
 program.hook('postAction', async () => {
+  if (compatCheckPromise) {
+    await compatCheckPromise;
+  }
   if (updateCheckPromise) {
     await updateCheckPromise;
   }
@@ -124,5 +153,10 @@ program
 program.command('logout').description('Remove stored credentials').action(logoutCommand);
 
 program.command('whoami').description('Show current authenticated user').action(whoamiCommand);
+
+program
+  .command('update')
+  .description('Update Spark CLI to the latest version')
+  .action(updateCommand);
 
 program.parse();
