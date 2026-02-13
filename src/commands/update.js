@@ -5,22 +5,22 @@ import { SETTINGS_PATH } from '../constants.js';
 import { writeSettingsKey } from '../settings.js';
 
 /**
- * spark update — self-update to the latest version.
+ * Core update logic, accepts dependencies for testability.
  */
-export async function updateCommand() {
-  const currentVersion = getLocalVersion();
+export async function runUpdate({ exec = execSync, getVersion = getLocalVersion } = {}) {
+  const currentVersion = getVersion();
   printInfo(`Current version: v${currentVersion}`);
 
   const spinner = createSpinner('Updating @memco/spark...');
 
   try {
-    execSync('npm install -g @memco/spark@latest', {
+    exec('npm install -g @memco/spark@latest', {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 60000,
     });
 
-    const newVersion = getLocalVersion();
+    const newVersion = getVersion();
 
     // Clear cached compatibility and version data so the next run gets a fresh check
     writeSettingsKey(SETTINGS_PATH, 'compatibility', null);
@@ -36,4 +36,11 @@ export async function updateCommand() {
     printError(err.stderr?.trim() || err.message);
     process.exit(1);
   }
+}
+
+/**
+ * spark update — self-update to the latest version.
+ */
+export async function updateCommand() {
+  return runUpdate();
 }
