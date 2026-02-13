@@ -4,24 +4,23 @@ import { runUninstall } from '../../src/commands/uninstall.js';
 import { setupCommandMocks } from '../helpers.js';
 
 describe('runUninstall', () => {
-  let logMock;
-  let exitMock;
+  const mocks = setupCommandMocks();
   let stdoutMock;
-  let restoreMocks;
 
   beforeEach(() => {
-    ({ logMock, exitMock, restoreMocks } = setupCommandMocks(mock));
     stdoutMock = mock.method(process.stdout, 'write', () => true);
   });
 
   afterEach(() => {
-    restoreMocks();
     stdoutMock.mock.restore();
   });
 
   const getLogOutput = (m) => m.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
   const getStdoutOutput = (m) => m.mock.calls.map((c) => c.arguments[0]).join('');
-  const throwingExec = (err) => mock.fn(() => { throw err; });
+  const throwingExec = (err) =>
+    mock.fn(() => {
+      throw err;
+    });
 
   it('shows success message on successful uninstall', async () => {
     await runUninstall({ exec: mock.fn() });
@@ -67,8 +66,8 @@ describe('runUninstall', () => {
     it(name, async () => {
       await runUninstall({ exec: throwingExec(error) });
 
-      assert.strictEqual(exitMock.mock.calls[0].arguments[0], 1);
-      assert.ok(getLogOutput(logMock).includes(expected));
+      assert.strictEqual(mocks.exitMock.mock.calls[0].arguments[0], 1);
+      assert.ok(getLogOutput(mocks.logMock).includes(expected));
     });
   }
 });
