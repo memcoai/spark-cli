@@ -112,7 +112,7 @@ export async function fetchCompatibility() {
     });
     if (!response.ok) return null;
     const data = await response.json();
-    if (!data?.minimum_version) return null;
+    if (!data || (!data.minimum_version && !data.deprecations)) return null;
     const result = { data, checkedAt: Date.now() };
     writeSettingsKey(SETTINGS_PATH, 'compatibility', result);
     return result;
