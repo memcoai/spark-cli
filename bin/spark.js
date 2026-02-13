@@ -7,6 +7,7 @@ import { shareCommand } from '../src/commands/share.js';
 import { feedbackCommand } from '../src/commands/feedback.js';
 import { loginCommand, logoutCommand, whoamiCommand } from '../src/commands/auth.js';
 import { updateCommand } from '../src/commands/update.js';
+import { uninstallCommand } from '../src/commands/uninstall.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -42,7 +43,7 @@ program.hook('preAction', (thisCommand, actionCommand) => {
   }
 
   // Skip version/compatibility checks for the update command
-  if (actionCommand.name() === 'update') return;
+  if (actionCommand.name() === 'update' || actionCommand.name() === 'uninstall') return;
 
   const localVersion = getLocalVersion();
 
@@ -158,5 +159,10 @@ program
   .command('update')
   .description('Update Spark CLI to the latest version')
   .action(updateCommand);
+
+program
+  .command('uninstall')
+  .description('Uninstall Spark CLI from this system')
+  .action(uninstallCommand);
 
 program.parse();
