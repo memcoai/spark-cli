@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { runUninstall } from '../../src/commands/uninstall.js';
 import { setupCommandMocks } from '../helpers.js';
 
-describe('uninstallCommand', () => {
+describe('runUninstall', () => {
   let logMock;
   let exitMock;
   let stdoutMock;
