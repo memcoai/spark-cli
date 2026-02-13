@@ -103,7 +103,7 @@ export function getCachedCompatibility() {
 
 /**
  * Fetch compatibility info from the backend and cache it.
- * Returns { data, checkedAt } or null on failure. Never throws.
+ * Returns { data, checkedAt } or null on failure. Never rejects.
  */
 export async function fetchCompatibility() {
   try {
@@ -145,7 +145,7 @@ function coerceVersion(version) {
 }
 
 /**
- * Check if localVersion is below the given version string.
+ * Check if a coerced semver string is below the given version string.
  */
 function isBelow(local, version) {
   const target = coerceVersion(version);
