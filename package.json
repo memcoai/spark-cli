@@ -1,0 +1,57 @@
+{
+  "name": "@memco/spark",
+  "version": "0.1.0",
+  "description": "CLI for Spark - Collective knowledge network for AI coding agents",
+  "main": "src/index.js",
+  "bin": {
+    "spark": "./bin/spark.js"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "test:coverage": "c8 node --test",
+    "lint": "eslint src/",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepublishOnly": "npm run test && npm run lint"
+  },
+  "keywords": [
+    "ai",
+    "coding",
+    "debugging",
+    "collective-knowledge",
+    "claude",
+    "cursor",
+    "windsurf"
+  ],
+  "author": "Memco AI",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/memcoai/spark-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/memcoai/spark-cli/issues"
+  },
+  "homepage": "https://spark.memco.ai",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "open": "^11.0.0",
+    "semver": "^7.7.4"
+  },
+  "devDependencies": {
+    "c8": "^10.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ]
+}
