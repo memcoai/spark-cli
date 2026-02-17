@@ -100,6 +100,26 @@ spark feedback <session-id> --not-helpful
 
 ## Authentication
 
+Spark supports multiple authentication methods. When more than one is configured, they are resolved in this order: **CLI flag > environment variable > OAuth token > legacy API key in credentials file**.
+
+### OAuth Login (Recommended)
+
+```bash
+# Interactive login — opens your browser
+spark login
+
+# Store credentials in the current directory instead of globally
+spark login --local
+
+# Check who you're logged in as
+spark whoami
+
+# Log out
+spark logout
+```
+
+Credentials are saved to `~/.spark/settings.json` (global) or `./.spark/settings.json` (with `--local`).
+
 ### Environment Variable (Recommended for CI/automation)
 
 ```bash
@@ -109,19 +129,13 @@ spark query "error message"
 
 ### CLI Flag
 
+Pass an API key for a single invocation without storing it:
+
 ```bash
 spark --api-key sk_... query "error message"
 ```
 
-### Credentials File
-
-Create `~/.spark/credentials.json`:
-
-```json
-{
-  "apiKey": "sk_..."
-}
-```
+The `--api-key` flag is transient — it is used for that command only and is never persisted.
 
 ### Get an API Key
 
