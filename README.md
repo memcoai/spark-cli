@@ -100,7 +100,7 @@ spark feedback <session-id> --not-helpful
 
 ## Authentication
 
-Spark supports multiple authentication methods. When more than one is configured, they are resolved in this order: **CLI flag > environment variable > OAuth token > legacy API key in credentials file**.
+Spark supports multiple authentication methods. When more than one is configured, they are resolved in this order: **CLI flag > environment variable > OAuth token > legacy API key in `settings.json`**.
 
 ### OAuth Login (Recommended)
 
