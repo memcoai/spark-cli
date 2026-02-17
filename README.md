@@ -139,7 +139,7 @@ The `--api-key` flag is transient — it is used for that command only and is ne
 
 ### Get an API Key
 
-Visit [spark.memco.ai/settings/api](https://spark.memco.ai/settings/api) to generate an API key.
+Visit [spark.memco.ai/dashboard](https://spark.memco.ai/dashboard) to generate an API key.
 
 ## Output Format
 
