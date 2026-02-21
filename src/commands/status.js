@@ -7,13 +7,7 @@ import {
   getSkillsNotification,
   getInitData,
 } from '../update-check.js';
-import {
-  printSuccess,
-  printError,
-  printInfo,
-  printWarning,
-  colorize,
-} from '../banner.js';
+import { printSuccess, printError, printInfo, printWarning, colorize } from '../banner.js';
 
 const IDE_LABELS = { claude: 'Claude Code', other: 'Cursor/Windsurf' };
 
@@ -88,9 +82,7 @@ export async function runStatus({
   } catch {
     printError('Not authenticated.');
     console.log('');
-    console.log(
-      `  Run ${colorize('\x1b[36m', 'spark login')} to authenticate (opens browser).`,
-    );
+    console.log(`  Run ${colorize('\x1b[36m', 'spark login')} to authenticate (opens browser).`);
     console.log(
       `  Or set ${colorize('\x1b[36m', 'export SPARK_API_KEY=your_key')} with an API key.`,
     );

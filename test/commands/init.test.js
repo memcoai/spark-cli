@@ -22,11 +22,13 @@ describe('runInit', () => {
   });
 
   it('prints cancellation message on user cancel during IDE selection', async () => {
-    await runInit(defaultDeps({
-      prompt_checklist: mock.fn(async () => {
-        throw new Error('User cancelled');
+    await runInit(
+      defaultDeps({
+        prompt_checklist: mock.fn(async () => {
+          throw new Error('User cancelled');
+        }),
       }),
-    }));
+    );
 
     assert.ok(getLogOutput(mocks.logMock).includes('Setup cancelled'));
   });
@@ -59,10 +61,12 @@ describe('runInit', () => {
 
   it('runs Claude Code setup with global (user) scope', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
-    await runInit(defaultDeps({
-      exec,
-      prompt_choice: mock.fn(async () => 'Global (all projects)'),
-    }));
+    await runInit(
+      defaultDeps({
+        exec,
+        prompt_choice: mock.fn(async () => 'Global (all projects)'),
+      }),
+    );
 
     assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
       'plugin',
@@ -75,10 +79,12 @@ describe('runInit', () => {
 
   it('runs Other IDEs setup with project scope via interactive spawn', async () => {
     const spawnInteractive = mock.fn(async () => {});
-    await runInit(defaultDeps({
-      prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
-      spawn_interactive: spawnInteractive,
-    }));
+    await runInit(
+      defaultDeps({
+        prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
+        spawn_interactive: spawnInteractive,
+      }),
+    );
 
     assert.strictEqual(spawnInteractive.mock.calls.length, 1);
     assert.strictEqual(spawnInteractive.mock.calls[0].arguments[0], 'npx');
@@ -91,11 +97,13 @@ describe('runInit', () => {
 
   it('runs Other IDEs setup with global scope via interactive spawn', async () => {
     const spawnInteractive = mock.fn(async () => {});
-    await runInit(defaultDeps({
-      prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
-      prompt_choice: mock.fn(async () => 'Global (all projects)'),
-      spawn_interactive: spawnInteractive,
-    }));
+    await runInit(
+      defaultDeps({
+        prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
+        prompt_choice: mock.fn(async () => 'Global (all projects)'),
+        spawn_interactive: spawnInteractive,
+      }),
+    );
 
     assert.deepStrictEqual(spawnInteractive.mock.calls[0].arguments[1], [
       'skills',
@@ -108,14 +116,13 @@ describe('runInit', () => {
   it('runs both IDE setups when both selected', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
     const spawnInteractive = mock.fn(async () => {});
-    await runInit(defaultDeps({
-      prompt_checklist: mock.fn(async () => [
-        'Claude Code',
-        'Other (Cursor, Windsurf, etc.)',
-      ]),
-      exec,
-      spawn_interactive: spawnInteractive,
-    }));
+    await runInit(
+      defaultDeps({
+        prompt_checklist: mock.fn(async () => ['Claude Code', 'Other (Cursor, Windsurf, etc.)']),
+        exec,
+        spawn_interactive: spawnInteractive,
+      }),
+    );
 
     // Claude Code: 2 exec calls (marketplace + install)
     assert.strictEqual(exec.mock.calls.length, 2);
@@ -154,12 +161,14 @@ describe('runInit', () => {
   });
 
   it('shows warning when Other IDEs interactive spawn fails', async () => {
-    await runInit(defaultDeps({
-      prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
-      spawn_interactive: mock.fn(async () => {
-        throw new Error('npx exited with code 1');
+    await runInit(
+      defaultDeps({
+        prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
+        spawn_interactive: mock.fn(async () => {
+          throw new Error('npx exited with code 1');
+        }),
       }),
-    }));
+    );
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Failed to install skills'));
@@ -169,11 +178,13 @@ describe('runInit', () => {
   });
 
   it('continues with warning when a command fails', async () => {
-    await runInit(defaultDeps({
-      exec: mock.fn(async () => {
-        throw Object.assign(new Error('command not found'), { stderr: 'claude: not found' });
+    await runInit(
+      defaultDeps({
+        exec: mock.fn(async () => {
+          throw Object.assign(new Error('command not found'), { stderr: 'claude: not found' });
+        }),
       }),
-    }));
+    );
 
     const output = getLogOutput(mocks.logMock);
     // Should still show auth instructions even after failures

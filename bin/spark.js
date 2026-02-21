@@ -197,10 +197,7 @@ program
   .description('Uninstall Spark CLI from this system')
   .action(uninstallCommand);
 
-program
-  .command('init')
-  .description('Set up Spark for your IDE')
-  .action(initCommand);
+program.command('init').description('Set up Spark for your IDE').action(initCommand);
 
 program
   .command('status')

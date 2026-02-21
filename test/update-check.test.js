@@ -187,7 +187,10 @@ describe('evaluateCompatibility', () => {
 
 describe('getSkillsNotification', () => {
   it('returns null when latestInfo is null', () => {
-    assert.strictEqual(getSkillsNotification(null, { ides: ['claude'], skillsVersion: '1.0.0' }), null);
+    assert.strictEqual(
+      getSkillsNotification(null, { ides: ['claude'], skillsVersion: '1.0.0' }),
+      null,
+    );
   });
 
   it('returns null when initData is null', () => {
@@ -195,10 +198,7 @@ describe('getSkillsNotification', () => {
   });
 
   it('returns null when initData has no skillsVersion', () => {
-    assert.strictEqual(
-      getSkillsNotification({ version: '2.0.0' }, { ides: ['claude'] }),
-      null,
-    );
+    assert.strictEqual(getSkillsNotification({ version: '2.0.0' }, { ides: ['claude'] }), null);
   });
 
   it('returns null when initData has no ides', () => {

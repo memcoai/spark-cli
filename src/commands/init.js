@@ -154,13 +154,7 @@ async function setupClaudeCode(scope, { exec = runCommand } = {}) {
 
   const installSpinner = createSpinner('Installing Spark plugin...');
   try {
-    await exec('claude', [
-      'plugin',
-      'install',
-      'spark-cli@MemCo',
-      '--scope',
-      scopeFlag,
-    ]);
+    await exec('claude', ['plugin', 'install', 'spark-cli@MemCo', '--scope', scopeFlag]);
     installSpinner.stop(`Spark plugin installed (${scopeFlag} scope)`);
   } catch (err) {
     installSpinner.fail('Failed to install plugin');
@@ -269,9 +263,7 @@ function printAuthInstructions() {
   console.log(
     `  ${colorize('\x1b[33m', 'Option 2:')} Visit ${colorize('\x1b[32m', 'https://spark.memco.ai')}, log in, create an API key,`,
   );
-  console.log(
-    `             then set: ${colorize('\x1b[32m', 'export SPARK_API_KEY=your_key')}`,
-  );
+  console.log(`             then set: ${colorize('\x1b[32m', 'export SPARK_API_KEY=your_key')}`);
   console.log('');
   console.log(
     `Once authenticated, run ${colorize('\x1b[32m', 'spark status')} to verify your setup.`,
