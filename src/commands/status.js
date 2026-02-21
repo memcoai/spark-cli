@@ -27,7 +27,7 @@ async function printSkillsStatus(initData, checkSkills, getSkillsNote) {
   printInfo(`Skills configured for: ${ideLabels}`);
 
   if (initData.skillsVersion) {
-    printInfo(`Installed skills version: v${initData.skillsVersion}`);
+    printInfo(`Installed skills version: v${String(initData.skillsVersion).replace(/^[vV]/, '')}`);
   }
 
   try {

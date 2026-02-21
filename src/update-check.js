@@ -256,7 +256,7 @@ export function getSkillsNotification(latestInfo, initData) {
   if (!installed || !latest || !semver.lt(installed, latest)) return null;
 
   const lines = [
-    `Skills update available: v${initData.skillsVersion} \u2192 v${latestInfo.version}`,
+    `Skills update available: v${String(initData.skillsVersion).replace(/^[vV]/, '')} \u2192 v${String(latestInfo.version).replace(/^[vV]/, '')}`,
   ];
 
   const ides = initData.ides;
