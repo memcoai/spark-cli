@@ -208,6 +208,13 @@ describe('getSkillsNotification', () => {
     );
   });
 
+  it('returns null when initData has empty ides array', () => {
+    assert.strictEqual(
+      getSkillsNotification({ version: '2.0.0' }, { ides: [], skillsVersion: '1.0.0' }),
+      null,
+    );
+  });
+
   it('returns null when versions are equal', () => {
     const result = getSkillsNotification(
       { version: '1.0.0' },

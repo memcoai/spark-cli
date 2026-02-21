@@ -236,10 +236,10 @@ export async function checkSkillsVersion() {
  */
 export function getInitData() {
   const local = readSettingsKey(LOCAL_SETTINGS_PATH, 'init');
-  if (local?.ides && local.skillsVersion) return local;
+  if (local?.ides?.length && local.skillsVersion) return local;
 
   const global = readSettingsKey(SETTINGS_PATH, 'globalInit');
-  if (global?.ides && global.skillsVersion) return global;
+  if (global?.ides?.length && global.skillsVersion) return global;
 
   return null;
 }
@@ -249,7 +249,7 @@ export function getInitData() {
  * Returns { type, message } or null.
  */
 export function getSkillsNotification(latestInfo, initData) {
-  if (!latestInfo?.version || !initData?.skillsVersion || !initData?.ides) return null;
+  if (!latestInfo?.version || !initData?.skillsVersion || !initData?.ides?.length) return null;
 
   const installed = semver.valid(semver.coerce(initData.skillsVersion));
   const latest = semver.valid(semver.coerce(latestInfo.version));

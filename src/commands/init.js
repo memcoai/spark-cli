@@ -48,42 +48,49 @@ export function promptChecklist(question, options) {
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
 
+    const cleanup = () => {
+      process.stdin.removeListener('data', onData);
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+    };
+
     const onData = (key) => {
-      // Ctrl-C
-      if (key === '\x03') {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stdin.removeListener('data', onData);
-        reject(new Error('User cancelled'));
-        return;
-      }
+      try {
+        // Ctrl-C
+        if (key === '\x03') {
+          cleanup();
+          reject(new Error('User cancelled'));
+          return;
+        }
 
-      // Enter
-      if (key === '\r' || key === '\n') {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stdin.removeListener('data', onData);
-        const result = options.filter((_, i) => selected[i]);
-        resolve(result);
-        return;
-      }
+        // Enter
+        if (key === '\r' || key === '\n') {
+          cleanup();
+          const result = options.filter((_, i) => selected[i]);
+          resolve(result);
+          return;
+        }
 
-      // Space — toggle
-      if (key === ' ') {
-        selected[cursor] = !selected[cursor];
-        render();
-        return;
-      }
+        // Space — toggle
+        if (key === ' ') {
+          selected[cursor] = !selected[cursor];
+          render();
+          return;
+        }
 
-      // Arrow keys (escape sequences)
-      if (key === '\x1b[A' || key === 'k') {
-        cursor = (cursor - 1 + options.length) % options.length;
-        render();
-        return;
-      }
-      if (key === '\x1b[B' || key === 'j') {
-        cursor = (cursor + 1) % options.length;
-        render();
+        // Arrow keys (escape sequences)
+        if (key === '\x1b[A' || key === 'k') {
+          cursor = (cursor - 1 + options.length) % options.length;
+          render();
+          return;
+        }
+        if (key === '\x1b[B' || key === 'j') {
+          cursor = (cursor + 1) % options.length;
+          render();
+        }
+      } catch (err) {
+        cleanup();
+        reject(err);
       }
     };
 
@@ -102,8 +109,15 @@ export function promptChoice(question, options) {
       console.log(`  ${number} ${options[i]}`);
     }
 
+    let answered = false;
     const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.on('close', () => {
+      if (!answered) {
+        reject(new Error('User cancelled'));
+      }
+    });
     rl.question(colorize('\x1b[2m', 'Enter choice: '), (answer) => {
+      answered = true;
       rl.close();
       const idx = Number.parseInt(answer, 10) - 1;
       if (idx >= 0 && idx < options.length) {
