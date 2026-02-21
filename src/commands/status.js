@@ -19,6 +19,10 @@ function ideKeyToLabel(key) {
  * Print skills version status.
  */
 async function printSkillsStatus(initData, checkSkills, getSkillsNote) {
+  if (!Array.isArray(initData.ides) || initData.ides.length === 0) {
+    printInfo('No IDEs configured for skills. Run spark init to configure your IDE.');
+    return;
+  }
   const ideLabels = initData.ides.map(ideKeyToLabel).join(', ');
   printInfo(`Skills configured for: ${ideLabels}`);
 
