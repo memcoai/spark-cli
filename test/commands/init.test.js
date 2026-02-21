@@ -18,10 +18,13 @@ describe('runInit', () => {
   const getLogOutput = (m) => m.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
   const getStdoutOutput = (m) => m.mock.calls.map((c) => c.arguments[0]).join('');
 
+  const noopFetchVersion = mock.fn(async () => ({ version: '1.0.0' }));
+
   it('shows warning when no IDE is selected', async () => {
     await runInit({
       prompt_checklist: mock.fn(async () => []),
       prompt_choice: mock.fn(async () => 'This project (current directory)'),
+      fetch_version: noopFetchVersion,
     });
 
     assert.ok(getLogOutput(mocks.logMock).includes('No IDE selected'));
@@ -45,6 +48,7 @@ describe('runInit', () => {
       prompt_checklist: mock.fn(async () => ['Claude Code']),
       prompt_choice: mock.fn(async () => 'This project (current directory)'),
       exec,
+      fetch_version: noopFetchVersion,
     });
 
     assert.strictEqual(exec.mock.calls.length, 2);
@@ -76,6 +80,7 @@ describe('runInit', () => {
       prompt_checklist: mock.fn(async () => ['Claude Code']),
       prompt_choice: mock.fn(async () => 'Global (all projects)'),
       exec,
+      fetch_version: noopFetchVersion,
     });
 
     assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
@@ -94,6 +99,7 @@ describe('runInit', () => {
       prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
       prompt_choice: mock.fn(async () => 'This project (current directory)'),
       spawn_interactive: spawnInteractive,
+      fetch_version: noopFetchVersion,
     });
 
     assert.strictEqual(spawnInteractive.mock.calls.length, 1);
@@ -112,6 +118,7 @@ describe('runInit', () => {
       prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
       prompt_choice: mock.fn(async () => 'Global (all projects)'),
       spawn_interactive: spawnInteractive,
+      fetch_version: noopFetchVersion,
     });
 
     assert.deepStrictEqual(spawnInteractive.mock.calls[0].arguments[1], [
@@ -134,6 +141,7 @@ describe('runInit', () => {
       prompt_choice: mock.fn(async () => 'This project (current directory)'),
       exec,
       spawn_interactive: spawnInteractive,
+      fetch_version: noopFetchVersion,
     });
 
     // Claude Code: 2 exec calls (marketplace + install)
@@ -147,6 +155,7 @@ describe('runInit', () => {
       prompt_checklist: mock.fn(async () => ['Claude Code']),
       prompt_choice: mock.fn(async () => 'This project (current directory)'),
       exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
+      fetch_version: noopFetchVersion,
     });
 
     const output = getLogOutput(mocks.logMock);
@@ -171,6 +180,7 @@ describe('runInit', () => {
       prompt_checklist: mock.fn(async () => ['Claude Code']),
       prompt_choice: mock.fn(async () => 'This project (current directory)'),
       exec,
+      fetch_version: noopFetchVersion,
     });
 
     const output = getStdoutOutput(stdoutMock);
@@ -189,6 +199,7 @@ describe('runInit', () => {
       prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
       prompt_choice: mock.fn(async () => 'This project (current directory)'),
       spawn_interactive: spawnInteractive,
+      fetch_version: noopFetchVersion,
     });
 
     const output = getLogOutput(mocks.logMock);
@@ -207,6 +218,7 @@ describe('runInit', () => {
       prompt_checklist: mock.fn(async () => ['Claude Code']),
       prompt_choice: mock.fn(async () => 'This project (current directory)'),
       exec,
+      fetch_version: noopFetchVersion,
     });
 
     const output = getLogOutput(mocks.logMock);

@@ -8,6 +8,9 @@ import {
   createSpinner,
   colorize,
 } from '../banner.js';
+import { readSettingsKey, writeSettingsKey } from '../settings.js';
+import { SETTINGS_PATH, LOCAL_SETTINGS_PATH } from '../constants.js';
+import { fetchSkillsVersion } from '../update-check.js';
 
 /**
  * Prompt a multi-select checklist. Users toggle with space, navigate with arrows, confirm with enter.
@@ -211,6 +214,48 @@ async function setupOtherIDEs(scope, { spawnInteractive = runInteractiveCommand 
 }
 
 /**
+ * Map IDE selection labels to short keys.
+ */
+const IDE_KEY_MAP = {
+  'Claude Code': 'claude',
+  'Other (Cursor, Windsurf, etc.)': 'other',
+};
+
+/**
+ * Save init choices to settings.
+ * Project scope: writes to local + upserts in global projects array.
+ * Global scope: writes to globalInit in global settings.
+ */
+async function saveInitChoices(ides, scope, { fetchVersion = fetchSkillsVersion } = {}) {
+  const ideKeys = ides.map((ide) => IDE_KEY_MAP[ide] || ide);
+
+  // Fetch the current skills version to record what was installed
+  const versionInfo = await fetchVersion();
+  const skillsVersion = versionInfo?.version || null;
+
+  const initData = { ides: ideKeys, skillsVersion };
+
+  if (scope === 'global') {
+    writeSettingsKey(SETTINGS_PATH, 'globalInit', initData);
+  } else {
+    // Write to local settings
+    writeSettingsKey(LOCAL_SETTINGS_PATH, 'init', initData);
+
+    // Upsert in global projects array
+    const projects = readSettingsKey(SETTINGS_PATH, 'projects') || [];
+    const cwd = process.cwd();
+    const idx = projects.findIndex((p) => p.path === cwd);
+    const entry = { path: cwd, ...initData };
+    if (idx >= 0) {
+      projects[idx] = entry;
+    } else {
+      projects.push(entry);
+    }
+    writeSettingsKey(SETTINGS_PATH, 'projects', projects);
+  }
+}
+
+/**
  * Print auth instructions after IDE setup.
  */
 function printAuthInstructions() {
@@ -241,6 +286,7 @@ export async function runInit({
   prompt_choice = promptChoice,
   exec = runCommand,
   spawn_interactive = runInteractiveCommand,
+  fetch_version = fetchSkillsVersion,
 } = {}) {
   printMemcoLogo();
 
@@ -296,7 +342,14 @@ export async function runInit({
     }
   }
 
-  // Step 4: Auth instructions
+  // Step 4: Save init choices
+  try {
+    await saveInitChoices(selectedIDEs, scope, { fetchVersion: fetch_version });
+  } catch {
+    // Non-blocking — don't fail init if we can't save preferences
+  }
+
+  // Step 5: Auth instructions
   printAuthInstructions();
 }
 

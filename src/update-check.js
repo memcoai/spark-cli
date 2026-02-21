@@ -2,7 +2,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import semver from 'semver';
-import { API_BASE, VERSION_CHECK_URL, SETTINGS_PATH } from './constants.js';
+import {
+  API_BASE,
+  VERSION_CHECK_URL,
+  SKILLS_VERSION_URL,
+  SETTINGS_PATH,
+  LOCAL_SETTINGS_PATH,
+} from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -174,6 +180,96 @@ function findDeprecation(local, deprecations) {
  *   messages: string[]       — message strings to display
  * }
  */
+// ──────────────────────────────────────────────
+// Skills version check (is the installed skill outdated?)
+// ──────────────────────────────────────────────
+
+/**
+ * Read cached skills version info from global settings.json.
+ */
+export function getCachedSkillsVersion() {
+  return readSettingsKey(SETTINGS_PATH, 'skillsVersion');
+}
+
+/**
+ * Fetch the latest skills version from GitHub and cache it.
+ * The VERSION file contains a plain version string (e.g. "1.0.0\n").
+ * Never rejects.
+ */
+export async function fetchSkillsVersion() {
+  try {
+    const response = await fetch(SKILLS_VERSION_URL, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return null;
+    const text = await response.text();
+    const version = text.trim();
+    if (!version) return null;
+    const result = { version, checkedAt: Date.now() };
+    writeSettingsKey(SETTINGS_PATH, 'skillsVersion', result);
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check for skills updates. Returns cached data if fresh (<24h), otherwise fetches.
+ * Never rejects.
+ */
+export async function checkSkillsVersion() {
+  try {
+    const cached = getCachedSkillsVersion();
+    if (cached?.version && cached.checkedAt && Date.now() - cached.checkedAt < ONE_DAY_MS) {
+      return cached;
+    }
+    return await fetchSkillsVersion();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read init data for the current project/global scope.
+ * Checks local .spark/settings.json first, then global globalInit.
+ * Returns { ides, skillsVersion } or null.
+ */
+export function getInitData() {
+  const local = readSettingsKey(LOCAL_SETTINGS_PATH, 'init');
+  if (local?.ides && local.skillsVersion) return local;
+
+  const global = readSettingsKey(SETTINGS_PATH, 'globalInit');
+  if (global?.ides && global.skillsVersion) return global;
+
+  return null;
+}
+
+/**
+ * Build a notification for skills version update.
+ * Returns { type, message } or null.
+ */
+export function getSkillsNotification(latestInfo, initData) {
+  if (!latestInfo?.version || !initData?.skillsVersion || !initData?.ides) return null;
+
+  const installed = semver.valid(semver.coerce(initData.skillsVersion));
+  const latest = semver.valid(semver.coerce(latestInfo.version));
+  if (!installed || !latest || !semver.lt(installed, latest)) return null;
+
+  const lines = [
+    `Skills update available: v${initData.skillsVersion} \u2192 v${latestInfo.version}`,
+  ];
+
+  const ides = initData.ides;
+  if (ides.includes('claude')) {
+    lines.push('  Claude Code: claude plugin install spark-cli@MemCo');
+  }
+  if (ides.includes('other')) {
+    lines.push('  Cursor/Windsurf: npx skills update memcoai/spark-cli-skills');
+  }
+
+  return { type: 'skills-update', message: lines.join('\n') };
+}
+
 export function evaluateCompatibility(localVersion, compatibility) {
   const result = { blocked: false, deprecation: null, messages: [] };
 

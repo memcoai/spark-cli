@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateCompatibility } from '../src/update-check.js';
+import { evaluateCompatibility, getSkillsNotification } from '../src/update-check.js';
 
 const makeCompat = (overrides = {}) => ({
   latest_version: '2.0.0',
@@ -182,5 +182,93 @@ describe('evaluateCompatibility', () => {
       assert.ok(result.messages.some((m) => m.includes('Deprecated')));
       assert.ok(result.messages.some((m) => m.includes('Announcement')));
     });
+  });
+});
+
+describe('getSkillsNotification', () => {
+  it('returns null when latestInfo is null', () => {
+    assert.strictEqual(getSkillsNotification(null, { ides: ['claude'], skillsVersion: '1.0.0' }), null);
+  });
+
+  it('returns null when initData is null', () => {
+    assert.strictEqual(getSkillsNotification({ version: '2.0.0' }, null), null);
+  });
+
+  it('returns null when initData has no skillsVersion', () => {
+    assert.strictEqual(
+      getSkillsNotification({ version: '2.0.0' }, { ides: ['claude'] }),
+      null,
+    );
+  });
+
+  it('returns null when initData has no ides', () => {
+    assert.strictEqual(
+      getSkillsNotification({ version: '2.0.0' }, { skillsVersion: '1.0.0' }),
+      null,
+    );
+  });
+
+  it('returns null when versions are equal', () => {
+    const result = getSkillsNotification(
+      { version: '1.0.0' },
+      { ides: ['claude'], skillsVersion: '1.0.0' },
+    );
+    assert.strictEqual(result, null);
+  });
+
+  it('returns null when installed is newer than latest', () => {
+    const result = getSkillsNotification(
+      { version: '1.0.0' },
+      { ides: ['claude'], skillsVersion: '2.0.0' },
+    );
+    assert.strictEqual(result, null);
+  });
+
+  it('returns notification with Claude Code update command', () => {
+    const result = getSkillsNotification(
+      { version: '2.0.0' },
+      { ides: ['claude'], skillsVersion: '1.0.0' },
+    );
+    assert.ok(result);
+    assert.strictEqual(result.type, 'skills-update');
+    assert.ok(result.message.includes('v1.0.0'));
+    assert.ok(result.message.includes('v2.0.0'));
+    assert.ok(result.message.includes('claude plugin install'));
+  });
+
+  it('returns notification with Cursor/Windsurf update command', () => {
+    const result = getSkillsNotification(
+      { version: '2.0.0' },
+      { ides: ['other'], skillsVersion: '1.0.0' },
+    );
+    assert.ok(result);
+    assert.ok(result.message.includes('npx skills update'));
+  });
+
+  it('returns notification with both update commands when both IDEs configured', () => {
+    const result = getSkillsNotification(
+      { version: '2.0.0' },
+      { ides: ['claude', 'other'], skillsVersion: '1.0.0' },
+    );
+    assert.ok(result);
+    assert.ok(result.message.includes('claude plugin install'));
+    assert.ok(result.message.includes('npx skills update'));
+  });
+
+  it('handles version with v prefix', () => {
+    const result = getSkillsNotification(
+      { version: 'v2.0.0' },
+      { ides: ['claude'], skillsVersion: 'v1.0.0' },
+    );
+    assert.ok(result);
+    assert.strictEqual(result.type, 'skills-update');
+  });
+
+  it('handles pre-release versions', () => {
+    const result = getSkillsNotification(
+      { version: '2.0.0' },
+      { ides: ['claude'], skillsVersion: '1.0.0-beta.1' },
+    );
+    assert.ok(result);
   });
 });

@@ -10,3 +10,5 @@ export const CALLBACK_PORT = 8789;
 export const AUTH_SUCCESS_URL = 'https://spark.memco.ai/cli/auth_success';
 export const AUTH_ERROR_URL = 'https://spark.memco.ai/cli/auth_error';
 export const VERSION_CHECK_URL = 'https://registry.npmjs.org/@memco/spark/latest';
+export const SKILLS_VERSION_URL =
+  'https://raw.githubusercontent.com/memcoai/spark-cli-skills/main/VERSION';

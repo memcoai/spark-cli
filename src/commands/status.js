@@ -3,6 +3,9 @@ import {
   checkForUpdate,
   getVersionNotification,
   getLocalVersion,
+  checkSkillsVersion,
+  getSkillsNotification,
+  getInitData,
 } from '../update-check.js';
 import {
   printSuccess,
@@ -12,6 +15,36 @@ import {
   colorize,
 } from '../banner.js';
 
+const IDE_LABELS = { claude: 'Claude Code', other: 'Cursor/Windsurf' };
+
+function ideKeyToLabel(key) {
+  return IDE_LABELS[key] || key;
+}
+
+/**
+ * Print skills version status.
+ */
+async function printSkillsStatus(initData, checkSkills, getSkillsNote) {
+  const ideLabels = initData.ides.map(ideKeyToLabel).join(', ');
+  printInfo(`Skills configured for: ${ideLabels}`);
+
+  if (initData.skillsVersion) {
+    printInfo(`Installed skills version: v${initData.skillsVersion}`);
+  }
+
+  try {
+    const latestSkills = await checkSkills();
+    const skillsNote = latestSkills ? getSkillsNote(latestSkills, initData) : null;
+    if (skillsNote) {
+      printWarning(skillsNote.message);
+    } else if (latestSkills) {
+      printSuccess('Skills are up to date.');
+    }
+  } catch {
+    printWarning('Could not check for skills updates.');
+  }
+}
+
 /**
  * Core status logic, accepts dependencies for testability.
  */
@@ -20,6 +53,9 @@ export async function runStatus({
   checkUpdate = checkForUpdate,
   getNotification = getVersionNotification,
   getUser = getCurrentUser,
+  checkSkills = checkSkillsVersion,
+  getSkillsNote = getSkillsNotification,
+  getInit = getInitData,
 } = {}) {
   console.log(colorize('\x1b[1m', 'Spark Status'));
   console.log('');
@@ -58,6 +94,16 @@ export async function runStatus({
     console.log(
       `  Or set ${colorize('\x1b[36m', 'export SPARK_API_KEY=your_key')} with an API key.`,
     );
+  }
+
+  console.log('');
+
+  // 3. Skills version check
+  const initData = getInit();
+  if (initData) {
+    await printSkillsStatus(initData, checkSkills, getSkillsNote);
+  } else {
+    printInfo('No skills configured. Run spark init to set up your IDE.');
   }
 }
 

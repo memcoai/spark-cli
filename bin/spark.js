@@ -21,6 +21,10 @@ import {
   checkCompatibility,
   getCachedCompatibility,
   evaluateCompatibility,
+  checkSkillsVersion,
+  getCachedSkillsVersion,
+  getSkillsNotification,
+  getInitData,
 } from '../src/update-check.js';
 import { setVersionNotification, printVersionNotification } from '../src/output.js';
 
@@ -30,6 +34,7 @@ const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'))
 
 let updateCheckPromise = null;
 let compatCheckPromise = null;
+let skillsCheckPromise = null;
 
 program
   .name('spark')
@@ -73,6 +78,16 @@ program.hook('preAction', (thisCommand, actionCommand) => {
     }
   }
 
+  // Pre-set skills update notification from cached data
+  const cachedSkills = getCachedSkillsVersion();
+  const initData = getInitData();
+  if (cachedSkills && initData) {
+    const skillsNotification = getSkillsNotification(cachedSkills, initData);
+    if (skillsNotification) {
+      setVersionNotification(skillsNotification.message);
+    }
+  }
+
   // Start background checks
   compatCheckPromise = checkCompatibility().then((result) => {
     if (result?.data) {
@@ -91,6 +106,18 @@ program.hook('preAction', (thisCommand, actionCommand) => {
       }
     }
   });
+
+  skillsCheckPromise = checkSkillsVersion().then((latestSkills) => {
+    if (latestSkills) {
+      const currentInitData = getInitData();
+      if (currentInitData) {
+        const skillsNotification = getSkillsNotification(latestSkills, currentInitData);
+        if (skillsNotification) {
+          setVersionNotification(skillsNotification.message);
+        }
+      }
+    }
+  });
 });
 
 program.hook('postAction', async () => {
@@ -99,6 +126,9 @@ program.hook('postAction', async () => {
   }
   if (updateCheckPromise) {
     await updateCheckPromise;
+  }
+  if (skillsCheckPromise) {
+    await skillsCheckPromise;
   }
   printVersionNotification();
 });
