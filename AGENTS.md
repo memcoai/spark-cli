@@ -28,6 +28,8 @@ src/
     feedback.js       Provide feedback on recommendations
     update.js         Self-update command (npm install -g @memco/spark@latest)
     uninstall.js      Self-uninstall command (npm uninstall -g @memco/spark)
+    init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf)
+    status.js         Status check — version freshness and auth verification
   api.js              HTTP client — getAuthToken, apiRequest, callTool, and API wrappers
   oauth.js            OAuth discovery (well-known endpoints) and dynamic client registration
   credentials.js      Load/save/remove credentials via settings.json
@@ -86,6 +88,8 @@ test/
     insights.test.js          taskIndex validation
     feedback.test.js          Flag validation (--helpful / --not-helpful)
     uninstall.test.js         npm uninstall execution and error handling
+    init.test.js              IDE selection, scope, command execution
+    status.test.js            Version check and auth verification
 ```
 
 Tests cover input parsing and validation without external service dependencies. Command tests mock `console.log` and `process.exit` to verify error output without hitting the API.

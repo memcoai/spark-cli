@@ -62,7 +62,7 @@ export function colorize(code, text) {
  * Print the Memco logo with colors
  */
 export function printMemcoLogo() {
-  console.log(colorize('\x1b[36m', MEMCO_LOGO));
+  console.log(colorize('\x1b[32m', MEMCO_LOGO));
 }
 
 /**
