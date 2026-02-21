@@ -1,38 +1,29 @@
-import { describe, it, mock, beforeEach, afterEach } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runStatus } from '../../src/commands/status.js';
-import { setupCommandMocks } from '../helpers.js';
+import { setupCommandMocks, getLogOutput } from '../helpers.js';
 
 describe('runStatus', () => {
   const mocks = setupCommandMocks();
-  let stdoutMock;
 
-  beforeEach(() => {
-    stdoutMock = mock.method(process.stdout, 'write', () => true);
-  });
-
-  afterEach(() => {
-    stdoutMock.mock.restore();
-  });
-
-  const getLogOutput = (m) => m.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
-
-  const noSkillsDeps = {
+  const defaultDeps = (overrides = {}) => ({
+    getVersion: () => '1.0.0',
+    checkUpdate: mock.fn(async () => null),
+    getNotification: mock.fn(() => null),
+    getUser: mock.fn(async () => ({ user: { first_name: 'User' } })),
     checkSkills: mock.fn(async () => null),
     getSkillsNote: mock.fn(() => null),
     getInit: mock.fn(() => null),
-  };
+    ...overrides,
+  });
 
   it('shows up-to-date version and authenticated user', async () => {
-    await runStatus({
-      getVersion: () => '1.0.0',
+    await runStatus(defaultDeps({
       checkUpdate: mock.fn(async () => ({ version: '1.0.0' })),
-      getNotification: mock.fn(() => null),
       getUser: mock.fn(async () => ({
         user: { first_name: 'Test', last_name: 'User', email: 'test@example.com' },
       })),
-      ...noSkillsDeps,
-    });
+    }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('v1.0.0'));
@@ -41,7 +32,7 @@ describe('runStatus', () => {
   });
 
   it('shows update available when outdated', async () => {
-    await runStatus({
+    await runStatus(defaultDeps({
       getVersion: () => '0.9.0',
       checkUpdate: mock.fn(async () => ({ version: '1.0.0' })),
       getNotification: mock.fn(() => ({
@@ -49,8 +40,7 @@ describe('runStatus', () => {
         message: 'Update available: v0.9.0 → v1.0.0. Run: spark update',
       })),
       getUser: mock.fn(async () => ({ user: { first_name: 'Test', last_name: 'User' } })),
-      ...noSkillsDeps,
-    });
+    }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Update available'));
@@ -58,15 +48,11 @@ describe('runStatus', () => {
   });
 
   it('shows auth error when not authenticated', async () => {
-    await runStatus({
-      getVersion: () => '1.0.0',
-      checkUpdate: mock.fn(async () => null),
-      getNotification: mock.fn(() => null),
+    await runStatus(defaultDeps({
       getUser: mock.fn(async () => {
         throw new Error('Not authenticated');
       }),
-      ...noSkillsDeps,
-    });
+    }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Not authenticated'));
@@ -74,15 +60,12 @@ describe('runStatus', () => {
   });
 
   it('handles update check failure gracefully', async () => {
-    await runStatus({
-      getVersion: () => '1.0.0',
+    await runStatus(defaultDeps({
       checkUpdate: mock.fn(async () => {
         throw new Error('Network error');
       }),
-      getNotification: mock.fn(() => null),
       getUser: mock.fn(async () => ({ user: { first_name: 'Test', last_name: 'User' } })),
-      ...noSkillsDeps,
-    });
+    }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Could not check for updates'));
@@ -90,56 +73,34 @@ describe('runStatus', () => {
   });
 
   it('displays email when name is not available', async () => {
-    await runStatus({
-      getVersion: () => '1.0.0',
-      checkUpdate: mock.fn(async () => null),
-      getNotification: mock.fn(() => null),
+    await runStatus(defaultDeps({
       getUser: mock.fn(async () => ({ user: { email: 'user@example.com' } })),
-      ...noSkillsDeps,
-    });
+    }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('user@example.com'));
   });
 
   it('shows latest version when no update info returned', async () => {
-    await runStatus({
-      getVersion: () => '1.0.0',
-      checkUpdate: mock.fn(async () => null),
-      getNotification: mock.fn(() => null),
-      getUser: mock.fn(async () => ({ user: { first_name: 'User' } })),
-      ...noSkillsDeps,
-    });
+    await runStatus(defaultDeps());
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('latest version'));
   });
 
   it('shows no skills configured when init data is missing', async () => {
-    await runStatus({
-      getVersion: () => '1.0.0',
-      checkUpdate: mock.fn(async () => null),
-      getNotification: mock.fn(() => null),
-      getUser: mock.fn(async () => ({ user: { first_name: 'User' } })),
-      checkSkills: mock.fn(async () => null),
-      getSkillsNote: mock.fn(() => null),
-      getInit: mock.fn(() => null),
-    });
+    await runStatus(defaultDeps());
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('No skills configured'));
   });
 
   it('shows skills up to date when configured and current', async () => {
-    await runStatus({
-      getVersion: () => '1.0.0',
-      checkUpdate: mock.fn(async () => null),
-      getNotification: mock.fn(() => null),
-      getUser: mock.fn(async () => ({ user: { first_name: 'User' } })),
+    await runStatus(defaultDeps({
       checkSkills: mock.fn(async () => ({ version: '1.0.0' })),
       getSkillsNote: mock.fn(() => null),
       getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0' })),
-    });
+    }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Skills configured for: Claude Code'));
@@ -147,18 +108,14 @@ describe('runStatus', () => {
   });
 
   it('shows skills update notification when outdated', async () => {
-    await runStatus({
-      getVersion: () => '1.0.0',
-      checkUpdate: mock.fn(async () => null),
-      getNotification: mock.fn(() => null),
-      getUser: mock.fn(async () => ({ user: { first_name: 'User' } })),
+    await runStatus(defaultDeps({
       checkSkills: mock.fn(async () => ({ version: '2.0.0' })),
       getSkillsNote: mock.fn(() => ({
         type: 'skills-update',
         message: 'Skills update available: v1.0.0 → v2.0.0',
       })),
       getInit: mock.fn(() => ({ ides: ['claude', 'other'], skillsVersion: '1.0.0' })),
-    });
+    }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Claude Code'));
@@ -167,17 +124,12 @@ describe('runStatus', () => {
   });
 
   it('handles skills check failure gracefully', async () => {
-    await runStatus({
-      getVersion: () => '1.0.0',
-      checkUpdate: mock.fn(async () => null),
-      getNotification: mock.fn(() => null),
-      getUser: mock.fn(async () => ({ user: { first_name: 'User' } })),
+    await runStatus(defaultDeps({
       checkSkills: mock.fn(async () => {
         throw new Error('Network error');
       }),
-      getSkillsNote: mock.fn(() => null),
       getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0' })),
-    });
+    }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Could not check for skills updates'));

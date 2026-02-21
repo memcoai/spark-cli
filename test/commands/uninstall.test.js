@@ -1,22 +1,11 @@
-import { describe, it, mock, beforeEach, afterEach } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runUninstall } from '../../src/commands/uninstall.js';
-import { setupCommandMocks } from '../helpers.js';
+import { setupCommandMocks, getLogOutput, getStdoutOutput } from '../helpers.js';
 
 describe('runUninstall', () => {
   const mocks = setupCommandMocks();
-  let stdoutMock;
 
-  beforeEach(() => {
-    stdoutMock = mock.method(process.stdout, 'write', () => true);
-  });
-
-  afterEach(() => {
-    stdoutMock.mock.restore();
-  });
-
-  const getLogOutput = (m) => m.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
-  const getStdoutOutput = (m) => m.mock.calls.map((c) => c.arguments[0]).join('');
   const throwingExec = (err) =>
     mock.fn(() => {
       throw err;
@@ -25,7 +14,7 @@ describe('runUninstall', () => {
   it('shows success message on successful uninstall', async () => {
     await runUninstall({ exec: mock.fn() });
 
-    assert.ok(getStdoutOutput(stdoutMock).includes('Successfully uninstalled @memco/spark'));
+    assert.ok(getStdoutOutput(mocks.stdoutMock).includes('Successfully uninstalled @memco/spark'));
   });
 
   it('calls npm uninstall with correct command and options', async () => {

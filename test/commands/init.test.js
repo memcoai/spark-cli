@@ -1,55 +1,39 @@
-import { describe, it, mock, beforeEach, afterEach } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInit } from '../../src/commands/init.js';
-import { setupCommandMocks } from '../helpers.js';
+import { setupCommandMocks, getLogOutput, getStdoutOutput } from '../helpers.js';
 
 describe('runInit', () => {
   const mocks = setupCommandMocks();
-  let stdoutMock;
 
-  beforeEach(() => {
-    stdoutMock = mock.method(process.stdout, 'write', () => true);
+  const defaultDeps = (overrides = {}) => ({
+    prompt_checklist: mock.fn(async () => ['Claude Code']),
+    prompt_choice: mock.fn(async () => 'This project (current directory)'),
+    exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
+    spawn_interactive: mock.fn(async () => {}),
+    fetch_version: mock.fn(async () => ({ version: '1.0.0' })),
+    ...overrides,
   });
-
-  afterEach(() => {
-    stdoutMock.mock.restore();
-  });
-
-  const getLogOutput = (m) => m.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
-  const getStdoutOutput = (m) => m.mock.calls.map((c) => c.arguments[0]).join('');
-
-  const noopFetchVersion = mock.fn(async () => ({ version: '1.0.0' }));
 
   it('shows warning when no IDE is selected', async () => {
-    await runInit({
-      prompt_checklist: mock.fn(async () => []),
-      prompt_choice: mock.fn(async () => 'This project (current directory)'),
-      fetch_version: noopFetchVersion,
-    });
+    await runInit(defaultDeps({ prompt_checklist: mock.fn(async () => []) }));
 
     assert.ok(getLogOutput(mocks.logMock).includes('No IDE selected'));
   });
 
   it('prints cancellation message on user cancel during IDE selection', async () => {
-    await runInit({
+    await runInit(defaultDeps({
       prompt_checklist: mock.fn(async () => {
         throw new Error('User cancelled');
       }),
-      prompt_choice: mock.fn(async () => 'This project (current directory)'),
-    });
+    }));
 
     assert.ok(getLogOutput(mocks.logMock).includes('Setup cancelled'));
   });
 
   it('runs Claude Code setup with project scope', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
-
-    await runInit({
-      prompt_checklist: mock.fn(async () => ['Claude Code']),
-      prompt_choice: mock.fn(async () => 'This project (current directory)'),
-      exec,
-      fetch_version: noopFetchVersion,
-    });
+    await runInit(defaultDeps({ exec }));
 
     assert.strictEqual(exec.mock.calls.length, 2);
 
@@ -75,13 +59,10 @@ describe('runInit', () => {
 
   it('runs Claude Code setup with global (user) scope', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
-
-    await runInit({
-      prompt_checklist: mock.fn(async () => ['Claude Code']),
-      prompt_choice: mock.fn(async () => 'Global (all projects)'),
+    await runInit(defaultDeps({
       exec,
-      fetch_version: noopFetchVersion,
-    });
+      prompt_choice: mock.fn(async () => 'Global (all projects)'),
+    }));
 
     assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
       'plugin',
@@ -94,13 +75,10 @@ describe('runInit', () => {
 
   it('runs Other IDEs setup with project scope via interactive spawn', async () => {
     const spawnInteractive = mock.fn(async () => {});
-
-    await runInit({
+    await runInit(defaultDeps({
       prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
-      prompt_choice: mock.fn(async () => 'This project (current directory)'),
       spawn_interactive: spawnInteractive,
-      fetch_version: noopFetchVersion,
-    });
+    }));
 
     assert.strictEqual(spawnInteractive.mock.calls.length, 1);
     assert.strictEqual(spawnInteractive.mock.calls[0].arguments[0], 'npx');
@@ -113,13 +91,11 @@ describe('runInit', () => {
 
   it('runs Other IDEs setup with global scope via interactive spawn', async () => {
     const spawnInteractive = mock.fn(async () => {});
-
-    await runInit({
+    await runInit(defaultDeps({
       prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
       prompt_choice: mock.fn(async () => 'Global (all projects)'),
       spawn_interactive: spawnInteractive,
-      fetch_version: noopFetchVersion,
-    });
+    }));
 
     assert.deepStrictEqual(spawnInteractive.mock.calls[0].arguments[1], [
       'skills',
@@ -132,17 +108,14 @@ describe('runInit', () => {
   it('runs both IDE setups when both selected', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
     const spawnInteractive = mock.fn(async () => {});
-
-    await runInit({
+    await runInit(defaultDeps({
       prompt_checklist: mock.fn(async () => [
         'Claude Code',
         'Other (Cursor, Windsurf, etc.)',
       ]),
-      prompt_choice: mock.fn(async () => 'This project (current directory)'),
       exec,
       spawn_interactive: spawnInteractive,
-      fetch_version: noopFetchVersion,
-    });
+    }));
 
     // Claude Code: 2 exec calls (marketplace + install)
     assert.strictEqual(exec.mock.calls.length, 2);
@@ -151,12 +124,7 @@ describe('runInit', () => {
   });
 
   it('prints auth instructions after successful setup', async () => {
-    await runInit({
-      prompt_checklist: mock.fn(async () => ['Claude Code']),
-      prompt_choice: mock.fn(async () => 'This project (current directory)'),
-      exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
-      fetch_version: noopFetchVersion,
-    });
+    await runInit(defaultDeps());
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Next: Authenticate with Spark'));
@@ -176,14 +144,9 @@ describe('runInit', () => {
       return { stdout: '', stderr: '' };
     });
 
-    await runInit({
-      prompt_checklist: mock.fn(async () => ['Claude Code']),
-      prompt_choice: mock.fn(async () => 'This project (current directory)'),
-      exec,
-      fetch_version: noopFetchVersion,
-    });
+    await runInit(defaultDeps({ exec }));
 
-    const output = getStdoutOutput(stdoutMock);
+    const output = getStdoutOutput(mocks.stdoutMock);
     // Should show success-style message, not a failure
     assert.ok(output.includes('already configured'));
     // Should still proceed to install the plugin
@@ -191,16 +154,12 @@ describe('runInit', () => {
   });
 
   it('shows warning when Other IDEs interactive spawn fails', async () => {
-    const spawnInteractive = mock.fn(async () => {
-      throw new Error('npx exited with code 1');
-    });
-
-    await runInit({
+    await runInit(defaultDeps({
       prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
-      prompt_choice: mock.fn(async () => 'This project (current directory)'),
-      spawn_interactive: spawnInteractive,
-      fetch_version: noopFetchVersion,
-    });
+      spawn_interactive: mock.fn(async () => {
+        throw new Error('npx exited with code 1');
+      }),
+    }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Failed to install skills'));
@@ -210,16 +169,11 @@ describe('runInit', () => {
   });
 
   it('continues with warning when a command fails', async () => {
-    const exec = mock.fn(async () => {
-      throw Object.assign(new Error('command not found'), { stderr: 'claude: not found' });
-    });
-
-    await runInit({
-      prompt_checklist: mock.fn(async () => ['Claude Code']),
-      prompt_choice: mock.fn(async () => 'This project (current directory)'),
-      exec,
-      fetch_version: noopFetchVersion,
-    });
+    await runInit(defaultDeps({
+      exec: mock.fn(async () => {
+        throw Object.assign(new Error('command not found'), { stderr: 'claude: not found' });
+      }),
+    }));
 
     const output = getLogOutput(mocks.logMock);
     // Should still show auth instructions even after failures
