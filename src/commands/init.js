@@ -40,6 +40,14 @@ export function promptChecklist(question, options) {
     console.log(colorize('\x1b[2m', '(↑/↓ navigate, space toggle, enter confirm)'));
     render();
 
+    if (!process.stdin.isTTY || typeof process.stdin.setRawMode !== 'function') {
+      reject(
+        new Error(
+          'Interactive terminal (TTY) is required to use checklist prompts. Please run this command directly in a terminal.',
+        ),
+      );
+      return;
+    }
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
