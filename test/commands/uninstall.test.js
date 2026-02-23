@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { runUninstall } from '../../src/commands/uninstall.js';
 import { setupCommandMocks, getLogOutput, getStdoutOutput, npmExecErrorCases } from '../helpers.js';
 
-function initReadKey(initValue, globalInitValue = null) {
+function initReadKey(initValue, globalInitValue = null, projects = null) {
   return mock.fn((path, key) => {
     if (key === 'init') return initValue;
     if (key === 'globalInit') return globalInitValue;
+    if (key === 'projects') return projects;
     return null;
   });
 }
@@ -207,15 +208,10 @@ describe('runUninstall — init data cleanup', () => {
   it('removes project entry from global projects array for project scope', async () => {
     const cwd = process.cwd();
     const deps = makeDeps({
-      readKey: mock.fn((path, key) => {
-        if (key === 'init') return { ides: ['claude'] };
-        if (key === 'projects')
-          return [
-            { path: cwd, ides: ['claude'] },
-            { path: '/other', ides: ['other'] },
-          ];
-        return null;
-      }),
+      readKey: initReadKey({ ides: ['claude'] }, null, [
+        { path: cwd, ides: ['claude'] },
+        { path: '/other', ides: ['other'] },
+      ]),
     });
     await runUninstall(deps);
 
@@ -229,11 +225,7 @@ describe('runUninstall — init data cleanup', () => {
   it('sets projects to null when current project is the only entry', async () => {
     const cwd = process.cwd();
     const deps = makeDeps({
-      readKey: mock.fn((path, key) => {
-        if (key === 'init') return { ides: ['claude'] };
-        if (key === 'projects') return [{ path: cwd, ides: ['claude'] }];
-        return null;
-      }),
+      readKey: initReadKey({ ides: ['claude'] }, null, [{ path: cwd, ides: ['claude'] }]),
     });
     await runUninstall(deps);
 
