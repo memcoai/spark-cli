@@ -20,6 +20,7 @@ export function promptChecklist(question, options) {
   return new Promise((resolve, reject) => {
     const selected = new Array(options.length).fill(false);
     let cursor = 0;
+    let cleanedUp = false;
 
     const render = () => {
       // Move cursor up to overwrite previous render (except first render)
@@ -39,19 +40,31 @@ export function promptChecklist(question, options) {
     console.log(colorize('\x1b[2m', '(↑/↓ navigate, space toggle, enter confirm)'));
     render();
 
-    if (!process.stdin.isTTY) {
-      reject(new Error('Interactive prompts require a TTY terminal'));
-      return;
-    }
-
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
 
     const cleanup = () => {
-      process.stdin.removeListener('data', onData);
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
+      if (cleanedUp) return;
+      cleanedUp = true;
+      try{
+        process.stdin.removeListener('data', onData);
+      } catch {
+        // ignore errors
+      }
+      if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
+        try {
+          process.stdin.setRawMode(false);
+        } catch {
+          // ignore errors
+        }
+      }
+      try {
+        process.stdin.pause();
+      } catch {
+        // ignore errors
+      }
+
     };
 
     const onData = (key) => {

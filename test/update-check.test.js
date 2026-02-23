@@ -240,7 +240,7 @@ describe('getSkillsNotification', () => {
     assert.strictEqual(result.type, 'skills-update');
     assert.ok(result.message.includes('v1.0.0'));
     assert.ok(result.message.includes('v2.0.0'));
-    assert.ok(result.message.includes('claude plugin install'));
+    assert.ok(result.message.includes('claude plugin update'));
   });
 
   it('returns notification with Cursor/Windsurf update command', () => {
@@ -258,7 +258,7 @@ describe('getSkillsNotification', () => {
       { ides: ['claude', 'other'], skillsVersion: '1.0.0' },
     );
     assert.ok(result);
-    assert.ok(result.message.includes('claude plugin install'));
+    assert.ok(result.message.includes('claude plugin update'));
     assert.ok(result.message.includes('npx skills update'));
   });
 

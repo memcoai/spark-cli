@@ -261,7 +261,7 @@ export function getSkillsNotification(latestInfo, initData) {
 
   const ides = initData.ides;
   if (ides.includes('claude')) {
-    lines.push('  Claude Code: claude plugin install spark-cli@MemCo');
+    lines.push('  Claude Code: claude plugin update spark-cli@MemCo');
   }
   if (ides.includes('other')) {
     lines.push('  Cursor/Windsurf: npx skills update memcoai/spark-cli-skills');
