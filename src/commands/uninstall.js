@@ -1,41 +1,9 @@
-import { execSync, execFile, spawn } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
 import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, SPARK_DIR, LOCAL_SPARK_DIR } from '../constants.js';
-
-/**
- * Run a command via execFile. Returns a promise with { stdout, stderr }.
- */
-function runCommand(cmd, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    execFile(cmd, args, { timeout: 60000, ...options }, (err, stdout, stderr) => {
-      if (err) {
-        err.stderr = stderr;
-        reject(err);
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-  });
-}
-
-/**
- * Run a command interactively with stdio inherited.
- */
-function runInteractiveCommand(cmd, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: 'inherit' });
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${cmd} exited with code ${code}`));
-      }
-    });
-  });
-}
+import { runCommand, runInteractiveCommand } from '../exec.js';
 
 /**
  * Read saved init choices. Returns { initData, scope, settingsPath, settingsKey } or null.

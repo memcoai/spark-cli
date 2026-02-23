@@ -30,6 +30,7 @@ src/
     uninstall.js      Self-uninstall command (npm uninstall -g @memco/spark)
     init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings
     status.js         Status check — version freshness, auth verification, and skills version
+  exec.js             Shared child process helpers (runCommand, runInteractiveCommand)
   api.js              HTTP client — getAuthToken, apiRequest, callTool, and API wrappers
   oauth.js            OAuth discovery (well-known endpoints) and dynamic client registration
   credentials.js      Load/save/remove credentials via settings.json
