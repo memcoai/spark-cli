@@ -83,6 +83,12 @@ export async function runStatus({
     const user = data.user || data;
     const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
     printSuccess(`Authenticated as ${name || user.email || user.id || 'unknown user'}`);
+    const orgName = user.organization_name;
+    if (orgName && orgName !== 'Spark') {
+      printInfo(`Organization: ${orgName}`);
+    } else {
+      printInfo('Environment: Public');
+    }
   } catch {
     printError('Not authenticated.');
     console.log('');

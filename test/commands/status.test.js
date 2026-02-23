@@ -31,6 +31,21 @@ describe('runStatus', () => {
     assert.ok(output.includes('v1.0.0'));
     assert.ok(output.includes('latest version'));
     assert.ok(output.includes('Test User'));
+    assert.ok(output.includes('Environment: Public'));
+  });
+
+  it('shows organization name when not Spark', async () => {
+    await runStatus(
+      defaultDeps({
+        getUser: mock.fn(async () => ({
+          user: { first_name: 'Test', last_name: 'User', organization_name: 'Acme Corp' },
+        })),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(output.includes('Organization: Acme Corp'));
+    assert.ok(!output.includes('Environment: Public'));
   });
 
   it('shows update available when outdated', async () => {
