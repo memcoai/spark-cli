@@ -12,8 +12,6 @@ describe('runUninstall', () => {
     });
 
   const noopExec = () => mock.fn();
-  const noopExecAsync = () => mock.fn(async () => ({ stdout: '', stderr: '' }));
-  const noopSpawn = () => mock.fn(async () => {});
   const noInitReadKey = () => mock.fn(() => null);
 
   it('shows success message on successful uninstall', async () => {
@@ -214,7 +212,7 @@ describe('runUninstall — Other IDEs skills removal', () => {
 });
 
 describe('runUninstall — both IDEs', () => {
-  const mocks = setupCommandMocks();
+  setupCommandMocks();
 
   it('uninstalls both claude plugin and skills when both ides are set', async () => {
     const execAsync = mock.fn(async () => ({ stdout: '', stderr: '' }));
