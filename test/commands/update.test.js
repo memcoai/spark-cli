@@ -1,7 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runUpdate } from '../../src/commands/update.js';
-import { setupCommandMocks, getLogOutput, getStdoutOutput } from '../helpers.js';
+import { setupCommandMocks, getLogOutput, getStdoutOutput, npmExecErrorCases } from '../helpers.js';
 
 describe('updateCommand', () => {
   const mocks = setupCommandMocks();
@@ -44,30 +44,7 @@ describe('updateCommand', () => {
     assert.strictEqual(opts.timeout, 60000);
   });
 
-  const errorCases = [
-    {
-      name: 'shows npm-not-found message on ENOENT',
-      error: Object.assign(new Error('spawn npm ENOENT'), { code: 'ENOENT' }),
-      expected: 'npm is not installed or not in PATH',
-    },
-    {
-      name: 'shows permission message on EACCES',
-      error: Object.assign(new Error('permission denied'), { code: 'EACCES' }),
-      expected: 'Permission denied',
-    },
-    {
-      name: 'prints stderr message on npm failure',
-      error: Object.assign(new Error('command failed'), { stderr: '  npm ERR! network error  ' }),
-      expected: 'npm ERR! network error',
-    },
-    {
-      name: 'falls back to error message when stderr is empty',
-      error: Object.assign(new Error('ETIMEOUT'), { stderr: '' }),
-      expected: 'ETIMEOUT',
-    },
-  ];
-
-  for (const { name, error, expected } of errorCases) {
+  for (const { name, error, expected } of npmExecErrorCases) {
     it(name, async () => {
       const exec = mock.fn(() => {
         throw error;

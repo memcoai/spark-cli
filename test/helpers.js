@@ -34,3 +34,30 @@ export function getLogOutput(m) {
 export function getStdoutOutput(m) {
   return m.mock.calls.map((c) => c.arguments[0]).join('');
 }
+
+/**
+ * Shared npm exec error cases for update/uninstall command tests.
+ * Each entry has a name, error object, and expected output substring.
+ */
+export const npmExecErrorCases = [
+  {
+    name: 'shows npm-not-found message on ENOENT',
+    error: Object.assign(new Error('spawn npm ENOENT'), { code: 'ENOENT' }),
+    expected: 'npm is not installed or not in PATH',
+  },
+  {
+    name: 'shows permission message on EACCES',
+    error: Object.assign(new Error('permission denied'), { code: 'EACCES' }),
+    expected: 'Permission denied',
+  },
+  {
+    name: 'prints stderr message on npm failure',
+    error: Object.assign(new Error('command failed'), { stderr: '  npm ERR! network error  ' }),
+    expected: 'npm ERR! network error',
+  },
+  {
+    name: 'falls back to error message when stderr is empty',
+    error: Object.assign(new Error('ETIMEOUT'), { stderr: '' }),
+    expected: 'ETIMEOUT',
+  },
+];
