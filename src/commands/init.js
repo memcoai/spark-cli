@@ -47,7 +47,7 @@ export function promptChecklist(question, options) {
     const cleanup = () => {
       if (cleanedUp) return;
       cleanedUp = true;
-      try{
+      try {
         process.stdin.removeListener('data', onData);
       } catch {
         // ignore errors
@@ -64,7 +64,6 @@ export function promptChecklist(question, options) {
       } catch {
         // ignore errors
       }
-
     };
 
     const onData = (key) => {
