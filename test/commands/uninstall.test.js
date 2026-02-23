@@ -7,6 +7,8 @@ const noopExec = () => mock.fn();
 const noopExecAsync = () => mock.fn(async () => ({ stdout: '', stderr: '' }));
 const noopSpawnInteractive = () => mock.fn(async () => {});
 const noInitReadKey = () => mock.fn(() => null);
+const noopWriteKey = () => mock.fn();
+const noopRm = () => mock.fn();
 
 const throwingExec = (err) =>
   mock.fn(() => {
@@ -57,7 +59,12 @@ describe('runUninstall — Claude Code plugin removal', () => {
   it('uninstalls claude plugin with project scope when local init has claude', async () => {
     const execAsync = noopExecAsync();
 
-    await runUninstall({ exec: noopExec(), execAsync, readKey: initReadKey({ ides: ['claude'] }) });
+    await runUninstall({
+      exec: noopExec(),
+      execAsync,
+      readKey: initReadKey({ ides: ['claude'] }),
+      writeKey: noopWriteKey(),
+    });
 
     assert.strictEqual(execAsync.mock.calls.length, 1);
     const [cmd, args] = execAsync.mock.calls[0].arguments;
@@ -72,6 +79,7 @@ describe('runUninstall — Claude Code plugin removal', () => {
       exec: noopExec(),
       execAsync,
       readKey: initReadKey(null, { ides: ['claude'] }),
+      writeKey: noopWriteKey(),
     });
 
     assert.strictEqual(execAsync.mock.calls.length, 1);
@@ -88,6 +96,7 @@ describe('runUninstall — Claude Code plugin removal', () => {
       execAsync,
       spawnInteractive: noopSpawnInteractive(),
       readKey: initReadKey({ ides: ['other'] }),
+      writeKey: noopWriteKey(),
     });
 
     assert.strictEqual(execAsync.mock.calls.length, 0);
@@ -107,7 +116,12 @@ describe('runUninstall — Claude Code plugin removal', () => {
     });
     const exec = noopExec();
 
-    await runUninstall({ exec, execAsync, readKey: initReadKey({ ides: ['claude'] }) });
+    await runUninstall({
+      exec,
+      execAsync,
+      readKey: initReadKey({ ides: ['claude'] }),
+      writeKey: noopWriteKey(),
+    });
 
     const output = getLogOutput(mocks.logMock) + getStdoutOutput(mocks.stdoutMock);
     assert.ok(output.includes('Failed to remove Claude Code plugin'));
@@ -126,6 +140,7 @@ describe('runUninstall — Other IDEs skills removal', () => {
       exec: noopExec(),
       spawnInteractive,
       readKey: initReadKey({ ides: ['other'] }),
+      writeKey: noopWriteKey(),
     });
 
     assert.strictEqual(spawnInteractive.mock.calls.length, 1);
@@ -141,6 +156,7 @@ describe('runUninstall — Other IDEs skills removal', () => {
       exec: noopExec(),
       spawnInteractive,
       readKey: initReadKey(null, { ides: ['other'] }),
+      writeKey: noopWriteKey(),
     });
 
     assert.strictEqual(spawnInteractive.mock.calls.length, 1);
@@ -157,6 +173,7 @@ describe('runUninstall — Other IDEs skills removal', () => {
       execAsync: noopExecAsync(),
       spawnInteractive,
       readKey: initReadKey({ ides: ['claude'] }),
+      writeKey: noopWriteKey(),
     });
 
     assert.strictEqual(spawnInteractive.mock.calls.length, 0);
@@ -168,7 +185,12 @@ describe('runUninstall — Other IDEs skills removal', () => {
     });
     const exec = noopExec();
 
-    await runUninstall({ exec, spawnInteractive, readKey: initReadKey({ ides: ['other'] }) });
+    await runUninstall({
+      exec,
+      spawnInteractive,
+      readKey: initReadKey({ ides: ['other'] }),
+      writeKey: noopWriteKey(),
+    });
 
     const output = getLogOutput(mocks.logMock) + getStdoutOutput(mocks.stdoutMock);
     assert.ok(output.includes('Failed to remove skills'));
@@ -189,6 +211,7 @@ describe('runUninstall — both IDEs', () => {
       execAsync,
       spawnInteractive,
       readKey: initReadKey({ ides: ['claude', 'other'] }),
+      writeKey: noopWriteKey(),
     });
 
     assert.strictEqual(execAsync.mock.calls.length, 1);
@@ -207,5 +230,155 @@ describe('runUninstall — both IDEs', () => {
     const [npxCmd, npxArgs] = spawnInteractive.mock.calls[0].arguments;
     assert.strictEqual(npxCmd, 'npx');
     assert.deepStrictEqual(npxArgs, ['skills', 'remove', 'memcoai/spark-cli-skills']);
+  });
+});
+
+describe('runUninstall — init data cleanup', () => {
+  setupCommandMocks();
+
+  it('removes local init key after uninstalling project-scoped IDEs', async () => {
+    const writeKey = noopWriteKey();
+
+    await runUninstall({
+      exec: noopExec(),
+      execAsync: noopExecAsync(),
+      readKey: initReadKey({ ides: ['claude'] }),
+      writeKey,
+    });
+
+    // First writeKey call should remove the init key (set to null)
+    const initRemoval = writeKey.mock.calls.find(
+      (c) => c.arguments[1] === 'init' && c.arguments[2] === null,
+    );
+    assert.ok(initRemoval, 'should remove init key from local settings');
+  });
+
+  it('removes globalInit key after uninstalling global-scoped IDEs', async () => {
+    const writeKey = noopWriteKey();
+
+    await runUninstall({
+      exec: noopExec(),
+      spawnInteractive: noopSpawnInteractive(),
+      readKey: initReadKey(null, { ides: ['other'] }),
+      writeKey,
+    });
+
+    const globalInitRemoval = writeKey.mock.calls.find(
+      (c) => c.arguments[1] === 'globalInit' && c.arguments[2] === null,
+    );
+    assert.ok(globalInitRemoval, 'should remove globalInit key from global settings');
+  });
+
+  it('removes project entry from global projects array for project scope', async () => {
+    const cwd = process.cwd();
+    const readKey = mock.fn((path, key) => {
+      if (key === 'init') return { ides: ['claude'] };
+      if (key === 'projects')
+        return [
+          { path: cwd, ides: ['claude'] },
+          { path: '/other', ides: ['other'] },
+        ];
+      return null;
+    });
+    const writeKey = noopWriteKey();
+
+    await runUninstall({
+      exec: noopExec(),
+      execAsync: noopExecAsync(),
+      readKey,
+      writeKey,
+    });
+
+    // Should write filtered projects array (without current project)
+    const projectsWrite = writeKey.mock.calls.find(
+      (c) => c.arguments[1] === 'projects' && c.arguments[2] !== null,
+    );
+    assert.ok(projectsWrite, 'should update projects array');
+    assert.deepStrictEqual(projectsWrite.arguments[2], [{ path: '/other', ides: ['other'] }]);
+  });
+
+  it('sets projects to null when current project is the only entry', async () => {
+    const cwd = process.cwd();
+    const readKey = mock.fn((path, key) => {
+      if (key === 'init') return { ides: ['claude'] };
+      if (key === 'projects') return [{ path: cwd, ides: ['claude'] }];
+      return null;
+    });
+    const writeKey = noopWriteKey();
+
+    await runUninstall({
+      exec: noopExec(),
+      execAsync: noopExecAsync(),
+      readKey,
+      writeKey,
+    });
+
+    const projectsWrite = writeKey.mock.calls.find((c) => c.arguments[1] === 'projects');
+    assert.ok(projectsWrite, 'should update projects key');
+    assert.strictEqual(projectsWrite.arguments[2], null, 'should set projects to null when empty');
+  });
+
+  it('does not touch projects array for global scope', async () => {
+    const readKey = initReadKey(null, { ides: ['claude'] });
+    const writeKey = noopWriteKey();
+
+    await runUninstall({
+      exec: noopExec(),
+      execAsync: noopExecAsync(),
+      readKey,
+      writeKey,
+    });
+
+    const projectsWrite = writeKey.mock.calls.find((c) => c.arguments[1] === 'projects');
+    assert.strictEqual(projectsWrite, undefined, 'should not touch projects for global scope');
+  });
+
+  it('does not call writeKey when no init data exists', async () => {
+    const writeKey = noopWriteKey();
+
+    await runUninstall({
+      exec: noopExec(),
+      readKey: noInitReadKey(),
+      writeKey,
+    });
+
+    assert.strictEqual(writeKey.mock.calls.length, 0);
+  });
+});
+
+describe('runUninstall — .spark directory cleanup', () => {
+  setupCommandMocks();
+
+  it('removes both local and global .spark directories after successful uninstall', async () => {
+    const rm = noopRm();
+
+    await runUninstall({ exec: noopExec(), readKey: noInitReadKey(), rm });
+
+    assert.strictEqual(rm.mock.calls.length, 2);
+    // Both calls should use recursive + force
+    for (const call of rm.mock.calls) {
+      assert.deepStrictEqual(call.arguments[1], { recursive: true, force: true });
+    }
+  });
+
+  it('does not remove directories when npm uninstall fails', async () => {
+    const rm = noopRm();
+    const error = new Error('npm failure');
+    error.stderr = 'npm failure';
+
+    await runUninstall({ exec: throwingExec(error), readKey: noInitReadKey(), rm });
+
+    assert.strictEqual(rm.mock.calls.length, 0);
+  });
+
+  it('continues successfully when directory removal throws', async () => {
+    const rm = mock.fn(() => {
+      throw new Error('EPERM');
+    });
+
+    await runUninstall({ exec: noopExec(), readKey: noInitReadKey(), rm });
+
+    // Should have attempted both directories despite errors
+    assert.strictEqual(rm.mock.calls.length, 2);
   });
 });
