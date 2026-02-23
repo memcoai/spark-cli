@@ -115,6 +115,7 @@ export function promptChecklist(question, options) {
     };
 
     process.stdin.on('data', onData);
+    render();
   });
 }
 
