@@ -93,9 +93,7 @@ async function uninstallOtherIDEs(scope, { spawnInteractive = runInteractiveComm
   } catch (err) {
     console.log('');
     printWarning(`Failed to remove skills: ${err.message}`);
-    printInfo(
-      `You can remove manually: npx skills remove memcoai/spark-cli-skills${globalFlag}`,
-    );
+    printInfo(`You can remove manually: npx skills remove memcoai/spark-cli-skills${globalFlag}`);
   }
 }
 
