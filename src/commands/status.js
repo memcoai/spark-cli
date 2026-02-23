@@ -67,7 +67,6 @@ export async function runStatus({
     const notification = latestInfo ? getNotification(latestInfo) : null;
     if (notification) {
       printWarning(`${notification.message}`);
-      console.log(`  Run ${colorize('\x1b[36m', 'spark update')} to update.`);
     } else {
       printSuccess('You are on the latest version.');
     }

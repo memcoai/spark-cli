@@ -308,18 +308,18 @@ function printAuthInstructions() {
  * Core init logic, accepts dependencies for testability.
  */
 export async function runInit({
-  prompt_checklist = promptChecklist,
-  prompt_choice = promptChoice,
+  promptChecklist: promptChecklistFn = promptChecklist,
+  promptChoice: promptChoiceFn = promptChoice,
   exec = runCommand,
-  spawn_interactive = runInteractiveCommand,
-  fetch_version = fetchSkillsVersion,
+  spawnInteractive = runInteractiveCommand,
+  fetchVersion = fetchSkillsVersion,
 } = {}) {
   printMemcoLogo();
 
   // Step 1: IDE selection
   let selectedIDEs;
   try {
-    selectedIDEs = await prompt_checklist('Select your IDE(s):', [
+    selectedIDEs = await promptChecklistFn('Select your IDE(s):', [
       'Claude Code',
       'Other (Cursor, Windsurf, etc.)',
     ]);
@@ -343,7 +343,7 @@ export async function runInit({
   // Step 2: Scope selection
   let scopeChoice;
   try {
-    scopeChoice = await prompt_choice('Install scope:', [
+    scopeChoice = await promptChoiceFn('Install scope:', [
       'This project (current directory)',
       'Global (all projects)',
     ]);
@@ -364,13 +364,13 @@ export async function runInit({
     if (ide === 'Claude Code') {
       await setupClaudeCode(scope, { exec });
     } else {
-      await setupOtherIDEs(scope, { spawnInteractive: spawn_interactive });
+      await setupOtherIDEs(scope, { spawnInteractive });
     }
   }
 
   // Step 4: Save init choices
   try {
-    await saveInitChoices(selectedIDEs, scope, { fetchVersion: fetch_version });
+    await saveInitChoices(selectedIDEs, scope, { fetchVersion });
   } catch {
     // Non-blocking — don't fail init if we can't save preferences
   }

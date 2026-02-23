@@ -7,16 +7,16 @@ describe('runInit', () => {
   const mocks = setupCommandMocks();
 
   const defaultDeps = (overrides = {}) => ({
-    prompt_checklist: mock.fn(async () => ['Claude Code']),
-    prompt_choice: mock.fn(async () => 'This project (current directory)'),
+    promptChecklist: mock.fn(async () => ['Claude Code']),
+    promptChoice: mock.fn(async () => 'This project (current directory)'),
     exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
-    spawn_interactive: mock.fn(async () => {}),
-    fetch_version: mock.fn(async () => ({ version: '1.0.0' })),
+    spawnInteractive: mock.fn(async () => {}),
+    fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
     ...overrides,
   });
 
   it('shows warning when no IDE is selected', async () => {
-    await runInit(defaultDeps({ prompt_checklist: mock.fn(async () => []) }));
+    await runInit(defaultDeps({ promptChecklist: mock.fn(async () => []) }));
 
     assert.ok(getLogOutput(mocks.logMock).includes('No IDE selected'));
   });
@@ -24,7 +24,7 @@ describe('runInit', () => {
   it('prints cancellation message on user cancel during IDE selection', async () => {
     await runInit(
       defaultDeps({
-        prompt_checklist: mock.fn(async () => {
+        promptChecklist: mock.fn(async () => {
           throw new Error('User cancelled');
         }),
       }),
@@ -64,7 +64,7 @@ describe('runInit', () => {
     await runInit(
       defaultDeps({
         exec,
-        prompt_choice: mock.fn(async () => 'Global (all projects)'),
+        promptChoice: mock.fn(async () => 'Global (all projects)'),
       }),
     );
 
@@ -81,8 +81,8 @@ describe('runInit', () => {
     const spawnInteractive = mock.fn(async () => {});
     await runInit(
       defaultDeps({
-        prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
-        spawn_interactive: spawnInteractive,
+        promptChecklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
+        spawnInteractive,
       }),
     );
 
@@ -99,9 +99,9 @@ describe('runInit', () => {
     const spawnInteractive = mock.fn(async () => {});
     await runInit(
       defaultDeps({
-        prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
-        prompt_choice: mock.fn(async () => 'Global (all projects)'),
-        spawn_interactive: spawnInteractive,
+        promptChecklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
+        promptChoice: mock.fn(async () => 'Global (all projects)'),
+        spawnInteractive,
       }),
     );
 
@@ -118,9 +118,9 @@ describe('runInit', () => {
     const spawnInteractive = mock.fn(async () => {});
     await runInit(
       defaultDeps({
-        prompt_checklist: mock.fn(async () => ['Claude Code', 'Other (Cursor, Windsurf, etc.)']),
+        promptChecklist: mock.fn(async () => ['Claude Code', 'Other (Cursor, Windsurf, etc.)']),
         exec,
-        spawn_interactive: spawnInteractive,
+        spawnInteractive,
       }),
     );
 
@@ -163,8 +163,8 @@ describe('runInit', () => {
   it('shows warning when Other IDEs interactive spawn fails', async () => {
     await runInit(
       defaultDeps({
-        prompt_checklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
-        spawn_interactive: mock.fn(async () => {
+        promptChecklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
+        spawnInteractive: mock.fn(async () => {
           throw new Error('npx exited with code 1');
         }),
       }),
