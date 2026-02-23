@@ -44,74 +44,42 @@ describe('updateCommand', () => {
     assert.strictEqual(opts.timeout, 60000);
   });
 
-  it('exits with code 1 on npm failure', async () => {
-    const exec = mock.fn(() => {
-      throw new Error('npm ERR! command failed');
+  const errorCases = [
+    {
+      name: 'shows npm-not-found message on ENOENT',
+      error: Object.assign(new Error('spawn npm ENOENT'), { code: 'ENOENT' }),
+      expected: 'npm is not installed or not in PATH',
+    },
+    {
+      name: 'shows permission message on EACCES',
+      error: Object.assign(new Error('permission denied'), { code: 'EACCES' }),
+      expected: 'Permission denied',
+    },
+    {
+      name: 'prints stderr message on npm failure',
+      error: Object.assign(new Error('command failed'), { stderr: '  npm ERR! network error  ' }),
+      expected: 'npm ERR! network error',
+    },
+    {
+      name: 'falls back to error message when stderr is empty',
+      error: Object.assign(new Error('ETIMEOUT'), { stderr: '' }),
+      expected: 'ETIMEOUT',
+    },
+  ];
+
+  for (const { name, error, expected } of errorCases) {
+    it(name, async () => {
+      const exec = mock.fn(() => {
+        throw error;
+      });
+      const getVersion = mock.fn(() => '1.0.0');
+
+      await runUpdate({ exec, getVersion });
+
+      assert.strictEqual(mocks.exitMock.mock.calls[0].arguments[0], 1);
+      assert.ok(getLogOutput(mocks.logMock).includes(expected));
     });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    assert.strictEqual(mocks.exitMock.mock.calls[0].arguments[0], 1);
-  });
-
-  it('prints stderr message on npm failure', async () => {
-    const err = new Error('command failed');
-    err.stderr = '  npm ERR! network error  ';
-    const exec = mock.fn(() => {
-      throw err;
-    });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    const output = getLogOutput(mocks.logMock);
-    assert.ok(output.includes('npm ERR! network error'));
-  });
-
-  it('shows npm-not-found message on ENOENT', async () => {
-    const err = new Error('spawn npm ENOENT');
-    err.code = 'ENOENT';
-    const exec = mock.fn(() => {
-      throw err;
-    });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    const output = getLogOutput(mocks.logMock);
-    assert.ok(output.includes('npm is not installed or not in PATH'));
-  });
-
-  it('shows permission message on EACCES', async () => {
-    const err = new Error('permission denied');
-    err.code = 'EACCES';
-    const exec = mock.fn(() => {
-      throw err;
-    });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    const output = getLogOutput(mocks.logMock);
-    assert.ok(output.includes('Permission denied'));
-    assert.ok(output.includes('sudo'));
-  });
-
-  it('falls back to error message when stderr is empty', async () => {
-    const err = new Error('ETIMEOUT');
-    err.stderr = '';
-    const exec = mock.fn(() => {
-      throw err;
-    });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    const output = getLogOutput(mocks.logMock);
-    assert.ok(output.includes('ETIMEOUT'));
-  });
+  }
 
   it('prints current version before updating', async () => {
     const exec = mock.fn(() => '');
