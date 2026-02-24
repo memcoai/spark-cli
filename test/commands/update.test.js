@@ -1,23 +1,10 @@
-import { describe, it, mock, beforeEach, afterEach } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runUpdate } from '../../src/commands/update.js';
+import { setupCommandMocks, getLogOutput, getStdoutOutput, npmExecErrorCases } from '../helpers.js';
 
 describe('updateCommand', () => {
-  let logMock;
-  let exitMock;
-  let stdoutMock;
-
-  beforeEach(() => {
-    logMock = mock.method(console, 'log');
-    exitMock = mock.method(process, 'exit', () => {});
-    stdoutMock = mock.method(process.stdout, 'write', () => true);
-  });
-
-  afterEach(() => {
-    logMock.mock.restore();
-    exitMock.mock.restore();
-    stdoutMock.mock.restore();
-  });
+  const mocks = setupCommandMocks();
 
   it('shows already on latest when version is unchanged', async () => {
     const exec = mock.fn(() => '');
@@ -25,7 +12,7 @@ describe('updateCommand', () => {
 
     await runUpdate({ exec, getVersion });
 
-    const output = stdoutMock.mock.calls.map((c) => c.arguments[0]).join('');
+    const output = getStdoutOutput(mocks.stdoutMock);
     assert.ok(output.includes('Already on the latest version (v1.0.0)'));
   });
 
@@ -39,7 +26,7 @@ describe('updateCommand', () => {
 
     await runUpdate({ exec, getVersion });
 
-    const output = stdoutMock.mock.calls.map((c) => c.arguments[0]).join('');
+    const output = getStdoutOutput(mocks.stdoutMock);
     assert.ok(output.includes('Updated @memco/spark: v1.0.0'));
     assert.ok(output.includes('v1.1.0'));
   });
@@ -57,74 +44,19 @@ describe('updateCommand', () => {
     assert.strictEqual(opts.timeout, 60000);
   });
 
-  it('exits with code 1 on npm failure', async () => {
-    const exec = mock.fn(() => {
-      throw new Error('npm ERR! command failed');
+  for (const { name, error, expected } of npmExecErrorCases) {
+    it(name, async () => {
+      const exec = mock.fn(() => {
+        throw error;
+      });
+      const getVersion = mock.fn(() => '1.0.0');
+
+      await runUpdate({ exec, getVersion });
+
+      assert.strictEqual(mocks.exitMock.mock.calls[0].arguments[0], 1);
+      assert.ok(getLogOutput(mocks.logMock).includes(expected));
     });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    assert.strictEqual(exitMock.mock.calls.length, 1);
-    assert.strictEqual(exitMock.mock.calls[0].arguments[0], 1);
-  });
-
-  it('prints stderr message on npm failure', async () => {
-    const err = new Error('command failed');
-    err.stderr = '  npm ERR! network error  ';
-    const exec = mock.fn(() => {
-      throw err;
-    });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    const output = logMock.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
-    assert.ok(output.includes('npm ERR! network error'));
-  });
-
-  it('shows npm-not-found message on ENOENT', async () => {
-    const err = new Error('spawn npm ENOENT');
-    err.code = 'ENOENT';
-    const exec = mock.fn(() => {
-      throw err;
-    });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    const output = logMock.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
-    assert.ok(output.includes('npm is not installed or not in PATH'));
-  });
-
-  it('shows permission message on EACCES', async () => {
-    const err = new Error('permission denied');
-    err.code = 'EACCES';
-    const exec = mock.fn(() => {
-      throw err;
-    });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    const output = logMock.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
-    assert.ok(output.includes('Permission denied'));
-    assert.ok(output.includes('sudo'));
-  });
-
-  it('falls back to error message when stderr is empty', async () => {
-    const err = new Error('ETIMEOUT');
-    err.stderr = '';
-    const exec = mock.fn(() => {
-      throw err;
-    });
-    const getVersion = mock.fn(() => '1.0.0');
-
-    await runUpdate({ exec, getVersion });
-
-    const output = logMock.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
-    assert.ok(output.includes('ETIMEOUT'));
-  });
+  }
 
   it('prints current version before updating', async () => {
     const exec = mock.fn(() => '');
@@ -132,7 +64,7 @@ describe('updateCommand', () => {
 
     await runUpdate({ exec, getVersion });
 
-    const output = logMock.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
+    const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Current version: v2.3.4'));
   });
 

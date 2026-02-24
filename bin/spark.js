@@ -8,6 +8,8 @@ import { feedbackCommand } from '../src/commands/feedback.js';
 import { loginCommand, logoutCommand, whoamiCommand } from '../src/commands/auth.js';
 import { updateCommand } from '../src/commands/update.js';
 import { uninstallCommand } from '../src/commands/uninstall.js';
+import { initCommand } from '../src/commands/init.js';
+import { statusCommand } from '../src/commands/status.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -19,6 +21,10 @@ import {
   checkCompatibility,
   getCachedCompatibility,
   evaluateCompatibility,
+  checkSkillsVersion,
+  getCachedSkillsVersion,
+  getSkillsNotification,
+  getInitData,
 } from '../src/update-check.js';
 import { setVersionNotification, printVersionNotification } from '../src/output.js';
 
@@ -28,6 +34,7 @@ const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'))
 
 let updateCheckPromise = null;
 let compatCheckPromise = null;
+let skillsCheckPromise = null;
 
 program
   .name('spark')
@@ -43,7 +50,7 @@ program.hook('preAction', (thisCommand, actionCommand) => {
   }
 
   // Skip version/compatibility checks for the update command
-  if (actionCommand.name() === 'update' || actionCommand.name() === 'uninstall') return;
+  if (['update', 'uninstall', 'init'].includes(actionCommand.name())) return;
 
   const localVersion = getLocalVersion();
 
@@ -71,6 +78,16 @@ program.hook('preAction', (thisCommand, actionCommand) => {
     }
   }
 
+  // Pre-set skills update notification from cached data
+  const cachedSkills = getCachedSkillsVersion();
+  const initData = getInitData();
+  if (cachedSkills && initData) {
+    const skillsNotification = getSkillsNotification(cachedSkills, initData);
+    if (skillsNotification) {
+      setVersionNotification(skillsNotification.message);
+    }
+  }
+
   // Start background checks
   compatCheckPromise = checkCompatibility().then((result) => {
     if (result?.data) {
@@ -89,6 +106,18 @@ program.hook('preAction', (thisCommand, actionCommand) => {
       }
     }
   });
+
+  skillsCheckPromise = checkSkillsVersion().then((latestSkills) => {
+    if (latestSkills) {
+      const currentInitData = getInitData();
+      if (currentInitData) {
+        const skillsNotification = getSkillsNotification(latestSkills, currentInitData);
+        if (skillsNotification) {
+          setVersionNotification(skillsNotification.message);
+        }
+      }
+    }
+  });
 });
 
 program.hook('postAction', async () => {
@@ -97,6 +126,9 @@ program.hook('postAction', async () => {
   }
   if (updateCheckPromise) {
     await updateCheckPromise;
+  }
+  if (skillsCheckPromise) {
+    await skillsCheckPromise;
   }
   printVersionNotification();
 });
@@ -164,5 +196,12 @@ program
   .command('uninstall')
   .description('Uninstall Spark CLI from this system')
   .action(uninstallCommand);
+
+program.command('init').description('Set up Spark for your IDE').action(initCommand);
+
+program
+  .command('status')
+  .description('Verify Spark setup and authentication')
+  .action(statusCommand);
 
 program.parse();

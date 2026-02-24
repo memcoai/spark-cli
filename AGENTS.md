@@ -28,12 +28,15 @@ src/
     feedback.js       Provide feedback on recommendations
     update.js         Self-update command (npm install -g @memco/spark@latest)
     uninstall.js      Self-uninstall command (npm uninstall -g @memco/spark)
+    init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings
+    status.js         Status check — version freshness, auth verification, and skills version
+  exec.js             Shared child process helpers (runCommand, runInteractiveCommand)
   api.js              HTTP client — getAuthToken, apiRequest, callTool, and API wrappers
   oauth.js            OAuth discovery (well-known endpoints) and dynamic client registration
   credentials.js      Load/save/remove credentials via settings.json
   settings.js         Low-level settings.json read/write helpers
-  update-check.js     Version checking (npm update notifications) and backend compatibility (block/deprecation)
-  constants.js        Shared constants (API_BASE, VERSION_CHECK_URL, paths, port, auth redirect URLs)
+  update-check.js     Version checking (npm update notifications), backend compatibility (block/deprecation), and skills version checking
+  constants.js        Shared constants (API_BASE, VERSION_CHECK_URL, SKILLS_VERSION_URL, paths, port, auth redirect URLs)
   output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode
@@ -44,13 +47,14 @@ src/
 
 ## Key Patterns
 
-- **Settings file:** All persistent state stored in `settings.json` with structure `{ credentials, client, latestVersion, compatibility }`. Global at `~/.spark/settings.json`, local at `./.spark/settings.json`. Credentials and client data use `readSettingsKey`/`writeSettingsKey` from `settings.js`.
+- **Settings file:** All persistent state stored in `settings.json` with structure `{ credentials, client, latestVersion, compatibility, skillsVersion, projects, globalInit }`. Global at `~/.spark/settings.json`, local at `./.spark/settings.json`. Credentials and client data use `readSettingsKey`/`writeSettingsKey` from `settings.js`.
 - **Credentials resolution:** local-first (`./.spark/settings.json`) then global (`~/.spark/settings.json`). The `--local` flag on `spark login` scopes credentials to the current directory. Token refresh auto-detects which location to save back to. Logout removes the `credentials` key, not the file.
 - **Auth priority:** CLI `--api-key` flag > `SPARK_API_KEY` env var > OAuth access token > legacy API key in credentials file.
 - **Tag format:** `TYPE:NAME` or `TYPE:NAME:VERSION` where version accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH with optional pre-release suffix. The `v` prefix is stripped. Backend handles semantic validation; CLI only validates structure.
 - **Output:** Default output is compact JSON via `output()`. Use `--pretty` for human-readable output with markdown rendering and ANSI formatting. Auth commands (login, logout) always use styled terminal output via banner.js. Errors go through `outputError()` which calls `process.exit(1)`.
 - **OAuth client cache:** stored in `~/.spark/settings.json` under the `client` key (global, not per-project).
-- **Version checking:** Two separate systems: (1) npm registry check for "update available" notifications — cached under `latestVersion` with 24-hour TTL; (2) backend compatibility check (`GET /api/cli/compatibility`) for blocking outdated CLIs and deprecation warnings — cached under `compatibility` with 4-hour TTL. Both fail open on network errors. Blocking uses `minimum_version` from the backend. Deprecation warnings show on every invocation until updated. Backend `message` field is displayed when blocked or deprecated. Notifications print to stderr after command output.
+- **Version checking:** Three separate systems: (1) npm registry check for "update available" notifications — cached under `latestVersion` with 24-hour TTL; (2) backend compatibility check (`GET /api/cli/compatibility`) for blocking outdated CLIs and deprecation warnings — cached under `compatibility` with 4-hour TTL; (3) skills version check from GitHub raw content (`memcoai/spark-cli-skills/main/VERSION`) — cached under `skillsVersion` with 24-hour TTL. All fail open on network errors. Skills notifications include IDE-specific update commands based on stored init choices.
+- **Init persistence:** `spark init` saves IDE choices and installed skills version. Project scope writes `init` to local `.spark/settings.json` AND upserts into global `projects` array. Global scope writes `globalInit` to `~/.spark/settings.json`. Version checks read local `init` first, then fall back to `globalInit`.
 
 ## Development
 
@@ -76,7 +80,7 @@ test/
   parse-tags.test.js          parseTags, parseSources
   credentials.test.js         isTokenExpired
   settings.test.js            readSettings, writeSettings, readSettingsKey, writeSettingsKey
-  update-check.test.js        evaluateCompatibility (blocked, deprecation, message, edge cases)
+  update-check.test.js        evaluateCompatibility, getSkillsNotification
   output.test.js              getParentOptions, output, outputSuccess, printVersionNotification
   format-markdown.test.js     Markdown-to-ANSI rendering
   pretty-print.test.js        Human-readable object formatting
@@ -86,6 +90,8 @@ test/
     insights.test.js          taskIndex validation
     feedback.test.js          Flag validation (--helpful / --not-helpful)
     uninstall.test.js         npm uninstall execution and error handling
+    init.test.js              IDE selection, scope, command execution, init persistence
+    status.test.js            Version check, auth verification, and skills version status
 ```
 
 Tests cover input parsing and validation without external service dependencies. Command tests mock `console.log` and `process.exit` to verify error output without hitting the API.
