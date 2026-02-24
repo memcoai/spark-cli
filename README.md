@@ -23,6 +23,20 @@ curl -fsSL https://raw.githubusercontent.com/memcoai/spark-cli/main/install.sh |
 npm install -g @memco/spark
 ```
 
+## Initialization
+
+After installation, initialize Spark to work with your favorite IDE:
+
+```bash
+spark init
+```
+
+To get started, log in to your Spark account:
+
+```bash
+spark login
+```
+
 ## Quick Start
 
 ```bash
