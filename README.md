@@ -25,16 +25,15 @@ npm install -g @memco/spark
 
 ## Initialization
 
-After installing, log in to your Spark account:
+Setup Spark with your favorite IDE:
+```bash
+spark init
+```
+
+To get started, log in to your Spark account:
 
 ```bash
 spark login
-```
-
-Follow by configuring Spark:
-
-```bash
-spark init
 ```
 
 ## Quick Start
