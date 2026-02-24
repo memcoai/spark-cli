@@ -31,7 +31,7 @@ After installing, log in to your Spark account:
 spark login
 ```
 
-Follow by configuring Spark:
+Then configure Spark:
 
 ```bash
 spark init
