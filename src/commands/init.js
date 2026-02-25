@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
 import {
-  printMemcoLogo,
+  printBanner,
   printError,
   printInfo,
   printWarning,
@@ -281,7 +281,7 @@ export async function runInit({
   spawnInteractive = runInteractiveCommand,
   fetchVersion = fetchSkillsVersion,
 } = {}) {
-  printMemcoLogo();
+  printBanner();
 
   // Step 1: IDE selection
   let selectedIDEs;
