@@ -76,7 +76,7 @@ export function printSparkLogo() {
  * Print the full banner with logo and info
  */
 export function printBanner() {
-  console.log(colorize('\x1b[36m', MEMCO_LOGO));
+  console.log(colorize('\x1b[32m', MEMCO_LOGO));
   console.log(colorize('\x1b[2m', INFO_BOX));
 }
 

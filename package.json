@@ -1,6 +1,6 @@
 {
   "name": "@memco/spark",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "CLI for Spark - Collective knowledge network for AI coding agents",
   "main": "src/index.js",
   "bin": {
@@ -13,6 +13,7 @@
     "lint": "eslint src/",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "postinstall": "node scripts/postinstall.js || true",
     "prepublishOnly": "npm run test && npm run lint"
   },
   "keywords": [
@@ -50,6 +51,7 @@
   },
   "files": [
     "bin/",
+    "scripts/",
     "src/",
     "README.md",
     "LICENSE"
