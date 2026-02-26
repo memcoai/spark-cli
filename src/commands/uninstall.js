@@ -37,7 +37,7 @@ function getInitChoices(readKey = readSettingsKey) {
  * Remove the init data from the settings file after IDE uninstalls.
  * For project scope, also removes the project entry from the global projects array.
  */
-function removeInitData(
+export function removeInitData(
   settingsPath,
   settingsKey,
   { readKey = readSettingsKey, writeKey = writeSettingsKey } = {},
@@ -71,7 +71,7 @@ function cleanupSparkDirs(rm = rmSync) {
 /**
  * Uninstall Claude Code plugin if it was installed via spark init.
  */
-async function uninstallClaudePlugin(scope, { exec = runCommand } = {}) {
+export async function uninstallClaudePlugin(scope, { exec = runCommand } = {}) {
   const scopeFlag = scope === 'project' ? 'project' : 'user';
 
   const spinner = createSpinner('Removing Spark plugin from Claude Code...');
@@ -90,7 +90,7 @@ async function uninstallClaudePlugin(scope, { exec = runCommand } = {}) {
 /**
  * Uninstall skills for other IDEs (Cursor, Windsurf, etc.) via skills CLI.
  */
-async function uninstallOtherIDEs(scope, { spawnInteractive = runInteractiveCommand } = {}) {
+export async function uninstallOtherIDEs(scope, { spawnInteractive = runInteractiveCommand } = {}) {
   const args = ['skills', 'remove', 'memcoai/spark-cli-skills'];
   if (scope === 'global') {
     args.push('--global');

@@ -16,6 +16,7 @@ console.log();
 console.log(`   ${green('Get started:')}`);
 console.log(`     ${cyan('spark init')}        Set up your IDE integration`);
 console.log(`     ${cyan('spark enable')}      Enable Spark in the current project`);
+console.log(`     ${cyan('spark disable')}     Disable Spark in the current project`);
 console.log(`     ${cyan('spark login')}       Sign in to Spark`);
 console.log(`     ${cyan('spark status')}      Check your setup`);
 console.log();

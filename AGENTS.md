@@ -30,6 +30,7 @@ src/
     uninstall.js      Self-uninstall command (npm uninstall -g @memco/spark)
     init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings; exports shared setup helpers
     enable.js         Enable Spark for the current project (project-scoped init without scope prompt); reuses init helpers
+    disable.js        Disable Spark for the current project (reverse of enable); reuses uninstall helpers
     status.js         Status check — version freshness, auth verification, and skills version
   exec.js             Shared child process helpers (runCommand, runInteractiveCommand)
   api.js              HTTP client — getAuthToken, apiRequest, callTool, and API wrappers
