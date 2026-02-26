@@ -9,6 +9,8 @@ import { loginCommand, logoutCommand, whoamiCommand } from '../src/commands/auth
 import { updateCommand } from '../src/commands/update.js';
 import { uninstallCommand } from '../src/commands/uninstall.js';
 import { initCommand } from '../src/commands/init.js';
+import { enableCommand } from '../src/commands/enable.js';
+import { disableCommand } from '../src/commands/disable.js';
 import { statusCommand } from '../src/commands/status.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -50,7 +52,7 @@ program.hook('preAction', (thisCommand, actionCommand) => {
   }
 
   // Skip version/compatibility checks for the update command
-  if (['update', 'uninstall', 'init'].includes(actionCommand.name())) return;
+  if (['update', 'uninstall', 'init', 'enable', 'disable'].includes(actionCommand.name())) return;
 
   const localVersion = getLocalVersion();
 
@@ -198,6 +200,13 @@ program
   .action(uninstallCommand);
 
 program.command('init').description('Set up Spark for your IDE').action(initCommand);
+
+program.command('enable').description('Enable Spark for the current project').action(enableCommand);
+
+program
+  .command('disable')
+  .description('Disable Spark for the current project')
+  .action(disableCommand);
 
 program
   .command('status')

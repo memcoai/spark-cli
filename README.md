@@ -31,6 +31,20 @@ After installation, initialize Spark to work with your favorite IDE:
 spark init
 ```
 
+To enable Spark for a specific project, run from that project's directory:
+
+```bash
+spark enable
+```
+
+`spark enable` is a shortcut that skips the scope prompt and always sets up the current project.
+
+To disable Spark for the current project:
+
+```bash
+spark disable
+```
+
 To get started, log in to your Spark account:
 
 ```bash

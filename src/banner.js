@@ -121,11 +121,11 @@ export function createSpinner(message) {
   return {
     stop: (finalMessage) => {
       clearInterval(interval);
-      process.stdout.write(`\r${colorize('\x1b[32m', '✓')} ${finalMessage || message}\n`);
+      process.stdout.write(`\r\x1b[K${colorize('\x1b[32m', '✓')} ${finalMessage || message}\n`);
     },
     fail: (errorMessage) => {
       clearInterval(interval);
-      process.stdout.write(`\r${colorize('\x1b[31m', '✗')} ${errorMessage || message}\n`);
+      process.stdout.write(`\r\x1b[K${colorize('\x1b[31m', '✗')} ${errorMessage || message}\n`);
     },
   };
 }

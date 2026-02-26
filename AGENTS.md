@@ -28,7 +28,9 @@ src/
     feedback.js       Provide feedback on recommendations
     update.js         Self-update command (npm install -g @memco/spark@latest)
     uninstall.js      Self-uninstall command (npm uninstall -g @memco/spark)
-    init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings
+    init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings; exports runSetupFlow and shared helpers
+    enable.js         Enable Spark for the current project; delegates to runSetupFlow from init.js with scope='project'
+    disable.js        Disable Spark for the current project (reverse of enable); reuses uninstall helpers
     status.js         Status check — version freshness, auth verification, and skills version
   exec.js             Shared child process helpers (runCommand, runInteractiveCommand)
   api.js              HTTP client — getAuthToken, apiRequest, callTool, and API wrappers
@@ -47,6 +49,7 @@ src/
 
 ## Key Patterns
 
+- **Avoid code duplication:** Extract shared logic into reusable helpers rather than duplicating code across commands. For example, `enable.js` and `disable.js` reuse helpers exported from `init.js` and `uninstall.js` respectively. When adding new commands or features, check for existing utilities before writing new code.
 - **Settings file:** All persistent state stored in `settings.json` with structure `{ credentials, client, latestVersion, compatibility, skillsVersion, projects, globalInit }`. Global at `~/.spark/settings.json`, local at `./.spark/settings.json`. Credentials and client data use `readSettingsKey`/`writeSettingsKey` from `settings.js`.
 - **Credentials resolution:** local-first (`./.spark/settings.json`) then global (`~/.spark/settings.json`). The `--local` flag on `spark login` scopes credentials to the current directory. Token refresh auto-detects which location to save back to. Logout removes the `credentials` key, not the file.
 - **Auth priority:** CLI `--api-key` flag > `SPARK_API_KEY` env var > OAuth access token > legacy API key in credentials file.
@@ -71,6 +74,7 @@ npm run format        # eslint --fix src/
 - Coverage: `c8`
 - Linting: ESLint 9 flat config (`eslint.config.js`)
 - CI: GitHub Actions on main/dev, matrix Node [18, 20, 22], lint on Node 22 only
+- **Always run `npm run format` after making changes** to ensure consistent code style
 
 ## Test Structure
 
@@ -91,6 +95,8 @@ test/
     feedback.test.js          Flag validation (--helpful / --not-helpful)
     uninstall.test.js         npm uninstall execution and error handling
     init.test.js              IDE selection, scope, command execution, init persistence
+    enable.test.js            Verifies project scope is always used (delegates to runSetupFlow)
+    disable.test.js           Project-scoped teardown, plugin/skills removal, init cleanup
     status.test.js            Version check, auth verification, and skills version status
 ```
 
