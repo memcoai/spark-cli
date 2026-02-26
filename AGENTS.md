@@ -95,7 +95,7 @@ test/
     feedback.test.js          Flag validation (--helpful / --not-helpful)
     uninstall.test.js         npm uninstall execution and error handling
     init.test.js              IDE selection, scope, command execution, init persistence
-    enable.test.js            Project-scoped setup delegation, IDE selection, error handling
+    enable.test.js            Verifies project scope is always used (delegates to runSetupFlow)
     disable.test.js           Project-scoped teardown, plugin/skills removal, init cleanup
     status.test.js            Version check, auth verification, and skills version status
 ```
