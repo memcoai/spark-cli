@@ -272,9 +272,41 @@ export function printAuthInstructions() {
 }
 
 /**
- * Core init logic, accepts dependencies for testability.
+ * Run a prompt function, handling user cancellation gracefully.
+ * Returns the prompt result, or undefined if the user cancelled.
  */
-export async function runInit({
+async function promptWithCancel(promptFn, ...args) {
+  try {
+    return await promptFn(...args);
+  } catch (err) {
+    if (err.message === 'User cancelled') {
+      console.log('');
+      printInfo('Setup cancelled.');
+      return undefined;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Execute IDE setup for the given selections.
+ */
+async function executeSetup(selectedIDEs, scope, { exec, spawnInteractive }) {
+  for (const ide of selectedIDEs) {
+    if (ide === 'Claude Code') {
+      await setupClaudeCode(scope, { exec });
+    } else {
+      await setupOtherIDEs(scope, { spawnInteractive });
+    }
+  }
+}
+
+/**
+ * Shared setup flow used by both `init` and `enable`.
+ * When `scope` is provided, the scope prompt is skipped.
+ */
+export async function runSetupFlow({
+  scope: fixedScope,
   promptChecklist: promptChecklistFn = promptChecklist,
   promptChoice: promptChoiceFn = promptChoice,
   exec = runCommand,
@@ -284,20 +316,11 @@ export async function runInit({
   printBanner();
 
   // Step 1: IDE selection
-  let selectedIDEs;
-  try {
-    selectedIDEs = await promptChecklistFn('Select your IDE(s):', [
-      'Claude Code',
-      'Other (Cursor, Windsurf, etc.)',
-    ]);
-  } catch (err) {
-    if (err.message === 'User cancelled') {
-      console.log('');
-      printInfo('Setup cancelled.');
-      return;
-    }
-    throw err;
-  }
+  const selectedIDEs = await promptWithCancel(promptChecklistFn, 'Select your IDE(s):', [
+    'Claude Code',
+    'Other (Cursor, Windsurf, etc.)',
+  ]);
+  if (!selectedIDEs) return;
 
   if (selectedIDEs.length === 0) {
     console.log('');
@@ -307,43 +330,38 @@ export async function runInit({
 
   console.log('');
 
-  // Step 2: Scope selection
-  let scopeChoice;
-  try {
-    scopeChoice = await promptChoiceFn('Install scope:', [
+  // Step 2: Scope selection (skipped when scope is pre-determined)
+  let scope = fixedScope;
+  if (!scope) {
+    const scopeChoice = await promptWithCancel(promptChoiceFn, 'Install scope:', [
       'This project (current directory)',
       'Global (all projects)',
     ]);
-  } catch (err) {
-    if (err.message === 'User cancelled') {
-      console.log('');
-      printInfo('Setup cancelled.');
-      return;
-    }
-    throw err;
-  }
+    if (!scopeChoice) return;
 
-  const scope = scopeChoice.startsWith('Global') ? 'global' : 'project';
-  console.log('');
+    scope = scopeChoice.startsWith('Global') ? 'global' : 'project';
+    console.log('');
+  }
 
   // Step 3: Execute setup
-  for (const ide of selectedIDEs) {
-    if (ide === 'Claude Code') {
-      await setupClaudeCode(scope, { exec });
-    } else {
-      await setupOtherIDEs(scope, { spawnInteractive });
-    }
-  }
+  await executeSetup(selectedIDEs, scope, { exec, spawnInteractive });
 
   // Step 4: Save init choices
   try {
     await saveInitChoices(selectedIDEs, scope, { fetchVersion });
   } catch {
-    // Non-blocking — don't fail init if we can't save preferences
+    // Non-blocking — don't fail if we can't save preferences
   }
 
   // Step 5: Auth instructions
   printAuthInstructions();
+}
+
+/**
+ * Core init logic, accepts dependencies for testability.
+ */
+export async function runInit(deps = {}) {
+  return runSetupFlow(deps);
 }
 
 /**
