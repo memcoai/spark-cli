@@ -226,7 +226,7 @@ export async function saveInitChoices(ides, scope, { fetchVersion = fetchSkillsV
 
   // Fetch the current skills version to record what was installed
   const versionInfo = await fetchVersion();
-  const skillsVersion = versionInfo?.version || null;
+  const skillsVersion = versionInfo?.version || '0.0.0';
 
   const initData = { ides: ideKeys, skillsVersion };
 
