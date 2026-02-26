@@ -28,7 +28,8 @@ src/
     feedback.js       Provide feedback on recommendations
     update.js         Self-update command (npm install -g @memco/spark@latest)
     uninstall.js      Self-uninstall command (npm uninstall -g @memco/spark)
-    init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings
+    init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings; exports shared setup helpers
+    enable.js         Enable Spark for the current project (project-scoped init without scope prompt); reuses init helpers
     status.js         Status check — version freshness, auth verification, and skills version
   exec.js             Shared child process helpers (runCommand, runInteractiveCommand)
   api.js              HTTP client — getAuthToken, apiRequest, callTool, and API wrappers
@@ -71,6 +72,7 @@ npm run format        # eslint --fix src/
 - Coverage: `c8`
 - Linting: ESLint 9 flat config (`eslint.config.js`)
 - CI: GitHub Actions on main/dev, matrix Node [18, 20, 22], lint on Node 22 only
+- **Always run `npm run format` after making changes** to ensure consistent code style
 
 ## Test Structure
 

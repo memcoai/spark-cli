@@ -1,6 +1,6 @@
 {
   "name": "@memco/spark",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "CLI for Spark - Collective knowledge network for AI coding agents",
   "main": "src/index.js",
   "bin": {

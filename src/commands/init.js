@@ -153,7 +153,7 @@ export function promptChoice(question, options) {
 /**
  * Set up Claude Code with Spark plugin.
  */
-async function setupClaudeCode(scope, { exec = runCommand } = {}) {
+export async function setupClaudeCode(scope, { exec = runCommand } = {}) {
   const scopeFlag = scope === 'project' ? 'project' : 'user';
 
   const addSpinner = createSpinner('Adding Spark marketplace...');
@@ -187,7 +187,7 @@ async function setupClaudeCode(scope, { exec = runCommand } = {}) {
 /**
  * Set up other IDEs (Cursor, Windsurf, etc.) via skills CLI.
  */
-async function setupOtherIDEs(scope, { spawnInteractive = runInteractiveCommand } = {}) {
+export async function setupOtherIDEs(scope, { spawnInteractive = runInteractiveCommand } = {}) {
   const args = ['skills', 'add', 'memcoai/spark-cli-skills'];
   if (scope === 'global') {
     args.push('--global');
@@ -211,7 +211,7 @@ async function setupOtherIDEs(scope, { spawnInteractive = runInteractiveCommand 
 /**
  * Map IDE selection labels to short keys.
  */
-const IDE_KEY_MAP = {
+export const IDE_KEY_MAP = {
   'Claude Code': 'claude',
   'Other (Cursor, Windsurf, etc.)': 'other',
 };
@@ -221,7 +221,7 @@ const IDE_KEY_MAP = {
  * Project scope: writes to local + upserts in global projects array.
  * Global scope: writes to globalInit in global settings.
  */
-async function saveInitChoices(ides, scope, { fetchVersion = fetchSkillsVersion } = {}) {
+export async function saveInitChoices(ides, scope, { fetchVersion = fetchSkillsVersion } = {}) {
   const ideKeys = ides.map((ide) => IDE_KEY_MAP[ide] || ide);
 
   // Fetch the current skills version to record what was installed
@@ -253,7 +253,7 @@ async function saveInitChoices(ides, scope, { fetchVersion = fetchSkillsVersion 
 /**
  * Print auth instructions after IDE setup.
  */
-function printAuthInstructions() {
+export function printAuthInstructions() {
   console.log('');
   console.log(colorize('\x1b[1m', 'Next: Authenticate with Spark'));
   console.log('');
