@@ -25,6 +25,7 @@ src/
     query.js          Query knowledge network (get_recommendation)
     insights.js       Get detailed insights for a task
     share.js          Share an insight/solution
+    share-task.js     Share task insights with knowledge network (share_task)
     feedback.js       Provide feedback on recommendations
     update.js         Self-update command (npm install -g @memco/spark@latest)
     uninstall.js      Self-uninstall command (npm uninstall -g @memco/spark)
@@ -91,6 +92,7 @@ test/
   commands/
     query.test.js             Tag validation errors
     share.test.js             Tag/version validation errors
+    share-task.test.js        Tag/version validation errors for share-task
     insights.test.js          taskIndex validation
     feedback.test.js          Flag validation (--helpful / --not-helpful)
     uninstall.test.js         npm uninstall execution and error handling
