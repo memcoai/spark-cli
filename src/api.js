@@ -169,6 +169,13 @@ export async function shareInsight(params, command = null) {
 }
 
 /**
+ * Share a task with insights
+ */
+export async function shareTask(params, command = null) {
+  return callTool('share_task', params, command);
+}
+
+/**
  * Share feedback on recommendations
  */
 export async function shareFeedback(sessionId, feedback, command = null) {

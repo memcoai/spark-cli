@@ -4,6 +4,7 @@ import { program } from 'commander';
 import { queryCommand } from '../src/commands/query.js';
 import { insightsCommand } from '../src/commands/insights.js';
 import { shareCommand } from '../src/commands/share.js';
+import { shareTaskCommand } from '../src/commands/share-task.js';
 import { feedbackCommand } from '../src/commands/feedback.js';
 import { loginCommand, logoutCommand, whoamiCommand } from '../src/commands/auth.js';
 import { updateCommand } from '../src/commands/update.js';
@@ -169,6 +170,23 @@ program
   .option('-t, --tags <items>', 'Task key:value pairs (comma-separated, e.g., task-type:bug_fix)')
   .option('--sources <items>', 'Source insight/document IDs from Spark (comma-separated)')
   .action(shareCommand);
+
+// Share-task command
+program
+  .command('share-task <query>')
+  .description('Share task insights with the knowledge network')
+  .requiredOption('--insight <insight>', 'Insight to share (can be repeated)', (val, prev) =>
+    prev ? [...prev, val] : [val],
+  )
+  .option(
+    '-e, --env <items>',
+    'Environment key:value pairs describing your stack (comma-separated, e.g., language_version:python:3.11,framework_version:django:4.2)',
+  )
+  .option(
+    '-t, --tags <items>',
+    'Task key:value pairs describing your task (comma-separated, e.g., task-type:bug_fix,method:DataFrame.apply())',
+  )
+  .action(shareTaskCommand);
 
 // Feedback command
 program
