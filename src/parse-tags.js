@@ -30,7 +30,7 @@ function normalizeVersion(version) {
  */
 function parseTag(raw) {
   if (typeof raw !== 'string') {
-    throw new Error(`Invalid tag value: expected a string but got ${typeof raw}`);
+    throw new TypeError(`Invalid tag value: expected a string but got ${typeof raw}`);
   }
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -124,7 +124,7 @@ function parseXmlTag(raw) {
   while ((match = attrRegex.exec(tagMatch[1])) !== null) {
     const key = match[1];
     const value = match[2];
-    if (Object.prototype.hasOwnProperty.call(attrs, key)) {
+    if (Object.hasOwn(attrs, key)) {
       throw new Error(`Invalid XML tag "${trimmed}": duplicate attribute "${key}"`);
     }
     attrs[key] = value;
