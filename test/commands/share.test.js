@@ -27,5 +27,26 @@ describe('shareCommand', () => {
       const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
       assert.strictEqual(body.task_idx, '5');
     });
+
+    it('sends tags as XML in request body', async () => {
+      await shareCommand(
+        'session-1',
+        { title: 'T', content: 'C', tag: ['language:python:3.11', 'task_type:bug_fix'] },
+        null,
+      );
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, [
+        '<tag type="language" name="python" version="3.11" />',
+        '<tag type="task_type" name="bug_fix" />',
+      ]);
+    });
+
+    it('omits tags when --tag is not provided', async () => {
+      await shareCommand('session-1', { title: 'T', content: 'C' }, null);
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.strictEqual(body.tags, undefined);
+    });
   });
 });
