@@ -154,7 +154,7 @@ export function parseXmlTags(input) {
  * Collect and merge tags from --tag and --xml-tag options.
  * Returns a single array of XML tag strings ready for the API.
  */
-export function collectTags(options) {
+export function collectTags(options = {}) {
   const fromColon = tagsToXml(parseTags(options.tag));
   const fromXml = parseXmlTags(options.xmlTag);
   return [...fromColon, ...fromXml];
