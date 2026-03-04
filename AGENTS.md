@@ -81,7 +81,7 @@ npm run format        # eslint --fix src/
 
 ```
 test/
-  helpers.js                  Shared test helpers (setupCommandMocks, getErrorOutput, xmlTagValidationTests)
+  helpers.js                  Shared test helpers (setupCommandMocks, setupFetchMock, getErrorOutput, tagValidationTests, xmlTagValidationTests)
   parse-tags.test.js          parseTags, tagsToXml, parseXmlTags, collectTags, parseSources
   credentials.test.js         isTokenExpired
   settings.test.js            readSettings, writeSettings, readSettingsKey, writeSettingsKey

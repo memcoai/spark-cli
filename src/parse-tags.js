@@ -24,7 +24,9 @@ function normalizeVersion(version) {
  * Validate and parse a single tag string.
  * Format: TYPE:NAME or TYPE:NAME:VERSION (exactly one or two ':' separators).
  * Type and name must be non-empty strings that do not contain ':'.
- * Version, if present, must be numeric (MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH). PATCH can be a string.
+ * Version, if present, must be MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH, where all numeric
+ * components are integers; the patch component may include an optional pre-release suffix
+ * after '-' (e.g. 0-beta).
  */
 function parseTag(raw) {
   const trimmed = raw.trim();
@@ -106,7 +108,7 @@ function parseXmlTag(raw) {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  const tagMatch = /^<tag\s+((?:\w+="[^"]*"\s*)+)\/>$/.exec(trimmed);
+  const tagMatch = /^<tag\s+((?:\w+="[^"]*"(?:\s+|(?=\/>)))+)\/>$/.exec(trimmed);
   if (!tagMatch) {
     throw new Error(
       `Invalid XML tag "${trimmed}": expected <tag type="..." name="..." /> or <tag type="..." name="..." version="..." />`,

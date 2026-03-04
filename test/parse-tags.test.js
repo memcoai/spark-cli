@@ -280,6 +280,12 @@ describe('parseXmlTags', () => {
       });
     });
 
+    it('throws on concatenated attributes without whitespace', () => {
+      assert.throws(() => parseXmlTags('<tag type="a"name="b" />'), {
+        message: /Invalid XML tag/,
+      });
+    });
+
     it('throws on non-self-closing tag', () => {
       assert.throws(() => parseXmlTags('<tag type="a" name="b">text</tag>'), {
         message: /Invalid XML tag/,
