@@ -175,10 +175,8 @@ program
 program
   .command('share-task <query>')
   .description('Share task insights with the knowledge network')
-  .requiredOption(
-    '--insight <insight>',
-    'Insight to share (can be repeated)',
-    (val, prev) => (prev ? [...prev, val] : [val]),
+  .requiredOption('--insight <insight>', 'Insight to share (can be repeated)', (val, prev) =>
+    prev ? [...prev, val] : [val],
   )
   .option(
     '-e, --env <items>',
