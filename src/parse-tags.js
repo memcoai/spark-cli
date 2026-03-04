@@ -30,9 +30,7 @@ function normalizeVersion(version) {
  */
 function parseTag(raw) {
   if (typeof raw !== 'string') {
-    throw new Error(
-      `Invalid tag value: expected a string but got ${typeof raw}`,
-    );
+    throw new Error(`Invalid tag value: expected a string but got ${typeof raw}`);
   }
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -121,10 +119,15 @@ function parseXmlTag(raw) {
   }
 
   const attrs = {};
-  const attrRegex = /(\w+)="([^"]*)"/g;
+  const attrRegex = /(\w+)="([^"<&]*)"/g;
   let match;
   while ((match = attrRegex.exec(tagMatch[1])) !== null) {
-    attrs[match[1]] = match[2];
+    const key = match[1];
+    const value = match[2];
+    if (Object.prototype.hasOwnProperty.call(attrs, key)) {
+      throw new Error(`Invalid XML tag "${trimmed}": duplicate attribute "${key}"`);
+    }
+    attrs[key] = value;
   }
 
   if (!attrs.type) {
