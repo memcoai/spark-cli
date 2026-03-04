@@ -29,6 +29,11 @@ function normalizeVersion(version) {
  * after '-' (e.g. 0-beta).
  */
 function parseTag(raw) {
+  if (typeof raw !== 'string') {
+    throw new Error(
+      `Invalid tag value: expected a string but got ${typeof raw}`,
+    );
+  }
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
