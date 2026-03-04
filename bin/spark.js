@@ -145,6 +145,11 @@ program
     'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
     (val, prev) => (prev ? [...prev, val] : [val]),
   )
+  .option(
+    '--xml-tag <tag>',
+    'Pre-formed XML tag (can be repeated, e.g., --xml-tag \'<tag type="language" name="python" />\')',
+    (val, prev) => (prev ? [...prev, val] : [val]),
+  )
   .action(queryCommand);
 
 // Insights command
@@ -165,6 +170,11 @@ program
     'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
     (val, prev) => (prev ? [...prev, val] : [val]),
   )
+  .option(
+    '--xml-tag <tag>',
+    'Pre-formed XML tag (can be repeated, e.g., --xml-tag \'<tag type="language" name="python" />\')',
+    (val, prev) => (prev ? [...prev, val] : [val]),
+  )
   .option('--sources <items>', 'Source insight/document IDs from Spark (comma-separated)')
   .action(shareCommand);
 
@@ -178,6 +188,11 @@ program
   .option(
     '--tag <tag>',
     'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
+    (val, prev) => (prev ? [...prev, val] : [val]),
+  )
+  .option(
+    '--xml-tag <tag>',
+    'Pre-formed XML tag (can be repeated, e.g., --xml-tag \'<tag type="language" name="python" />\')',
     (val, prev) => (prev ? [...prev, val] : [val]),
   )
   .action(shareTaskCommand);

@@ -90,6 +90,31 @@ export function tagValidationTests(mocks, commandFn, buildArgs) {
   });
 }
 
+/**
+ * Generates standard XML tag validation tests for a command.
+ * Must be called inside a describe() block that uses setupCommandMocks().
+ */
+export function xmlTagValidationTests(mocks, commandFn, buildArgs) {
+  it('errors on invalid XML tag format', async () => {
+    const [positional, baseOpts] = buildArgs();
+    await commandFn(positional, { ...baseOpts, xmlTag: 'not-xml' }, null);
+
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
+    assert.strictEqual(output.error, true);
+    assert.match(output.message, /Invalid XML tag/);
+  });
+
+  it('errors on XML tag missing type attribute', async () => {
+    const [positional, baseOpts] = buildArgs();
+    await commandFn(positional, { ...baseOpts, xmlTag: '<tag name="foo" />' }, null);
+
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
+    assert.match(output.message, /missing required "type"/);
+  });
+}
+
 export function getLogOutput(m) {
   return m.mock.calls.map((c) => c.arguments.join(' ')).join('\n');
 }

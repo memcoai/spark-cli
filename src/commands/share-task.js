@@ -1,6 +1,6 @@
 import { shareTask } from '../api.js';
 import { output, outputError } from '../output.js';
-import { parseTags, tagsToXml } from '../parse-tags.js';
+import { collectTags } from '../parse-tags.js';
 
 /**
  * Share-task command handler
@@ -12,8 +12,9 @@ export async function shareTaskCommand(query, options, command) {
       insights: options.insight,
     };
 
-    if (options.tag) {
-      params.tags = tagsToXml(parseTags(options.tag));
+    const tags = collectTags(options);
+    if (tags.length > 0) {
+      params.tags = tags;
     }
 
     const result = await shareTask(params, command);

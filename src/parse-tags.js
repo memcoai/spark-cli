@@ -98,6 +98,69 @@ export function tagsToXml(tags) {
 }
 
 /**
+ * Validate and parse a single XML tag string.
+ * Accepts: <tag type="..." name="..." /> or <tag type="..." name="..." version="..." />
+ * Attributes may appear in any order. Returns the normalized canonical XML string.
+ */
+function parseXmlTag(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const tagMatch = /^<tag\s+((?:\w+="[^"]*"\s*)+)\/>$/.exec(trimmed);
+  if (!tagMatch) {
+    throw new Error(
+      `Invalid XML tag "${trimmed}": expected <tag type="..." name="..." /> or <tag type="..." name="..." version="..." />`,
+    );
+  }
+
+  const attrs = {};
+  const attrRegex = /(\w+)="([^"]*)"/g;
+  let match;
+  while ((match = attrRegex.exec(tagMatch[1])) !== null) {
+    attrs[match[1]] = match[2];
+  }
+
+  if (!attrs.type) {
+    throw new Error(`Invalid XML tag "${trimmed}": missing required "type" attribute`);
+  }
+  if (!attrs.name) {
+    throw new Error(`Invalid XML tag "${trimmed}": missing required "name" attribute`);
+  }
+
+  const allowed = new Set(['type', 'name', 'version']);
+  for (const key of Object.keys(attrs)) {
+    if (!allowed.has(key)) {
+      throw new Error(`Invalid XML tag "${trimmed}": unknown attribute "${key}"`);
+    }
+  }
+
+  if (attrs.version) {
+    return `<tag type="${attrs.type}" name="${attrs.name}" version="${attrs.version}" />`;
+  }
+  return `<tag type="${attrs.type}" name="${attrs.name}" />`;
+}
+
+/**
+ * Parse XML tags from an array of strings (from repeated --xml-tag flags).
+ * Each tag must be a valid XML tag with type and name attributes.
+ */
+export function parseXmlTags(input) {
+  if (!input) return [];
+  const tags = Array.isArray(input) ? input : [input];
+  return tags.map(parseXmlTag).filter(Boolean);
+}
+
+/**
+ * Collect and merge tags from --tag and --xml-tag options.
+ * Returns a single array of XML tag strings ready for the API.
+ */
+export function collectTags(options) {
+  const fromColon = tagsToXml(parseTags(options.tag));
+  const fromXml = parseXmlTags(options.xmlTag);
+  return [...fromColon, ...fromXml];
+}
+
+/**
  * Parse source URLs from comma-separated string.
  */
 export function parseSources(sourcesString) {

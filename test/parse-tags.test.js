@@ -1,6 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseTags, tagsToXml, parseSources } from '../src/parse-tags.js';
+import {
+  parseTags,
+  tagsToXml,
+  parseXmlTags,
+  collectTags,
+  parseSources,
+} from '../src/parse-tags.js';
 
 describe('parseTags', () => {
   describe('empty input', () => {
@@ -172,6 +178,144 @@ describe('tagsToXml', () => {
     assert.deepStrictEqual(tagsToXml(['type&<>:name"\'test']), [
       '<tag type="type&amp;&lt;&gt;" name="name&quot;&apos;test" />',
     ]);
+  });
+});
+
+describe('parseXmlTags', () => {
+  describe('empty input', () => {
+    it('returns [] for null', () => {
+      assert.deepStrictEqual(parseXmlTags(null), []);
+    });
+
+    it('returns [] for undefined', () => {
+      assert.deepStrictEqual(parseXmlTags(undefined), []);
+    });
+
+    it('returns [] for empty array', () => {
+      assert.deepStrictEqual(parseXmlTags([]), []);
+    });
+  });
+
+  describe('valid XML tags', () => {
+    it('parses tag with type and name', () => {
+      assert.deepStrictEqual(parseXmlTags(['<tag type="task_type" name="bug_fix" />']), [
+        '<tag type="task_type" name="bug_fix" />',
+      ]);
+    });
+
+    it('parses tag with type, name, and version', () => {
+      assert.deepStrictEqual(
+        parseXmlTags(['<tag type="language" name="python" version="3.11" />']),
+        ['<tag type="language" name="python" version="3.11" />'],
+      );
+    });
+
+    it('normalizes attribute order to canonical form', () => {
+      assert.deepStrictEqual(parseXmlTags(['<tag name="python" type="language" />']), [
+        '<tag type="language" name="python" />',
+      ]);
+    });
+
+    it('normalizes version attribute order', () => {
+      assert.deepStrictEqual(
+        parseXmlTags(['<tag version="3.11" name="python" type="language" />']),
+        ['<tag type="language" name="python" version="3.11" />'],
+      );
+    });
+
+    it('handles extra whitespace between attributes', () => {
+      assert.deepStrictEqual(parseXmlTags(['<tag  type="language"   name="python"  />']), [
+        '<tag type="language" name="python" />',
+      ]);
+    });
+
+    it('wraps single string into array', () => {
+      assert.deepStrictEqual(parseXmlTags('<tag type="task_type" name="bug_fix" />'), [
+        '<tag type="task_type" name="bug_fix" />',
+      ]);
+    });
+
+    it('parses multiple tags', () => {
+      assert.deepStrictEqual(
+        parseXmlTags([
+          '<tag type="language" name="python" version="3.11" />',
+          '<tag type="task_type" name="bug_fix" />',
+        ]),
+        [
+          '<tag type="language" name="python" version="3.11" />',
+          '<tag type="task_type" name="bug_fix" />',
+        ],
+      );
+    });
+  });
+
+  describe('validation errors', () => {
+    it('throws on plain string (not XML)', () => {
+      assert.throws(() => parseXmlTags('not-xml'), {
+        message: /Invalid XML tag/,
+      });
+    });
+
+    it('throws on missing type attribute', () => {
+      assert.throws(() => parseXmlTags('<tag name="foo" />'), {
+        message: /missing required "type"/,
+      });
+    });
+
+    it('throws on missing name attribute', () => {
+      assert.throws(() => parseXmlTags('<tag type="foo" />'), {
+        message: /missing required "name"/,
+      });
+    });
+
+    it('throws on unknown attribute', () => {
+      assert.throws(() => parseXmlTags('<tag type="a" name="b" extra="c" />'), {
+        message: /unknown attribute "extra"/,
+      });
+    });
+
+    it('throws on wrong element name', () => {
+      assert.throws(() => parseXmlTags('<span type="a" name="b" />'), {
+        message: /Invalid XML tag/,
+      });
+    });
+
+    it('throws on non-self-closing tag', () => {
+      assert.throws(() => parseXmlTags('<tag type="a" name="b">text</tag>'), {
+        message: /Invalid XML tag/,
+      });
+    });
+  });
+});
+
+describe('collectTags', () => {
+  it('returns empty array when neither option is provided', () => {
+    assert.deepStrictEqual(collectTags({}), []);
+  });
+
+  it('returns tags from --tag only', () => {
+    assert.deepStrictEqual(collectTags({ tag: ['language:python:3.11'] }), [
+      '<tag type="language" name="python" version="3.11" />',
+    ]);
+  });
+
+  it('returns tags from --xml-tag only', () => {
+    assert.deepStrictEqual(collectTags({ xmlTag: ['<tag type="task_type" name="bug_fix" />'] }), [
+      '<tag type="task_type" name="bug_fix" />',
+    ]);
+  });
+
+  it('merges --tag and --xml-tag into one array', () => {
+    assert.deepStrictEqual(
+      collectTags({
+        tag: ['language:python:3.11'],
+        xmlTag: ['<tag type="task_type" name="bug_fix" />'],
+      }),
+      [
+        '<tag type="language" name="python" version="3.11" />',
+        '<tag type="task_type" name="bug_fix" />',
+      ],
+    );
   });
 });
 

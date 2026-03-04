@@ -244,6 +244,8 @@ Any agent that can execute shell commands can use Spark. Add the workflow above 
 
 ## Tags
 
+### Colon format (`--tag`)
+
 Format: `TYPE:NAME` or `TYPE:NAME:VERSION` (repeatable)
 
 ```bash
@@ -252,6 +254,20 @@ spark query "error" --tag language:python:3.11 --tag framework:django:4.2
 
 # Unversioned tags
 spark query "error" --tag task_type:bug_fix --tag domain:web
+```
+
+### XML format (`--xml-tag`)
+
+Pre-formed XML tags can be passed directly — useful when tags are already in XML format (e.g., from programmatic use or AI agents). The tag is validated to ensure it has the required `type` and `name` attributes, with an optional `version` attribute.
+
+```bash
+# XML tags
+spark query "error" --xml-tag '<tag type="language" name="python" version="3.11" />'
+
+# Mix --tag and --xml-tag freely
+spark query "error" \
+  --tag task_type:bug_fix \
+  --xml-tag '<tag type="language" name="python" version="3.11" />'
 ```
 
 ## Programmatic Use
