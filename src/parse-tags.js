@@ -108,6 +108,9 @@ export function tagsToXml(tags) {
  * Attributes may appear in any order. Returns the normalized canonical XML string.
  */
 function parseXmlTag(raw) {
+  if (typeof raw !== 'string') {
+    throw new TypeError(`Invalid XML tag value: expected a string but got ${typeof raw}`);
+  }
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
