@@ -1,16 +1,15 @@
 import { getRecommendation } from '../api.js';
 import { output, outputError } from '../output.js';
-import { parseTags } from '../parse-tags.js';
+import { parseTags, tagsToXml } from '../parse-tags.js';
 
 /**
  * Query command handler
  */
 export async function queryCommand(query, options, command) {
   try {
-    const environment = parseTags(options.env);
-    const task = parseTags(options.tags);
+    const tags = tagsToXml(parseTags(options.tag));
 
-    const result = await getRecommendation(query, environment, task, command);
+    const result = await getRecommendation(query, tags, command);
     output(result, command);
   } catch (err) {
     outputError(err, command);

@@ -150,8 +150,8 @@ export async function callTool(toolName, params, command = null) {
 /**
  * Query for recommendations
  */
-export async function getRecommendation(query, environment = [], task = [], command = null) {
-  return callTool('get_recommendation', { query, environment, task }, command);
+export async function getRecommendation(query, tags = [], command = null) {
+  return callTool('get_recommendation', { query, tags }, command);
 }
 
 /**

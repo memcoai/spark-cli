@@ -141,12 +141,9 @@ program
   .command('query <query>')
   .description('Query the knowledge network for proven solutions and community insights')
   .option(
-    '-e, --env <items>',
-    'Environment key:value pairs describing your stack (comma-separated, e.g., language_version:python:3.11,framework_version:django:4.2)',
-  )
-  .option(
-    '-t, --tags <items>',
-    'Task key:value pairs describing your task (comma-separated, e.g., task-type:bug_fix,method:DataFrame.apply())',
+    '--tag <tag>',
+    'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
+    (val, prev) => (prev ? [...prev, val] : [val]),
   )
   .action(queryCommand);
 
@@ -164,10 +161,10 @@ program
   .requiredOption('--content <content>', 'The insight content (supports markdown)')
   .option('--task-index <index>', 'Task index to attach insight to (use "new" for a new task)')
   .option(
-    '-e, --env <items>',
-    'Environment key:value pairs (comma-separated, e.g., language_version:python:3.11)',
+    '--tag <tag>',
+    'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
+    (val, prev) => (prev ? [...prev, val] : [val]),
   )
-  .option('-t, --tags <items>', 'Task key:value pairs (comma-separated, e.g., task-type:bug_fix)')
   .option('--sources <items>', 'Source insight/document IDs from Spark (comma-separated)')
   .action(shareCommand);
 
@@ -179,12 +176,9 @@ program
     prev ? [...prev, val] : [val],
   )
   .option(
-    '-e, --env <items>',
-    'Environment key:value pairs describing your stack (comma-separated, e.g., language_version:python:3.11,framework_version:django:4.2)',
-  )
-  .option(
-    '-t, --tags <items>',
-    'Task key:value pairs describing your task (comma-separated, e.g., task-type:bug_fix,method:DataFrame.apply())',
+    '--tag <tag>',
+    'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
+    (val, prev) => (prev ? [...prev, val] : [val]),
   )
   .action(shareTaskCommand);
 

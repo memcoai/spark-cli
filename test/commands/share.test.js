@@ -6,13 +6,13 @@ import { setupCommandMocks, getErrorOutput } from '../helpers.js';
 describe('shareCommand', () => {
   const mocks = setupCommandMocks();
 
-  it('errors on invalid env tag format', async () => {
+  it('errors on invalid tag format', async () => {
     await shareCommand(
       'session-1',
       {
         title: 'Test',
         content: 'Content',
-        env: 'bare-tag',
+        tag: 'bare-tag',
       },
       null,
     );
@@ -23,29 +23,13 @@ describe('shareCommand', () => {
     assert.match(output.message, /Invalid tag/);
   });
 
-  it('errors on invalid task tag format', async () => {
+  it('errors on invalid version in tag', async () => {
     await shareCommand(
       'session-1',
       {
         title: 'Test',
         content: 'Content',
-        tags: 'no-colon',
-      },
-      null,
-    );
-
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.match(output.message, /Invalid tag/);
-  });
-
-  it('errors on invalid version in env tag', async () => {
-    await shareCommand(
-      'session-1',
-      {
-        title: 'Test',
-        content: 'Content',
-        env: 'language_version:python:latest',
+        tag: 'language:python:latest',
       },
       null,
     );
@@ -53,6 +37,22 @@ describe('shareCommand', () => {
     assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
     const output = getErrorOutput(mocks.logMock);
     assert.match(output.message, /Invalid version/);
+  });
+
+  it('errors on invalid tag in array format', async () => {
+    await shareCommand(
+      'session-1',
+      {
+        title: 'Test',
+        content: 'Content',
+        tag: ['language:python:3.11', 'no-colon'],
+      },
+      null,
+    );
+
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
+    assert.match(output.message, /Invalid tag/);
   });
 
   describe('API calls', () => {

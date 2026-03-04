@@ -29,7 +29,9 @@ function normalizeVersion(version) {
 export function parseTags(input) {
   if (!input) return [];
 
-  return input
+  const raw = Array.isArray(input) ? input.join(',') : input;
+
+  return raw
     .split(',')
     .map((raw) => {
       const trimmed = raw.trim();
@@ -62,6 +64,23 @@ export function parseTags(input) {
       throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
     })
     .filter(Boolean);
+}
+
+/**
+ * Convert parsed colon-format tags to XML tag strings.
+ * Input: ['language:python:3.11', 'task_type:bug_fix']
+ * Output: ['<tag type="language" name="python" version="3.11" />', '<tag type="task_type" name="bug_fix" />']
+ */
+export function tagsToXml(tags) {
+  if (!tags || tags.length === 0) return [];
+
+  return tags.map((tag) => {
+    const parts = tag.split(':');
+    if (parts.length === 2) {
+      return `<tag type="${parts[0]}" name="${parts[1]}" />`;
+    }
+    return `<tag type="${parts[0]}" name="${parts[1]}" version="${parts.slice(2).join(':')}" />`;
+  });
 }
 
 /**

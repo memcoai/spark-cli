@@ -1,6 +1,6 @@
 import { shareInsight } from '../api.js';
 import { output, outputError } from '../output.js';
-import { parseTags, parseSources } from '../parse-tags.js';
+import { parseTags, tagsToXml, parseSources } from '../parse-tags.js';
 
 /**
  * Share command handler
@@ -15,11 +15,8 @@ export async function shareCommand(sessionId, options, command) {
     if (options.taskIndex !== undefined) {
       params.task_idx = options.taskIndex;
     }
-    if (options.env) {
-      params.environment = parseTags(options.env);
-    }
-    if (options.tags) {
-      params.task = parseTags(options.tags);
+    if (options.tag) {
+      params.tags = tagsToXml(parseTags(options.tag));
     }
     if (options.sources) {
       params.sources = parseSources(options.sources);

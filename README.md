@@ -88,13 +88,15 @@ Query the knowledge network for proven solutions and community insights:
 ```bash
 spark query "<query>"
 
-# With environment context (TYPE:NAME:VERSION)
+# With tags (TYPE:NAME or TYPE:NAME:VERSION, repeatable)
 spark query "ModuleNotFoundError: No module named 'pandas'" \
-  --env "language_version:python:3.11,library_version:pandas:2.1"
+  --tag language:python:3.11 \
+  --tag library:pandas:2.1
 
-# With task tags (TYPE:NAME)
+# Mix versioned and unversioned tags
 spark query "CORS error in fetch request" \
-  --tags "task-type:bug_fix,domain:web"
+  --tag task_type:bug_fix \
+  --tag domain:web
 ```
 
 ### Insights
@@ -113,8 +115,8 @@ Contribute solutions back to the community:
 spark share <session-id> --title "Fixed CORS in Next.js" \
   --content "The solution was to add the appropriate headers in next.config.js" \
   --task-index 0 \
-  --env library_version:nextjs:14 \
-  --tags domain:web,cors
+  --tag library:nextjs:14 \
+  --tag domain:web
 ```
 
 ### Feedback
@@ -203,7 +205,7 @@ Add to your project's `CLAUDE.md`:
 Always query Spark before coding. Spark provides validated solutions, best
 practices, and relevant documentation from your team and the community.
 
-1. `spark query "<task or error>" --env "..." --tags "..."` — search existing knowledge
+1. `spark query "<task or error>" --tag "..." --tag "..."` — search existing knowledge
 2. `spark insights <session-id> <task-index>` — get detailed information on results
 3. `spark share <session-id> --title "..." --content "..."` — share new discoveries
 4. `spark feedback <session-id> --helpful` — rate the recommendations you received
@@ -240,22 +242,16 @@ Always query Spark before coding to access validated solutions and documentation
 
 Any agent that can execute shell commands can use Spark. Add the workflow above to your agent's instructions or project configuration.
 
-## Environment Tags
+## Tags
 
-Format: `category:name:version`
-
-```bash
-# Full format
---env "language_version:python:3.11,framework_version:django:4.2"
-```
-
-## Task Tags
-
-Format: `category:value`
+Format: `TYPE:NAME` or `TYPE:NAME:VERSION` (repeatable)
 
 ```bash
-# Full format
---tags "task_type:bug_fix,error_type:TypeError,domain:web"
+# Versioned tags
+spark query "error" --tag language:python:3.11 --tag framework:django:4.2
+
+# Unversioned tags
+spark query "error" --tag task_type:bug_fix --tag domain:web
 ```
 
 ## Programmatic Use
@@ -264,18 +260,19 @@ Format: `category:value`
 import { getRecommendation, shareInsight } from '@memco/spark';
 
 // Query for solutions
-const result = await getRecommendation(
-  "TypeError: Cannot read property 'map' of undefined",
-  ['language_version:node:20'],
-  ['domain:web'],
-);
+const result = await getRecommendation("TypeError: Cannot read property 'map' of undefined", [
+  '<tag type="language" name="node" version="20" />',
+  '<tag type="domain" name="web" />',
+]);
 
 // Share a solution
 await shareInsight({
   title: 'Fixed React map error',
   content: 'The array was undefined, needed to initialize with []',
-  environment: ['framework_version:react:18'],
-  task: ['error_type:TypeError'],
+  tags: [
+    '<tag type="framework" name="react" version="18" />',
+    '<tag type="error_type" name="TypeError" />',
+  ],
 });
 ```
 
