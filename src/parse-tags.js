@@ -21,49 +21,60 @@ function normalizeVersion(version) {
 }
 
 /**
- * Parse tags from a comma-separated string.
- * Each tag must be TYPE:NAME or TYPE:NAME:VERSION.
+ * Validate and parse a single tag string.
+ * Format: TYPE:NAME or TYPE:NAME:VERSION.
  * Type and name can be any non-empty string.
- * Version, if present, must be semver (MAJOR.MINOR.PATCH).
+ * Version, if present, must be numeric (MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH).
+ */
+function parseTag(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const parts = trimmed.split(':');
+
+  if (parts.length === 2) {
+    const [type, name] = parts;
+    if (!type || !name) {
+      throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
+    }
+    return `${type}:${name}`;
+  }
+
+  if (parts.length === 3) {
+    const [type, name, version] = parts;
+    if (!type || !name || !version) {
+      throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
+    }
+    const normalized = normalizeVersion(version);
+    if (!normalized) {
+      throw new Error(
+        `Invalid version "${version}" in tag "${trimmed}": expected a numeric version (e.g. 3, 3.11, 3.11.0)`,
+      );
+    }
+    return `${type}:${name}:${normalized}`;
+  }
+
+  throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
+}
+
+/**
+ * Parse tags from an array of strings (from repeated --tag flags).
+ * Each tag must be TYPE:NAME or TYPE:NAME:VERSION.
  */
 export function parseTags(input) {
   if (!input) return [];
 
-  const raw = Array.isArray(input) ? input.join(',') : input;
+  const tags = Array.isArray(input) ? input : [input];
+  return tags.map(parseTag).filter(Boolean);
+}
 
-  return raw
-    .split(',')
-    .map((raw) => {
-      const trimmed = raw.trim();
-      if (!trimmed) return null;
-
-      const parts = trimmed.split(':');
-
-      if (parts.length === 2) {
-        const [type, name] = parts;
-        if (!type || !name) {
-          throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
-        }
-        return `${type}:${name}`;
-      }
-
-      if (parts.length === 3) {
-        const [type, name, version] = parts;
-        if (!type || !name || !version) {
-          throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
-        }
-        const normalized = normalizeVersion(version);
-        if (!normalized) {
-          throw new Error(
-            `Invalid version "${version}" in tag "${trimmed}": expected a numeric version (e.g. 3, 3.11, 3.11.0)`,
-          );
-        }
-        return `${type}:${name}:${normalized}`;
-      }
-
-      throw new Error(`Invalid tag "${trimmed}": expected TYPE:NAME or TYPE:NAME:VERSION`);
-    })
-    .filter(Boolean);
+function escapeXmlAttribute(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
 }
 
 /**
@@ -76,10 +87,13 @@ export function tagsToXml(tags) {
 
   return tags.map((tag) => {
     const parts = tag.split(':');
+    const type = escapeXmlAttribute(parts[0]);
+    const name = escapeXmlAttribute(parts[1]);
     if (parts.length === 2) {
-      return `<tag type="${parts[0]}" name="${parts[1]}" />`;
+      return `<tag type="${type}" name="${name}" />`;
     }
-    return `<tag type="${parts[0]}" name="${parts[1]}" version="${parts.slice(2).join(':')}" />`;
+    const version = escapeXmlAttribute(parts.slice(2).join(':'));
+    return `<tag type="${type}" name="${name}" version="${version}" />`;
   });
 }
 

@@ -41,8 +41,7 @@
   "dependencies": {
     "commander": "^12.0.0",
     "open": "^11.0.0",
-    "semver": "^7.7.4",
-    "spark": "^0.4.1"
+    "semver": "^7.7.4"
   },
   "devDependencies": {
     "c8": "^10.0.0",

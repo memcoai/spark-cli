@@ -12,37 +12,23 @@ describe('parseTags', () => {
       assert.deepStrictEqual(parseTags(undefined), []);
     });
 
-    it('returns [] for empty string', () => {
-      assert.deepStrictEqual(parseTags(''), []);
+    it('returns [] for empty array', () => {
+      assert.deepStrictEqual(parseTags([]), []);
     });
   });
 
-  describe('TYPE:NAME format', () => {
-    it('parses a single tag', () => {
+  describe('single string input', () => {
+    it('wraps single string into array and parses', () => {
       assert.deepStrictEqual(parseTags('task_type:bug_fix'), ['task_type:bug_fix']);
     });
 
-    it('parses multiple comma-separated tags', () => {
-      assert.deepStrictEqual(parseTags('task_type:bug_fix,domain:web'), [
-        'task_type:bug_fix',
-        'domain:web',
-      ]);
-    });
-
-    it('trims whitespace around tags', () => {
-      assert.deepStrictEqual(parseTags(' task_type:bug_fix , domain:web '), [
-        'task_type:bug_fix',
-        'domain:web',
-      ]);
-    });
-
-    it('skips empty segments from trailing commas', () => {
-      assert.deepStrictEqual(parseTags('task_type:bug_fix,'), ['task_type:bug_fix']);
+    it('trims whitespace', () => {
+      assert.deepStrictEqual(parseTags(' task_type:bug_fix '), ['task_type:bug_fix']);
     });
   });
 
   describe('array input (repeated --tag)', () => {
-    it('parses array of single tags', () => {
+    it('parses array of TYPE:NAME tags', () => {
       assert.deepStrictEqual(parseTags(['task_type:bug_fix', 'domain:web']), [
         'task_type:bug_fix',
         'domain:web',
@@ -60,10 +46,6 @@ describe('parseTags', () => {
       assert.throws(() => parseTags(['task_type:bug_fix', 'invalid']), {
         message: /Invalid tag "invalid"/,
       });
-    });
-
-    it('returns [] for empty array', () => {
-      assert.deepStrictEqual(parseTags([]), []);
     });
   });
 
@@ -100,13 +82,6 @@ describe('parseTags', () => {
 
     it('accepts major.minor version with v prefix', () => {
       assert.deepStrictEqual(parseTags('language:node:v22.11'), ['language:node:22.11']);
-    });
-
-    it('mixes TYPE:NAME and TYPE:NAME:VERSION tags', () => {
-      assert.deepStrictEqual(parseTags('task_type:bug_fix,language:node:20.0.0'), [
-        'task_type:bug_fix',
-        'language:node:20.0.0',
-      ]);
     });
   });
 
@@ -152,12 +127,6 @@ describe('parseTags', () => {
         message: /Invalid version "1.abc.0"/,
       });
     });
-
-    it('throws on first invalid tag in a list', () => {
-      assert.throws(() => parseTags('task_type:bug_fix,invalid'), {
-        message: /Invalid tag "invalid"/,
-      });
-    });
   });
 });
 
@@ -196,6 +165,12 @@ describe('tagsToXml', () => {
   it('handles pre-release version', () => {
     assert.deepStrictEqual(tagsToXml(['library:react:18.2.0-beta']), [
       '<tag type="library" name="react" version="18.2.0-beta" />',
+    ]);
+  });
+
+  it('escapes XML special characters in attributes', () => {
+    assert.deepStrictEqual(tagsToXml(['type&<>:name"\'test']), [
+      '<tag type="type&amp;&lt;&gt;" name="name&quot;&apos;test" />',
     ]);
   });
 });
