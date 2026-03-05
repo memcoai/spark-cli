@@ -25,7 +25,7 @@ describe('checkExistingAuth', () => {
       { ...baseDeps, loadCreds: () => ({ accessToken: 'tok' }) },
     );
     assert.strictEqual(result, 'skip');
-    assert.match(getLogOutput(mocks.stdoutMock), /already logged in/);
+    assert.match(getLogOutput(mocks.logMock), /already logged in/);
   });
 
   it('returns skip when api key exists', async () => {
@@ -34,7 +34,7 @@ describe('checkExistingAuth', () => {
       { ...baseDeps, loadCreds: () => ({ apiKey: 'key123' }) },
     );
     assert.strictEqual(result, 'skip');
-    assert.match(getLogOutput(mocks.stdoutMock), /already logged in/);
+    assert.match(getLogOutput(mocks.logMock), /already logged in/);
   });
 
   it('returns skip after successful token refresh', async () => {
@@ -48,7 +48,7 @@ describe('checkExistingAuth', () => {
       },
     );
     assert.strictEqual(result, 'skip');
-    assert.match(getLogOutput(mocks.stdoutMock), /session has been refreshed/);
+    assert.match(getLogOutput(mocks.logMock), /session has been refreshed/);
   });
 
   it('returns continue and removes credentials when refresh fails', async () => {
