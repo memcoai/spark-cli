@@ -89,6 +89,14 @@ describe('parseTags', () => {
     it('accepts major.minor version with v prefix', () => {
       assert.deepStrictEqual(parseTags('language:node:v22.11'), ['language:node:22.11']);
     });
+
+    it('drops .x wildcard from major.minor.x', () => {
+      assert.deepStrictEqual(parseTags('language:node:1.2.x'), ['language:node:1.2']);
+    });
+
+    it('drops .x wildcard from major.x', () => {
+      assert.deepStrictEqual(parseTags('language:node:1.x'), ['language:node:1']);
+    });
   });
 
   describe('validation errors', () => {

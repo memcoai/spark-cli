@@ -2,9 +2,10 @@
  * Validate and normalize a version string.
  * Strips leading 'v'. Accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH.
  * Major and minor must be integers. Patch can have a pre-release suffix (e.g. 0-beta).
+ * Strips trailing .x wildcard from major.minor.x and major.x.
  */
 function normalizeVersion(version) {
-  const stripped = version.replace(/^v/, '');
+  const stripped = version.replace(/^v/, '').replace(/\.x$/i, '');
 
   // Separate pre-release suffix (everything after first hyphen)
   const hyphenIdx = stripped.indexOf('-');
