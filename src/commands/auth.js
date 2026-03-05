@@ -251,15 +251,21 @@ async function runOAuthFlow() {
     await open(authUrl.toString());
 
     const spinner = createSpinner('Waiting for authentication...');
+    let result;
     try {
-      const result = await waitForCallback(server, state, codeVerifier);
+      result = await waitForCallback(server, state, codeVerifier);
       spinner.stop('Browser authentication complete');
+    } catch (err) {
+      spinner.fail('Authentication failed');
+      throw err;
+    }
 
-      const tokenSpinner = createSpinner('Exchanging code for tokens...');
+    const tokenSpinner = createSpinner('Exchanging code for tokens...');
+    try {
       const tokens = await exchangeCodeForTokens(result.code, result.codeVerifier, redirectUri);
       return { tokens, tokenSpinner };
     } catch (err) {
-      spinner.fail('Authentication failed');
+      tokenSpinner.fail('Token exchange failed');
       throw err;
     }
   } finally {
@@ -279,9 +285,6 @@ export async function loginCommand(options, _command) {
     printBanner();
     console.log('');
 
-    const authCheck = await checkExistingAuth(options);
-    if (authCheck === 'skip') return;
-
     if (process.env.SPARK_API_KEY) {
       printInfo('You are authenticated via SPARK_API_KEY environment variable.');
       console.log('');
@@ -289,6 +292,9 @@ export async function loginCommand(options, _command) {
       console.log(`  ${colorize('\x1b[33m', 'unset SPARK_API_KEY')}`);
       return;
     }
+
+    const authCheck = await checkExistingAuth(options);
+    if (authCheck === 'skip') return;
 
     console.log(colorize('\x1b[1m', 'Spark CLI Authentication'));
     console.log('');
