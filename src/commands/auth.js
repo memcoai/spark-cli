@@ -185,19 +185,27 @@ async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
  * Check existing credentials and attempt refresh if expired.
  * Returns 'skip' if login should be skipped, 'continue' if login should proceed.
  */
-async function checkExistingAuth(options) {
-  const existing = options.local ? loadLocalCredentials() : loadCredentials();
+export async function checkExistingAuth(options, deps = {}) {
+  const {
+    loadCreds = loadCredentials,
+    loadLocalCreds = loadLocalCredentials,
+    isExpired = isTokenExpired,
+    refresh = refreshToken,
+    removeCreds = removeCredentials,
+  } = deps;
+
+  const existing = options.local ? loadLocalCreds() : loadCreds();
   if (!existing?.accessToken && !existing?.apiKey) {
     return 'continue';
   }
 
-  if (existing.accessToken && isTokenExpired(existing)) {
+  if (existing.accessToken && isExpired(existing)) {
     try {
-      await refreshToken(existing);
+      await refresh(existing);
       printInfo('Your session has been refreshed. You are logged in.');
       return 'skip';
     } catch {
-      removeCredentials();
+      removeCreds();
       return 'continue';
     }
   }
@@ -304,18 +312,22 @@ export async function loginCommand(options, _command) {
 
     const { tokens, tokenSpinner } = flowResult;
     const local = options.local || false;
-    saveCredentials(
-      {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
-        tokenType: tokens.token_type || 'Bearer',
-      },
-      { local },
-    );
-
-    const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
-    tokenSpinner.stop(`Credentials saved ${location}`);
+    try {
+      saveCredentials(
+        {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+          tokenType: tokens.token_type || 'Bearer',
+        },
+        { local },
+      );
+      const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
+      tokenSpinner.stop(`Credentials saved ${location}`);
+    } catch (err) {
+      tokenSpinner.fail('Failed to save credentials');
+      throw err;
+    }
     console.log('');
     printSuccess('Successfully logged in to Spark!');
     console.log('');

@@ -90,6 +90,7 @@ test/
   format-markdown.test.js     Markdown-to-ANSI rendering
   pretty-print.test.js        Human-readable object formatting
   commands/
+    auth.test.js              checkExistingAuth (credential checks, token refresh, --local flag)
     query.test.js             Tag and XML tag validation, API call tag serialization
     share.test.js             Tag and XML tag validation, API call tag serialization
     share-task.test.js        Tag and XML tag validation, API call tag serialization
