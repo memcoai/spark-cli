@@ -227,40 +227,47 @@ async function runOAuthFlow() {
   const { server } = serverInfo;
   const redirectUri = `http://localhost:${CALLBACK_PORT}/callback`;
 
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = generateCodeChallenge(codeVerifier);
-  const state = generateState();
-
-  const { authorizationEndpoint } = await getOAuthEndpoints();
-  const authUrl = new URL(authorizationEndpoint);
-  authUrl.searchParams.set('provider', 'authkit');
-  const clientId = await getClientId(redirectUri);
-  authUrl.searchParams.set('client_id', clientId);
-  authUrl.searchParams.set('redirect_uri', redirectUri);
-  authUrl.searchParams.set('response_type', 'code');
-  authUrl.searchParams.set('code_challenge', codeChallenge);
-  authUrl.searchParams.set('code_challenge_method', 'S256');
-  authUrl.searchParams.set('state', state);
-
-  console.log('Opening browser for authentication...');
-  console.log('');
-  console.log(`If the browser doesn't open, visit:\n${colorize('\x1b[36m', authUrl.toString())}`);
-  console.log('');
-
-  await open(authUrl.toString());
-
-  const spinner = createSpinner('Waiting for authentication...');
   try {
-    const result = await waitForCallback(server, state, codeVerifier);
-    spinner.stop('Browser authentication complete');
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = generateCodeChallenge(codeVerifier);
+    const state = generateState();
 
-    const tokenSpinner = createSpinner('Exchanging code for tokens...');
-    const tokens = await exchangeCodeForTokens(result.code, result.codeVerifier, redirectUri);
-    return { tokens, tokenSpinner };
-  } catch (err) {
-    serverInfo.server.close();
-    spinner.fail('Authentication failed');
-    throw err;
+    const { authorizationEndpoint } = await getOAuthEndpoints();
+    const authUrl = new URL(authorizationEndpoint);
+    authUrl.searchParams.set('provider', 'authkit');
+    const clientId = await getClientId(redirectUri);
+    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('redirect_uri', redirectUri);
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('code_challenge', codeChallenge);
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+    authUrl.searchParams.set('state', state);
+
+    console.log('Opening browser for authentication...');
+    console.log('');
+    console.log(`If the browser doesn't open, visit:\n${colorize('\x1b[36m', authUrl.toString())}`);
+    console.log('');
+
+    await open(authUrl.toString());
+
+    const spinner = createSpinner('Waiting for authentication...');
+    try {
+      const result = await waitForCallback(server, state, codeVerifier);
+      spinner.stop('Browser authentication complete');
+
+      const tokenSpinner = createSpinner('Exchanging code for tokens...');
+      const tokens = await exchangeCodeForTokens(result.code, result.codeVerifier, redirectUri);
+      return { tokens, tokenSpinner };
+    } catch (err) {
+      spinner.fail('Authentication failed');
+      throw err;
+    }
+  } finally {
+    try {
+      server.close();
+    } catch {
+      // Best-effort server close; ignore errors during shutdown
+    }
   }
 }
 
