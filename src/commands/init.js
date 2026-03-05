@@ -221,7 +221,15 @@ export const IDE_KEY_MAP = {
  * Project scope: writes to local + upserts in global projects array.
  * Global scope: writes to globalInit in global settings.
  */
-export async function saveInitChoices(ides, scope, { fetchVersion = fetchSkillsVersion } = {}) {
+export async function saveInitChoices(
+  ides,
+  scope,
+  {
+    fetchVersion = fetchSkillsVersion,
+    writeKey = writeSettingsKey,
+    readKey = readSettingsKey,
+  } = {},
+) {
   const ideKeys = ides.map((ide) => IDE_KEY_MAP[ide] || ide);
 
   // Fetch the current skills version to record what was installed
@@ -231,13 +239,13 @@ export async function saveInitChoices(ides, scope, { fetchVersion = fetchSkillsV
   const initData = { ides: ideKeys, skillsVersion };
 
   if (scope === 'global') {
-    writeSettingsKey(SETTINGS_PATH, 'globalInit', initData);
+    writeKey(SETTINGS_PATH, 'globalInit', initData);
   } else {
     // Write to local settings
-    writeSettingsKey(LOCAL_SETTINGS_PATH, 'init', initData);
+    writeKey(LOCAL_SETTINGS_PATH, 'init', initData);
 
     // Upsert in global projects array
-    const projects = readSettingsKey(SETTINGS_PATH, 'projects') || [];
+    const projects = readKey(SETTINGS_PATH, 'projects') || [];
     const cwd = process.cwd();
     const idx = projects.findIndex((p) => p.path === cwd);
     const entry = { path: cwd, ...initData };
@@ -246,7 +254,7 @@ export async function saveInitChoices(ides, scope, { fetchVersion = fetchSkillsV
     } else {
       projects.push(entry);
     }
-    writeSettingsKey(SETTINGS_PATH, 'projects', projects);
+    writeKey(SETTINGS_PATH, 'projects', projects);
   }
 }
 
@@ -312,6 +320,8 @@ export async function runSetupFlow({
   exec = runCommand,
   spawnInteractive = runInteractiveCommand,
   fetchVersion = fetchSkillsVersion,
+  writeKey = writeSettingsKey,
+  readKey = readSettingsKey,
 } = {}) {
   printBanner();
 
@@ -348,7 +358,7 @@ export async function runSetupFlow({
 
   // Step 4: Save init choices
   try {
-    await saveInitChoices(selectedIDEs, scope, { fetchVersion });
+    await saveInitChoices(selectedIDEs, scope, { fetchVersion, writeKey, readKey });
   } catch {
     // Non-blocking — don't fail if we can't save preferences
   }
