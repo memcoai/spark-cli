@@ -29,13 +29,13 @@ const SPARK_LOGO = `
 const INFO_BOX = `
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                     │
-│   ⚡ SHARED MEMORY FOR AI AGENTS                                    │
+│   ⚡ SHARED MEMORY FOR AI AGENTS                                     │
 │                                                                     │
 │   When one agent solves a problem, all agents benefit.              │
 │   Collective debugging knowledge from thousands of developers.      │
 │                                                                     │
 │   ┌───────────────────────────────────────────────────────────┐     │
-│   │  🔒 YOUR CODE STAYS LOCAL                                 │     │
+│   │  🔒 YOUR CODE STAYS LOCAL                                  │     │
 │   │                                                           │     │
 │   │  • Only error messages and solutions are shared           │     │
 │   │  • No source code or files are uploaded                   │     │
