@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomBytes, createHash } from 'node:crypto';
 import { URL } from 'node:url';
 import open from 'open';
-import { getCurrentUser } from '../api.js';
+import { getCurrentUser, refreshToken } from '../api.js';
 import { getClientId, getOAuthEndpoints } from '../oauth.js';
 import { output } from '../output.js';
 import {
@@ -21,6 +21,7 @@ import {
   saveCredentials,
   credentialsExist,
   removeCredentials,
+  isTokenExpired,
 } from '../credentials.js';
 
 /**
@@ -181,28 +182,99 @@ async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
 }
 
 /**
+ * Check existing credentials and attempt refresh if expired.
+ * Returns 'skip' if login should be skipped, 'continue' if login should proceed.
+ */
+async function checkExistingAuth(options) {
+  const existing = options.local ? loadLocalCredentials() : loadCredentials();
+  if (!existing?.accessToken && !existing?.apiKey) {
+    return 'continue';
+  }
+
+  if (existing.accessToken && isTokenExpired(existing)) {
+    try {
+      await refreshToken(existing);
+      printInfo('Your session has been refreshed. You are logged in.');
+      return 'skip';
+    } catch {
+      removeCredentials();
+      return 'continue';
+    }
+  }
+
+  printInfo('You are already logged in.');
+  console.log('');
+  console.log(`Run ${colorize('\x1b[33m', 'spark logout')} first to log out, then try again.`);
+  console.log(`Or run ${colorize('\x1b[33m', 'spark whoami')} to see your account info.`);
+  return 'skip';
+}
+
+/**
+ * Run the OAuth PKCE browser flow: start server, open browser, exchange tokens.
+ * Returns the tokens on success, or null if the callback server failed to start.
+ */
+async function runOAuthFlow() {
+  let serverInfo;
+  try {
+    serverInfo = await startCallbackServer();
+  } catch (err) {
+    printError(`Failed to start callback server: ${err.message}`);
+    console.log('');
+    printApiKeyFallback();
+    return null;
+  }
+
+  const { server } = serverInfo;
+  const redirectUri = `http://localhost:${CALLBACK_PORT}/callback`;
+
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const state = generateState();
+
+  const { authorizationEndpoint } = await getOAuthEndpoints();
+  const authUrl = new URL(authorizationEndpoint);
+  authUrl.searchParams.set('provider', 'authkit');
+  const clientId = await getClientId(redirectUri);
+  authUrl.searchParams.set('client_id', clientId);
+  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('code_challenge', codeChallenge);
+  authUrl.searchParams.set('code_challenge_method', 'S256');
+  authUrl.searchParams.set('state', state);
+
+  console.log('Opening browser for authentication...');
+  console.log('');
+  console.log(`If the browser doesn't open, visit:\n${colorize('\x1b[36m', authUrl.toString())}`);
+  console.log('');
+
+  await open(authUrl.toString());
+
+  const spinner = createSpinner('Waiting for authentication...');
+  try {
+    const result = await waitForCallback(server, state, codeVerifier);
+    spinner.stop('Browser authentication complete');
+
+    const tokenSpinner = createSpinner('Exchanging code for tokens...');
+    const tokens = await exchangeCodeForTokens(result.code, result.codeVerifier, redirectUri);
+    return { tokens, tokenSpinner };
+  } catch (err) {
+    serverInfo.server.close();
+    spinner.fail('Authentication failed');
+    throw err;
+  }
+}
+
+/**
  * Login command handler - OAuth PKCE flow
  */
 export async function loginCommand(options, _command) {
-  let spinner;
-  let tokenSpinner;
-  let serverInfo;
-
   try {
     printBanner();
     console.log('');
 
-    // Check if already authenticated (scope-aware when --local is used)
-    const existing = options.local ? loadLocalCredentials() : loadCredentials();
-    if (existing?.accessToken || existing?.apiKey) {
-      printInfo('You are already logged in.');
-      console.log('');
-      console.log(`Run ${colorize('\x1b[33m', 'spark logout')} first to log out, then try again.`);
-      console.log(`Or run ${colorize('\x1b[33m', 'spark whoami')} to see your account info.`);
-      return;
-    }
+    const authCheck = await checkExistingAuth(options);
+    if (authCheck === 'skip') return;
 
-    // Check for API key in environment
     if (process.env.SPARK_API_KEY) {
       printInfo('You are authenticated via SPARK_API_KEY environment variable.');
       console.log('');
@@ -214,50 +286,10 @@ export async function loginCommand(options, _command) {
     console.log(colorize('\x1b[1m', 'Spark CLI Authentication'));
     console.log('');
 
-    // Generate PKCE values
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = generateCodeChallenge(codeVerifier);
-    const state = generateState();
+    const flowResult = await runOAuthFlow();
+    if (!flowResult) return;
 
-    // Start local callback server
-    try {
-      serverInfo = await startCallbackServer();
-    } catch (err) {
-      printError(`Failed to start callback server: ${err.message}`);
-      console.log('');
-      printApiKeyFallback();
-      return;
-    }
-
-    const { server } = serverInfo;
-    const redirectUri = `http://localhost:${CALLBACK_PORT}/callback`;
-
-    // Build OAuth authorization URL
-    const { authorizationEndpoint } = await getOAuthEndpoints();
-    const authUrl = new URL(authorizationEndpoint);
-    authUrl.searchParams.set('provider', 'authkit');
-    const clientId = await getClientId(redirectUri);
-    authUrl.searchParams.set('client_id', clientId);
-    authUrl.searchParams.set('redirect_uri', redirectUri);
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('code_challenge', codeChallenge);
-    authUrl.searchParams.set('code_challenge_method', 'S256');
-    authUrl.searchParams.set('state', state);
-
-    console.log('Opening browser for authentication...');
-    console.log('');
-    console.log(`If the browser doesn't open, visit:\n${colorize('\x1b[36m', authUrl.toString())}`);
-    console.log('');
-
-    await open(authUrl.toString());
-
-    spinner = createSpinner('Waiting for authentication...');
-    const result = await waitForCallback(server, state, codeVerifier);
-    spinner.stop('Browser authentication complete');
-
-    tokenSpinner = createSpinner('Exchanging code for tokens...');
-    const tokens = await exchangeCodeForTokens(result.code, result.codeVerifier, redirectUri);
-
+    const { tokens, tokenSpinner } = flowResult;
     const local = options.local || false;
     saveCredentials(
       {
@@ -276,12 +308,6 @@ export async function loginCommand(options, _command) {
     console.log('');
     console.log(`Run ${colorize('\x1b[33m', 'spark whoami')} to see your account info.`);
   } catch (err) {
-    if (serverInfo) serverInfo.server.close();
-    if (tokenSpinner) {
-      tokenSpinner.fail('Token exchange failed');
-    } else if (spinner) {
-      spinner.fail('Authentication failed');
-    }
     printError(err.message);
     console.log('');
     printApiKeyFallback();

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { API_BASE } from './constants.js';
+import { API_BASE, CALLBACK_PORT } from './constants.js';
 import { loadCredentials, saveCredentials, isTokenExpired } from './credentials.js';
 import { getOAuthEndpoints, getBearerMethods, getClientId } from './oauth.js';
 import { getParentOptions } from './output.js';
@@ -14,13 +14,13 @@ const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'))
 /**
  * Refresh the access token using the refresh token
  */
-async function refreshToken(credentials) {
+export async function refreshToken(credentials) {
   if (!credentials?.refreshToken) {
     throw new Error('No refresh token available');
   }
 
   const { tokenEndpoint } = await getOAuthEndpoints();
-  const clientId = await getClientId();
+  const clientId = await getClientId(`http://localhost:${CALLBACK_PORT}/callback`);
   const response = await fetch(tokenEndpoint, {
     method: 'POST',
     headers: {
