@@ -100,6 +100,7 @@ export async function apiRequest(endpoint, method = 'GET', body = null, command 
   const headers = {
     'Content-Type': 'application/json',
     'User-Agent': `spark-cli/${pkg.version}`,
+    'X-CLI-VERSION': pkg.version,
   };
 
   if (auth) {
