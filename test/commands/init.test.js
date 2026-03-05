@@ -12,6 +12,8 @@ describe('runInit', () => {
     exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
     spawnInteractive: mock.fn(async () => {}),
     fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
+    writeKey: mock.fn(),
+    readKey: mock.fn(() => []),
     ...overrides,
   });
 
