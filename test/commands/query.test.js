@@ -1,34 +1,69 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { queryCommand } from '../../src/commands/query.js';
-import { setupCommandMocks, getErrorOutput } from '../helpers.js';
+import {
+  setupCommandMocks,
+  setupFetchMock,
+  tagValidationTests,
+  xmlTagValidationTests,
+} from '../helpers.js';
 
 describe('queryCommand', () => {
   const mocks = setupCommandMocks();
 
-  it('errors on invalid env tag format', async () => {
-    await queryCommand('test query', { env: 'invalid' }, null);
+  tagValidationTests(mocks, queryCommand, () => ['test query', {}]);
+  xmlTagValidationTests(mocks, queryCommand, () => ['test query', {}]);
 
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.strictEqual(output.error, true);
-    assert.match(output.message, /Invalid tag/);
-  });
+  describe('API calls', () => {
+    const api = setupFetchMock();
 
-  it('errors on invalid task tag format', async () => {
-    await queryCommand('test query', { tags: 'notvalid' }, null);
+    it('sends tags as XML in request body', async () => {
+      await queryCommand(
+        'test query',
+        { tag: ['language:python:3.11', 'task_type:bug_fix'] },
+        null,
+      );
 
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.strictEqual(output.error, true);
-    assert.match(output.message, /Invalid tag/);
-  });
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, [
+        '<tag type="language" name="python" version="3.11" />',
+        '<tag type="task_type" name="bug_fix" />',
+      ]);
+    });
 
-  it('errors on invalid version in env tag', async () => {
-    await queryCommand('test query', { env: 'language_version:node:latest' }, null);
+    it('sends empty tags array when no --tag provided', async () => {
+      await queryCommand('test query', {}, null);
 
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.match(output.message, /Invalid version/);
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, []);
+    });
+
+    it('sends --xml-tag values in request body', async () => {
+      await queryCommand(
+        'test query',
+        { xmlTag: ['<tag type="task_type" name="bug_fix" />'] },
+        null,
+      );
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, ['<tag type="task_type" name="bug_fix" />']);
+    });
+
+    it('merges --tag and --xml-tag into request body', async () => {
+      await queryCommand(
+        'test query',
+        {
+          tag: ['language:python:3.11'],
+          xmlTag: ['<tag type="task_type" name="bug_fix" />'],
+        },
+        null,
+      );
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, [
+        '<tag type="language" name="python" version="3.11" />',
+        '<tag type="task_type" name="bug_fix" />',
+      ]);
+    });
   });
 });

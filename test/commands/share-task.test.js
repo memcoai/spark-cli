@@ -1,38 +1,73 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { shareTaskCommand } from '../../src/commands/share-task.js';
-import { setupCommandMocks, getErrorOutput } from '../helpers.js';
+import {
+  setupCommandMocks,
+  setupFetchMock,
+  tagValidationTests,
+  xmlTagValidationTests,
+} from '../helpers.js';
 
 describe('shareTaskCommand', () => {
   const mocks = setupCommandMocks();
 
-  it('errors on invalid env tag format', async () => {
-    await shareTaskCommand('test query', { insight: ['some insight'], env: 'invalid' }, null);
+  tagValidationTests(mocks, shareTaskCommand, () => ['test query', { insight: ['some insight'] }]);
+  xmlTagValidationTests(mocks, shareTaskCommand, () => [
+    'test query',
+    { insight: ['some insight'] },
+  ]);
 
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.strictEqual(output.error, true);
-    assert.match(output.message, /Invalid tag/);
-  });
+  describe('API calls', () => {
+    const api = setupFetchMock();
 
-  it('errors on invalid task tag format', async () => {
-    await shareTaskCommand('test query', { insight: ['some insight'], tags: 'notvalid' }, null);
+    it('sends tags as XML in request body', async () => {
+      await shareTaskCommand(
+        'test query',
+        { insight: ['some insight'], tag: ['language:python:3.11', 'task_type:bug_fix'] },
+        null,
+      );
 
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.strictEqual(output.error, true);
-    assert.match(output.message, /Invalid tag/);
-  });
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, [
+        '<tag type="language" name="python" version="3.11" />',
+        '<tag type="task_type" name="bug_fix" />',
+      ]);
+    });
 
-  it('errors on invalid version in env tag', async () => {
-    await shareTaskCommand(
-      'test query',
-      { insight: ['some insight'], env: 'language_version:node:latest' },
-      null,
-    );
+    it('omits tags when --tag is not provided', async () => {
+      await shareTaskCommand('test query', { insight: ['some insight'] }, null);
 
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.match(output.message, /Invalid version/);
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.strictEqual(body.tags, undefined);
+    });
+
+    it('sends --xml-tag values in request body', async () => {
+      await shareTaskCommand(
+        'test query',
+        { insight: ['some insight'], xmlTag: ['<tag type="task_type" name="bug_fix" />'] },
+        null,
+      );
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, ['<tag type="task_type" name="bug_fix" />']);
+    });
+
+    it('merges --tag and --xml-tag into request body', async () => {
+      await shareTaskCommand(
+        'test query',
+        {
+          insight: ['some insight'],
+          tag: ['language:python:3.11'],
+          xmlTag: ['<tag type="task_type" name="bug_fix" />'],
+        },
+        null,
+      );
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, [
+        '<tag type="language" name="python" version="3.11" />',
+        '<tag type="task_type" name="bug_fix" />',
+      ]);
+    });
   });
 });

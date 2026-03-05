@@ -1,90 +1,91 @@
-import { describe, it, mock, beforeEach, afterEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { shareCommand } from '../../src/commands/share.js';
-import { setupCommandMocks, getErrorOutput } from '../helpers.js';
+import {
+  setupCommandMocks,
+  setupFetchMock,
+  tagValidationTests,
+  xmlTagValidationTests,
+} from '../helpers.js';
 
 describe('shareCommand', () => {
   const mocks = setupCommandMocks();
 
-  it('errors on invalid env tag format', async () => {
-    await shareCommand(
-      'session-1',
-      {
-        title: 'Test',
-        content: 'Content',
-        env: 'bare-tag',
-      },
-      null,
-    );
-
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.strictEqual(output.error, true);
-    assert.match(output.message, /Invalid tag/);
-  });
-
-  it('errors on invalid task tag format', async () => {
-    await shareCommand(
-      'session-1',
-      {
-        title: 'Test',
-        content: 'Content',
-        tags: 'no-colon',
-      },
-      null,
-    );
-
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.match(output.message, /Invalid tag/);
-  });
-
-  it('errors on invalid version in env tag', async () => {
-    await shareCommand(
-      'session-1',
-      {
-        title: 'Test',
-        content: 'Content',
-        env: 'language_version:python:latest',
-      },
-      null,
-    );
-
-    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
-    const output = getErrorOutput(mocks.logMock);
-    assert.match(output.message, /Invalid version/);
-  });
+  tagValidationTests(mocks, shareCommand, () => [
+    'session-1',
+    { title: 'Test', content: 'Content' },
+  ]);
+  xmlTagValidationTests(mocks, shareCommand, () => [
+    'session-1',
+    { title: 'Test', content: 'Content' },
+  ]);
 
   describe('API calls', () => {
-    let fetchMock;
-    let originalKey;
-
-    beforeEach(() => {
-      originalKey = process.env.SPARK_API_KEY;
-      process.env.SPARK_API_KEY = 'test-key';
-      fetchMock = mock.method(globalThis, 'fetch', () =>
-        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-      );
-    });
-
-    afterEach(() => {
-      fetchMock.mock.restore();
-      if (originalKey === undefined) delete process.env.SPARK_API_KEY;
-      else process.env.SPARK_API_KEY = originalKey;
-    });
+    const api = setupFetchMock();
 
     it('passes task_idx as string when taskIndex is "new"', async () => {
       await shareCommand('session-1', { title: 'T', content: 'C', taskIndex: 'new' }, null);
 
-      const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
       assert.strictEqual(body.task_idx, 'new');
     });
 
     it('passes numeric task_idx as string', async () => {
       await shareCommand('session-1', { title: 'T', content: 'C', taskIndex: '5' }, null);
 
-      const body = JSON.parse(fetchMock.mock.calls[0].arguments[1].body);
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
       assert.strictEqual(body.task_idx, '5');
+    });
+
+    it('sends tags as XML in request body', async () => {
+      await shareCommand(
+        'session-1',
+        { title: 'T', content: 'C', tag: ['language:python:3.11', 'task_type:bug_fix'] },
+        null,
+      );
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, [
+        '<tag type="language" name="python" version="3.11" />',
+        '<tag type="task_type" name="bug_fix" />',
+      ]);
+    });
+
+    it('omits tags when --tag is not provided', async () => {
+      await shareCommand('session-1', { title: 'T', content: 'C' }, null);
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.strictEqual(body.tags, undefined);
+    });
+
+    it('sends --xml-tag values in request body', async () => {
+      await shareCommand(
+        'session-1',
+        { title: 'T', content: 'C', xmlTag: ['<tag type="task_type" name="bug_fix" />'] },
+        null,
+      );
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, ['<tag type="task_type" name="bug_fix" />']);
+    });
+
+    it('merges --tag and --xml-tag into request body', async () => {
+      await shareCommand(
+        'session-1',
+        {
+          title: 'T',
+          content: 'C',
+          tag: ['language:python:3.11'],
+          xmlTag: ['<tag type="task_type" name="bug_fix" />'],
+        },
+        null,
+      );
+
+      const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
+      assert.deepStrictEqual(body.tags, [
+        '<tag type="language" name="python" version="3.11" />',
+        '<tag type="task_type" name="bug_fix" />',
+      ]);
     });
   });
 });

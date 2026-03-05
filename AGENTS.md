@@ -6,7 +6,7 @@ Always keep this file up to date. Update it on approved changes to always reflec
 
 Always use Spark MCP tools to query shared memory **before** coding. Spark MCP provides software development guidance, including internal policies and best practice used in my team, information about proprietary code, and shared problem-solving knowledge from my software development team.
 
-1. Call `mcp__spark__get_recommendation` with an environment scan and task tags to search existing knowledge,
+1. Call `mcp__spark__get_recommendation` with tags describing your context to search existing knowledge,
 2. then call `mcp__spark__get_insights` to get any information relevant to your task.
 3. If you discover anything new, call `mcp__spark__share_insight` to share it with the rest of the team.
 4. **Always** call `mcp__spark__share_feedback` before finishing if you received any information from Spark.
@@ -43,7 +43,7 @@ src/
   output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode
-  parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION)
+  parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION), XML tag validation (parseXmlTags), XML conversion (tagsToXml), and merged tag collection (collectTags)
   banner.js           Terminal UI (logos, spinners, colored output via colorize())
   index.js            Public API re-exports from api.js
 ```
@@ -54,7 +54,7 @@ src/
 - **Settings file:** All persistent state stored in `settings.json` with structure `{ credentials, client, latestVersion, compatibility, skillsVersion, projects, globalInit }`. Global at `~/.spark/settings.json`, local at `./.spark/settings.json`. Credentials and client data use `readSettingsKey`/`writeSettingsKey` from `settings.js`.
 - **Credentials resolution:** local-first (`./.spark/settings.json`) then global (`~/.spark/settings.json`). The `--local` flag on `spark login` scopes credentials to the current directory. Token refresh auto-detects which location to save back to. Logout removes the `credentials` key, not the file.
 - **Auth priority:** CLI `--api-key` flag > `SPARK_API_KEY` env var > OAuth access token > legacy API key in credentials file.
-- **Tag format:** `TYPE:NAME` or `TYPE:NAME:VERSION` where version accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH with optional pre-release suffix. The `v` prefix is stripped. Backend handles semantic validation; CLI only validates structure.
+- **Tag format:** Two input formats, both repeatable. `--tag TYPE:NAME` or `--tag TYPE:NAME:VERSION` accepts colon-separated tags (e.g., `--tag language:python:3.11`). `--xml-tag` accepts pre-formed XML tags (e.g., `--xml-tag '<tag type="language" name="python" version="3.11" />'`). Both can be used together. Version in `--tag` accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH with optional pre-release suffix; `v` prefix is stripped. `--xml-tag` validates required `type` and `name` attributes, optional `version`, rejects unknown attributes, and normalizes to canonical attribute order. Command handlers use `collectTags(options)` from `parse-tags.js` to merge both sources into a single XML tags array. Sent as `tags` on all tool endpoints (get_recommendation, share_insight, share_task).
 - **Output:** Default output is compact JSON via `output()`. Use `--pretty` for human-readable output with markdown rendering and ANSI formatting. Auth commands (login, logout) always use styled terminal output via banner.js. Errors go through `outputError()` which calls `process.exit(1)`.
 - **OAuth client cache:** stored in `~/.spark/settings.json` under the `client` key (global, not per-project).
 - **Version checking:** Three separate systems: (1) npm registry check for "update available" notifications — cached under `latestVersion` with 24-hour TTL; (2) backend compatibility check (`GET /api/cli/compatibility`) for blocking outdated CLIs and deprecation warnings — cached under `compatibility` with 4-hour TTL; (3) skills version check from GitHub raw content (`memcoai/spark-cli-skills/main/VERSION`) — cached under `skillsVersion` with 24-hour TTL. All fail open on network errors. Skills notifications include IDE-specific update commands based on stored init choices.
@@ -81,8 +81,8 @@ npm run format        # eslint --fix src/
 
 ```
 test/
-  helpers.js                  Shared test helpers (setupCommandMocks, getErrorOutput)
-  parse-tags.test.js          parseTags, parseSources
+  helpers.js                  Shared test helpers (setupCommandMocks, setupFetchMock, getErrorOutput, tagValidationTests, xmlTagValidationTests)
+  parse-tags.test.js          parseTags, tagsToXml, parseXmlTags, collectTags, parseSources
   credentials.test.js         isTokenExpired
   settings.test.js            readSettings, writeSettings, readSettingsKey, writeSettingsKey
   update-check.test.js        evaluateCompatibility, getSkillsNotification
@@ -90,9 +90,9 @@ test/
   format-markdown.test.js     Markdown-to-ANSI rendering
   pretty-print.test.js        Human-readable object formatting
   commands/
-    query.test.js             Tag validation errors
-    share.test.js             Tag/version validation errors
-    share-task.test.js        Tag/version validation errors for share-task
+    query.test.js             Tag and XML tag validation, API call tag serialization
+    share.test.js             Tag and XML tag validation, API call tag serialization
+    share-task.test.js        Tag and XML tag validation, API call tag serialization
     insights.test.js          taskIndex validation
     feedback.test.js          Flag validation (--helpful / --not-helpful)
     uninstall.test.js         npm uninstall execution and error handling

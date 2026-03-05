@@ -1,4 +1,5 @@
-import { mock, beforeEach, afterEach } from 'node:test';
+import { it, mock, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert/strict';
 
 /**
  * Sets up console.log, process.exit, and process.stdout.write mocks for command tests.
@@ -25,6 +26,93 @@ export function setupCommandMocks() {
 
 export function getErrorOutput(logMock) {
   return JSON.parse(logMock.mock.calls[0].arguments[0]);
+}
+
+/**
+ * Sets up fetch mock and SPARK_API_KEY env var for API call tests.
+ * Must be called inside a describe() block.
+ * Returns an object whose fetchMock property updates each beforeEach.
+ */
+export function setupFetchMock() {
+  const ctx = {};
+
+  beforeEach(() => {
+    ctx.originalKey = process.env.SPARK_API_KEY;
+    process.env.SPARK_API_KEY = 'test-key';
+    ctx.fetchMock = mock.method(globalThis, 'fetch', () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+    );
+  });
+
+  afterEach(() => {
+    ctx.fetchMock.mock.restore();
+    if (ctx.originalKey === undefined) delete process.env.SPARK_API_KEY;
+    else process.env.SPARK_API_KEY = ctx.originalKey;
+  });
+
+  return ctx;
+}
+
+/**
+ * Generates standard tag validation tests for a command.
+ * Must be called inside a describe() block that uses setupCommandMocks().
+ * @param {object} mocks - The mocks object from setupCommandMocks()
+ * @param {Function} commandFn - The command function to test
+ * @param {Function} buildArgs - Returns [positionalArg, optsWithoutTag] for the command
+ */
+export function tagValidationTests(mocks, commandFn, buildArgs) {
+  it('errors on invalid tag format', async () => {
+    const [positional, baseOpts] = buildArgs();
+    await commandFn(positional, { ...baseOpts, tag: 'invalid' }, null);
+
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
+    assert.strictEqual(output.error, true);
+    assert.match(output.message, /Invalid tag/);
+  });
+
+  it('errors on invalid version in tag', async () => {
+    const [positional, baseOpts] = buildArgs();
+    await commandFn(positional, { ...baseOpts, tag: 'language:node:latest' }, null);
+
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
+    assert.match(output.message, /Invalid version/);
+  });
+
+  it('errors on invalid tag in array format', async () => {
+    const [positional, baseOpts] = buildArgs();
+    await commandFn(positional, { ...baseOpts, tag: ['language:python:3.11', 'invalid'] }, null);
+
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
+    assert.match(output.message, /Invalid tag/);
+  });
+}
+
+/**
+ * Generates standard XML tag validation tests for a command.
+ * Must be called inside a describe() block that uses setupCommandMocks().
+ */
+export function xmlTagValidationTests(mocks, commandFn, buildArgs) {
+  it('errors on invalid XML tag format', async () => {
+    const [positional, baseOpts] = buildArgs();
+    await commandFn(positional, { ...baseOpts, xmlTag: 'not-xml' }, null);
+
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
+    assert.strictEqual(output.error, true);
+    assert.match(output.message, /Invalid XML tag/);
+  });
+
+  it('errors on XML tag missing type attribute', async () => {
+    const [positional, baseOpts] = buildArgs();
+    await commandFn(positional, { ...baseOpts, xmlTag: '<tag name="foo" />' }, null);
+
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+    const output = getErrorOutput(mocks.logMock);
+    assert.match(output.message, /missing required "type"/);
+  });
 }
 
 export function getLogOutput(m) {
