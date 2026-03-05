@@ -1,8 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { setupCommandMocks } from '../helpers.js';
+import { setupCommandMocks, getLogOutput } from '../helpers.js';
 import { checkExistingAuth } from '../../src/commands/auth.js';
-import { getLogOutput } from '../helpers.js';
 
 describe('checkExistingAuth', () => {
   const mocks = setupCommandMocks();
