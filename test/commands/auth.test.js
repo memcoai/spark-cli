@@ -12,6 +12,7 @@ describe('checkExistingAuth', () => {
     isExpired: () => false,
     refresh: async () => {},
     removeCreds: () => {},
+    getUser: async () => ({}),
   };
 
   it('returns continue when no credentials exist', async () => {
@@ -111,5 +112,26 @@ describe('checkExistingAuth', () => {
     );
     assert.strictEqual(globalCalled, true);
     assert.strictEqual(localCalled, false);
+  });
+
+  it('returns continue and removes credentials when refresh succeeds but getUser fails', async () => {
+    let removeCalled = false;
+    const result = await checkExistingAuth(
+      {},
+      {
+        ...baseDeps,
+        loadCreds: () => ({ accessToken: 'tok', refreshToken: 'ref' }),
+        isExpired: () => true,
+        refresh: async () => {},
+        getUser: async () => {
+          throw new Error('unauthorized');
+        },
+        removeCreds: () => {
+          removeCalled = true;
+        },
+      },
+    );
+    assert.strictEqual(result, 'continue');
+    assert.strictEqual(removeCalled, true);
   });
 });

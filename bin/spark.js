@@ -210,6 +210,7 @@ program
   .command('login')
   .description('Authenticate with Spark (opens browser)')
   .option('--local', 'Store credentials in current directory (.spark/)')
+  .option('--api-base <url>', 'Set the API base URL')
   .action(loginCommand);
 
 program.command('logout').description('Remove stored credentials').action(logoutCommand);

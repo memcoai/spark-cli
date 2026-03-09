@@ -14,7 +14,15 @@ import {
   createSpinner,
   colorize,
 } from '../banner.js';
-import { API_BASE, CALLBACK_PORT, AUTH_SUCCESS_URL, AUTH_ERROR_URL } from '../constants.js';
+import {
+  getApiBase,
+  CALLBACK_PORT,
+  AUTH_SUCCESS_URL,
+  AUTH_ERROR_URL,
+  SETTINGS_PATH,
+  LOCAL_SETTINGS_PATH,
+} from '../constants.js';
+import { writeSettingsKey } from '../settings.js';
 import {
   loadCredentials,
   loadLocalCredentials,
@@ -192,6 +200,7 @@ export async function checkExistingAuth(options, deps = {}) {
     isExpired = isTokenExpired,
     refresh = refreshToken,
     removeCreds = removeCredentials,
+    getUser = getCurrentUser,
   } = deps;
 
   const existing = options.local ? loadLocalCreds() : loadCreds();
@@ -202,6 +211,13 @@ export async function checkExistingAuth(options, deps = {}) {
   if (existing.accessToken && isExpired(existing)) {
     try {
       await refresh(existing);
+    } catch {
+      removeCreds();
+      return 'continue';
+    }
+
+    try {
+      await getUser();
       printInfo('Your session has been refreshed. You are logged in.');
       return 'skip';
     } catch {
@@ -293,6 +309,14 @@ export async function loginCommand(options, _command) {
     printBanner();
     console.log('');
 
+    if (options.apiBase) {
+      const url = options.apiBase.replace(/\/+$/, '');
+      const settingsPath = options.local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
+      writeSettingsKey(settingsPath, 'apiBase', url);
+      printInfo(`API base set to ${url}`);
+      console.log('');
+    }
+
     if (process.env.SPARK_API_KEY) {
       printInfo('You are authenticated via SPARK_API_KEY environment variable.');
       console.log('');
@@ -328,6 +352,17 @@ export async function loginCommand(options, _command) {
       tokenSpinner.fail('Failed to save credentials');
       throw err;
     }
+
+    // Verify login by calling getUser
+    const verifySpinner = createSpinner('Verifying login...');
+    try {
+      await getCurrentUser();
+      verifySpinner.stop('Login verified');
+    } catch (error) {
+      verifySpinner.fail('Login verification failed');
+      printWarning(`Could not verify login: ${error.message}`);
+    }
+
     console.log('');
     printSuccess('Successfully logged in to Spark!');
     console.log('');
@@ -356,7 +391,7 @@ export async function logoutCommand() {
     if (credentials?.accessToken) {
       printInfo('Logging out of Spark server...');
       try {
-        const response = await fetch(`${API_BASE}/auth/logout-all`, {
+        const response = await fetch(`${getApiBase()}/auth/logout-all`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${credentials.accessToken}` },
           redirect: 'manual',

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { API_BASE, CALLBACK_PORT } from './constants.js';
+import { getApiBase, CALLBACK_PORT } from './constants.js';
 import { loadCredentials, saveCredentials, isTokenExpired } from './credentials.js';
 import { getOAuthEndpoints, getBearerMethods, getClientId } from './oauth.js';
 import { getParentOptions } from './output.js';
@@ -111,7 +111,7 @@ export async function apiRequest(endpoint, method = 'GET', body = null, command 
       if (supported.has('header') || supported.has('authorization_header')) {
         headers['Authorization'] = `Bearer ${auth.token}`;
       } else if (supported.has('query')) {
-        const requestUrl = new URL(`${API_BASE}${requestEndpoint}`);
+        const requestUrl = new URL(`${getApiBase()}${requestEndpoint}`);
         requestUrl.searchParams.set('access_token', auth.token);
         requestEndpoint = `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
       } else {
@@ -131,7 +131,7 @@ export async function apiRequest(endpoint, method = 'GET', body = null, command 
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE}${requestEndpoint}`, options);
+  const response = await fetch(`${getApiBase()}${requestEndpoint}`, options);
 
   if (!response.ok) {
     const error = await response.text();

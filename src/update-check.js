@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import semver from 'semver';
 import {
-  API_BASE,
+  getApiBase,
   VERSION_CHECK_URL,
   SKILLS_VERSION_URL,
   SETTINGS_PATH,
@@ -113,7 +113,7 @@ export function getCachedCompatibility() {
  */
 export async function fetchCompatibility() {
   try {
-    const response = await fetch(`${API_BASE}/api/cli/compatibility`, {
+    const response = await fetch(`${getApiBase()}/api/cli/compatibility`, {
       signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) return null;
