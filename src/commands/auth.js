@@ -17,8 +17,8 @@ import {
 import {
   getApiBase,
   CALLBACK_PORT,
-  AUTH_SUCCESS_URL,
-  AUTH_ERROR_URL,
+  getAuthSuccessUrl,
+  getAuthErrorUrl,
   SETTINGS_PATH,
   LOCAL_SETTINGS_PATH,
 } from '../constants.js';
@@ -118,7 +118,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
       const errorDescription = url.searchParams.get('error_description');
 
       if (error) {
-        const errorUrl = new URL(AUTH_ERROR_URL);
+        const errorUrl = new URL(getAuthErrorUrl());
         errorUrl.searchParams.set('error', error);
         if (errorDescription) errorUrl.searchParams.set('message', errorDescription);
         redirect(res, errorUrl.toString());
@@ -128,7 +128,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
       }
 
       if (state !== expectedState) {
-        const errorUrl = new URL(AUTH_ERROR_URL);
+        const errorUrl = new URL(getAuthErrorUrl());
         errorUrl.searchParams.set('error', 'invalid_state');
         errorUrl.searchParams.set('message', 'Security validation failed. Please try again.');
         redirect(res, errorUrl.toString());
@@ -138,7 +138,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
       }
 
       if (!code) {
-        const errorUrl = new URL(AUTH_ERROR_URL);
+        const errorUrl = new URL(getAuthErrorUrl());
         errorUrl.searchParams.set('error', 'missing_code');
         errorUrl.searchParams.set('message', 'No authorization code received.');
         redirect(res, errorUrl.toString());
@@ -147,7 +147,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
         return;
       }
 
-      redirect(res, AUTH_SUCCESS_URL);
+      redirect(res, getAuthSuccessUrl());
       server.close();
       resolve({ code, codeVerifier });
     });
@@ -376,7 +376,7 @@ export async function loginCommand(options, _command) {
 
 function printApiKeyFallback() {
   console.log(`${colorize('\x1b[33m', 'Alternative:')} Use an API key instead:`);
-  console.log(`  1. Visit: ${colorize('\x1b[36m', 'https://spark.memco.ai/settings/api')}`);
+  console.log(`  1. Visit: ${colorize('\x1b[36m', `${getApiBase()}/settings/api`)}`);
   console.log('  2. Generate an API key');
   console.log(`  3. Run: ${colorize('\x1b[33m', 'export SPARK_API_KEY=your_api_key')}`);
 }
