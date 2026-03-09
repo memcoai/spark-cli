@@ -15,6 +15,15 @@ Always use Spark MCP tools to query shared memory **before** coding. Spark MCP p
 
 Node.js CLI tool (`@memco/spark`) that provides a command-line interface to the Spark knowledge network — a collective memory system for AI coding agents. ES modules throughout (`"type": "module"`), requires Node >= 18.
 
+## Getting Started
+
+1. **Install:** `npm install -g @memco/spark`
+2. **Login:** `spark login` (opens browser for OAuth authentication)
+3. **Init:** `spark init` (interactive IDE setup wizard — installs skills for Claude Code, Cursor, Windsurf, etc.)
+4. **Verify:** `spark status` (checks version, auth, and skills status)
+
+**Updating:** `spark update` updates both the CLI and skills for all configured IDEs.
+
 ## Architecture
 
 ```
@@ -27,7 +36,7 @@ src/
     share.js          Share an insight/solution
     share-task.js     Share task insights with knowledge network (share_task)
     feedback.js       Provide feedback on recommendations
-    update.js         Self-update command (npm install -g @memco/spark@latest)
+    update.js         Self-update command (CLI + skills); exports updateSkills for IDE-aware skills updating
     uninstall.js      Self-uninstall command (npm uninstall -g @memco/spark)
     init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings; exports runSetupFlow and shared helpers
     enable.js         Enable Spark for the current project; delegates to runSetupFlow from init.js with scope='project'
@@ -101,6 +110,7 @@ test/
     share-task.test.js        Tag and XML tag validation, API call tag serialization
     insights.test.js          taskIndex validation
     feedback.test.js          Flag validation (--helpful / --not-helpful)
+    update.test.js            CLI self-update and skills update (IDE detection, version save, failure handling)
     uninstall.test.js         npm uninstall execution and error handling
     init.test.js              IDE selection, scope, command execution, init persistence
     enable.test.js            Verifies project scope is always used (delegates to runSetupFlow)
