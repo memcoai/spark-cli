@@ -41,14 +41,21 @@ export function loadLocalCredentials(apiBase) {
 /**
  * Load credentials from file.
  * Checks local (.spark/) first, then global (~/.spark/).
+ * When withSource is true, returns { credentials, local } so callers
+ * can write back to the same location (e.g. during token refresh).
  */
-export function loadCredentials(apiBase) {
+export function loadCredentials(apiBase, { withSource = false } = {}) {
   const url = normalizeUrl(apiBase) || getApiBase();
-  for (const path of [LOCAL_SETTINGS_PATH, SETTINGS_PATH]) {
+  for (const [path, isLocal] of [
+    [LOCAL_SETTINGS_PATH, true],
+    [SETTINGS_PATH, false],
+  ]) {
     const all = readAllCredentials(path);
-    if (all?.[url]) return all[url];
+    if (all?.[url]) {
+      return withSource ? { credentials: all[url], local: isLocal } : all[url];
+    }
   }
-  return null;
+  return withSource ? { credentials: null, local: false } : null;
 }
 
 /**

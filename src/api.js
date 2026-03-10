@@ -14,7 +14,7 @@ const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'))
 /**
  * Refresh the access token using the refresh token
  */
-export async function refreshToken(credentials, apiBase) {
+export async function refreshToken(credentials, apiBase, local) {
   if (!credentials?.refreshToken) {
     throw new Error('No refresh token available');
   }
@@ -51,7 +51,7 @@ export async function refreshToken(credentials, apiBase) {
     tokenType: 'Bearer',
   };
 
-  saveCredentials(newCredentials, { apiBase });
+  saveCredentials(newCredentials, { local, apiBase });
   return newCredentials;
 }
 
@@ -68,12 +68,13 @@ export async function getAuthToken(apiBase, options = {}) {
     return { type: 'apiKey', token: process.env.SPARK_API_KEY };
   }
 
-  let credentials = loadCredentials(apiBase);
-  if (credentials) {
+  const loaded = loadCredentials(apiBase, { withSource: true });
+  if (loaded.credentials) {
+    let { credentials } = loaded;
     if (credentials.accessToken) {
       if (isTokenExpired(credentials)) {
         try {
-          credentials = await refreshToken(credentials, apiBase);
+          credentials = await refreshToken(credentials, apiBase, loaded.local);
         } catch (err) {
           throw new Error(`Session expired. Please run 'spark login' again. (${err.message})`);
         }
