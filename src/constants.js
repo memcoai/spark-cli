@@ -23,12 +23,12 @@ export const SKILLS_VERSION_URL =
  * Priority: SPARK_API_BASE env var > local settings > global settings > default.
  */
 export function getApiBase() {
-  if (process.env.SPARK_API_BASE) {
+  if (typeof process.env.SPARK_API_BASE === 'string') {
     return process.env.SPARK_API_BASE.replace(/\/+$/, '');
   }
   const localApiBase = readSettingsKey(LOCAL_SETTINGS_PATH, 'apiBase');
-  if (localApiBase) return localApiBase.replace(/\/+$/, '');
+  if (typeof localApiBase === 'string') return localApiBase.replace(/\/+$/, '');
   const globalApiBase = readSettingsKey(SETTINGS_PATH, 'apiBase');
-  if (globalApiBase) return globalApiBase.replace(/\/+$/, '');
+  if (typeof globalApiBase === 'string') return globalApiBase.replace(/\/+$/, '');
   return DEFAULT_API_BASE;
 }

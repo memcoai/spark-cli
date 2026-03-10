@@ -157,9 +157,9 @@ function waitForCallback(server, expectedState, codeVerifier) {
 /**
  * Exchange authorization code for tokens
  */
-async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
-  const { tokenEndpoint } = await getOAuthEndpoints();
-  const clientId = await getClientId(redirectUri);
+async function exchangeCodeForTokens(code, codeVerifier, redirectUri, apiBase) {
+  const { tokenEndpoint } = await getOAuthEndpoints(apiBase);
+  const clientId = await getClientId(redirectUri, apiBase);
   const response = await fetch(tokenEndpoint, {
     method: 'POST',
     headers: {
@@ -193,7 +193,7 @@ async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
  * Check existing credentials and attempt refresh if expired.
  * Returns 'skip' if login should be skipped, 'continue' if login should proceed.
  */
-export async function checkExistingAuth(options, deps = {}) {
+export async function checkExistingAuth(options, apiBase, deps = {}) {
   const {
     loadCreds = loadCredentials,
     loadLocalCreds = loadLocalCredentials,
@@ -203,25 +203,25 @@ export async function checkExistingAuth(options, deps = {}) {
     getUser = getCurrentUser,
   } = deps;
 
-  const existing = options.local ? loadLocalCreds() : loadCreds();
+  const existing = options.local ? loadLocalCreds(apiBase) : loadCreds(apiBase);
   if (!existing?.accessToken && !existing?.apiKey) {
     return 'continue';
   }
 
   if (existing.accessToken && isExpired(existing)) {
     try {
-      await refresh(existing);
+      await refresh(existing, apiBase);
     } catch {
-      removeCreds();
+      removeCreds(apiBase);
       return 'continue';
     }
 
     try {
-      await getUser();
+      await getUser(apiBase);
       printInfo('Your session has been refreshed. You are logged in.');
       return 'skip';
     } catch {
-      removeCreds();
+      removeCreds(apiBase);
       return 'continue';
     }
   }
@@ -237,14 +237,14 @@ export async function checkExistingAuth(options, deps = {}) {
  * Run the OAuth PKCE browser flow: start server, open browser, exchange tokens.
  * Returns the tokens on success, or null if the callback server failed to start.
  */
-async function runOAuthFlow() {
+async function runOAuthFlow(apiBase) {
   let serverInfo;
   try {
     serverInfo = await startCallbackServer();
   } catch (err) {
     printError(`Failed to start callback server: ${err.message}`);
     console.log('');
-    printApiKeyFallback();
+    printApiKeyFallback(apiBase);
     return null;
   }
 
@@ -256,10 +256,10 @@ async function runOAuthFlow() {
     const codeChallenge = generateCodeChallenge(codeVerifier);
     const state = generateState();
 
-    const { authorizationEndpoint } = await getOAuthEndpoints();
+    const { authorizationEndpoint } = await getOAuthEndpoints(apiBase);
     const authUrl = new URL(authorizationEndpoint);
     authUrl.searchParams.set('provider', 'authkit');
-    const clientId = await getClientId(redirectUri);
+    const clientId = await getClientId(redirectUri, apiBase);
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('response_type', 'code');
@@ -286,7 +286,12 @@ async function runOAuthFlow() {
 
     const tokenSpinner = createSpinner('Exchanging code for tokens...');
     try {
-      const tokens = await exchangeCodeForTokens(result.code, result.codeVerifier, redirectUri);
+      const tokens = await exchangeCodeForTokens(
+        result.code,
+        result.codeVerifier,
+        redirectUri,
+        apiBase,
+      );
       return { tokens, tokenSpinner };
     } catch (err) {
       tokenSpinner.fail('Token exchange failed');
@@ -305,15 +310,15 @@ async function runOAuthFlow() {
  * Login command handler - OAuth PKCE flow
  */
 export async function loginCommand(options, _command) {
+  const apiBase = options.apiBase ? options.apiBase.replace(/\/+$/, '') : getApiBase();
   try {
     printBanner();
     console.log('');
 
     if (options.apiBase) {
-      const url = options.apiBase.replace(/\/+$/, '');
       const settingsPath = options.local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
-      writeSettingsKey(settingsPath, 'apiBase', url);
-      printInfo(`API base set to ${url}`);
+      writeSettingsKey(settingsPath, 'apiBase', apiBase);
+      printInfo(`API base set to ${apiBase}`);
       console.log('');
     }
 
@@ -325,13 +330,13 @@ export async function loginCommand(options, _command) {
       return;
     }
 
-    const authCheck = await checkExistingAuth(options);
+    const authCheck = await checkExistingAuth(options, apiBase);
     if (authCheck === 'skip') return;
 
     console.log(colorize('\x1b[1m', 'Spark CLI Authentication'));
     console.log('');
 
-    const flowResult = await runOAuthFlow();
+    const flowResult = await runOAuthFlow(apiBase);
     if (!flowResult) return;
 
     const { tokens, tokenSpinner } = flowResult;
@@ -344,7 +349,7 @@ export async function loginCommand(options, _command) {
           expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
           tokenType: tokens.token_type || 'Bearer',
         },
-        { local },
+        { local, apiBase },
       );
       const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
       tokenSpinner.stop(`Credentials saved ${location}`);
@@ -356,7 +361,7 @@ export async function loginCommand(options, _command) {
     // Verify login by calling getUser
     const verifySpinner = createSpinner('Verifying login...');
     try {
-      await getCurrentUser();
+      await getCurrentUser(apiBase);
       verifySpinner.stop('Login verified');
     } catch (error) {
       verifySpinner.fail('Login verification failed');
@@ -370,13 +375,14 @@ export async function loginCommand(options, _command) {
   } catch (err) {
     printError(err.message);
     console.log('');
-    printApiKeyFallback();
+    printApiKeyFallback(apiBase);
   }
 }
 
-function printApiKeyFallback() {
+function printApiKeyFallback(apiBase) {
+  const base = apiBase || getApiBase();
   console.log(`${colorize('\x1b[33m', 'Alternative:')} Use an API key instead:`);
-  console.log(`  1. Visit: ${colorize('\x1b[36m', `${getApiBase()}/settings/api`)}`);
+  console.log(`  1. Visit: ${colorize('\x1b[36m', `${base}/settings/api`)}`);
   console.log('  2. Generate an API key');
   console.log(`  3. Run: ${colorize('\x1b[33m', 'export SPARK_API_KEY=your_api_key')}`);
 }
@@ -426,7 +432,7 @@ export async function logoutCommand() {
  */
 export async function whoamiCommand(_options, command) {
   try {
-    const user = await getCurrentUser(command);
+    const user = await getCurrentUser(undefined, command);
     output(user, command);
   } catch (err) {
     const apiKey = process.env.SPARK_API_KEY;

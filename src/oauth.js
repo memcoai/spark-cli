@@ -42,7 +42,7 @@ async function resolveOAuthMetadata(apiBase) {
 }
 
 async function getOAuthMetadata(apiBase) {
-  const base = apiBase || getApiBase();
+  const base = normalizeBaseUrl(apiBase) || getApiBase();
   if (!oauthMetadataCache.has(base)) {
     oauthMetadataCache.set(base, resolveOAuthMetadata(base));
   }
@@ -91,7 +91,7 @@ function migrateClient() {
 }
 
 function loadClient(apiBase) {
-  const base = apiBase || getApiBase();
+  const base = normalizeBaseUrl(apiBase) || getApiBase();
   let clients = readSettingsKey(SETTINGS_PATH, 'clients');
   if (!clients) {
     clients = migrateClient();
@@ -100,7 +100,7 @@ function loadClient(apiBase) {
 }
 
 function saveClient(client, apiBase) {
-  const base = apiBase || getApiBase();
+  const base = normalizeBaseUrl(apiBase) || getApiBase();
   const clients = readSettingsKey(SETTINGS_PATH, 'clients') || {};
   clients[base] = client;
   writeSettingsKey(SETTINGS_PATH, 'clients', clients);

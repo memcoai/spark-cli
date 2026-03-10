@@ -2,6 +2,10 @@ import { existsSync } from 'node:fs';
 import { DEFAULT_API_BASE, getApiBase, SETTINGS_PATH, LOCAL_SETTINGS_PATH } from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
 
+function normalizeUrl(url) {
+  return typeof url === 'string' ? url.replace(/\/+$/, '') : null;
+}
+
 /**
  * Migrate flat credentials to per-URL format if needed.
  * If `credentials` is a flat object (has accessToken/apiKey/refreshToken at top level),
@@ -29,7 +33,7 @@ function readAllCredentials(settingsPath) {
  * Load credentials from local (.spark/) only — no global fallback.
  */
 export function loadLocalCredentials(apiBase) {
-  const url = apiBase || getApiBase();
+  const url = normalizeUrl(apiBase) || getApiBase();
   const all = readAllCredentials(LOCAL_SETTINGS_PATH);
   return all?.[url] || null;
 }
@@ -39,7 +43,7 @@ export function loadLocalCredentials(apiBase) {
  * Checks local (.spark/) first, then global (~/.spark/).
  */
 export function loadCredentials(apiBase) {
-  const url = apiBase || getApiBase();
+  const url = normalizeUrl(apiBase) || getApiBase();
   for (const path of [LOCAL_SETTINGS_PATH, SETTINGS_PATH]) {
     const all = readAllCredentials(path);
     if (all?.[url]) return all[url];
@@ -58,7 +62,7 @@ export function loadCredentials(apiBase) {
 export function saveCredentials(credentials, { local, apiBase } = {}) {
   const isLocal = local ?? existsSync(LOCAL_SETTINGS_PATH);
   const path = isLocal ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
-  const url = apiBase || getApiBase();
+  const url = normalizeUrl(apiBase) || getApiBase();
   const all = readSettingsKey(path, 'credentials') || {};
   // If all is in old flat format, start fresh per-URL object
   const perUrl =
@@ -73,7 +77,7 @@ export function saveCredentials(credentials, { local, apiBase } = {}) {
  * Check if credentials exist in either local or global location.
  */
 export function credentialsExist(apiBase) {
-  const url = apiBase || getApiBase();
+  const url = normalizeUrl(apiBase) || getApiBase();
   for (const path of [LOCAL_SETTINGS_PATH, SETTINGS_PATH]) {
     const all = readAllCredentials(path);
     if (all?.[url]) return true;
@@ -87,7 +91,7 @@ export function credentialsExist(apiBase) {
  * Returns a description of what was removed, or null if nothing found.
  */
 export function removeCredentials(apiBase) {
-  const url = apiBase || getApiBase();
+  const url = normalizeUrl(apiBase) || getApiBase();
   for (const [path, label] of [
     [LOCAL_SETTINGS_PATH, 'local'],
     [SETTINGS_PATH, 'global'],
