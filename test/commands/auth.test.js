@@ -8,7 +8,7 @@ describe('checkExistingAuth', () => {
   const mocks = setupCommandMocks();
 
   const baseDeps = {
-    loadCreds: () => null,
+    loadCreds: () => ({ credentials: null, local: false }),
     loadLocalCreds: () => null,
     isExpired: () => false,
     refresh: async () => {},
@@ -24,7 +24,7 @@ describe('checkExistingAuth', () => {
   it('returns skip when valid access token exists', async () => {
     const result = await checkExistingAuth({}, undefined, {
       ...baseDeps,
-      loadCreds: () => ({ accessToken: 'tok' }),
+      loadCreds: () => ({ credentials: { accessToken: 'tok' }, local: false }),
     });
     assert.strictEqual(result, 'skip');
     assert.match(getLogOutput(mocks.logMock), /already logged in/);
@@ -33,7 +33,7 @@ describe('checkExistingAuth', () => {
   it('returns skip when api key exists', async () => {
     const result = await checkExistingAuth({}, undefined, {
       ...baseDeps,
-      loadCreds: () => ({ apiKey: 'key123' }),
+      loadCreds: () => ({ credentials: { apiKey: 'key123' }, local: false }),
     });
     assert.strictEqual(result, 'skip');
     assert.match(getLogOutput(mocks.logMock), /already logged in/);
@@ -42,7 +42,7 @@ describe('checkExistingAuth', () => {
   it('returns skip after successful token refresh', async () => {
     const result = await checkExistingAuth({}, undefined, {
       ...baseDeps,
-      loadCreds: () => ({ accessToken: 'tok', refreshToken: 'ref' }),
+      loadCreds: () => ({ credentials: { accessToken: 'tok', refreshToken: 'ref' }, local: false }),
       isExpired: () => true,
       refresh: async () => {},
     });
@@ -54,7 +54,7 @@ describe('checkExistingAuth', () => {
     let removeCalled = false;
     const result = await checkExistingAuth({}, undefined, {
       ...baseDeps,
-      loadCreds: () => ({ accessToken: 'tok', refreshToken: 'ref' }),
+      loadCreds: () => ({ credentials: { accessToken: 'tok', refreshToken: 'ref' }, local: false }),
       isExpired: () => true,
       refresh: async () => {
         throw new Error('refresh failed');
@@ -92,7 +92,7 @@ describe('checkExistingAuth', () => {
       ...baseDeps,
       loadCreds: () => {
         globalCalled = true;
-        return null;
+        return { credentials: null, local: false };
       },
       loadLocalCreds: () => {
         localCalled = true;
@@ -103,11 +103,37 @@ describe('checkExistingAuth', () => {
     assert.strictEqual(localCalled, false);
   });
 
+  it('passes local flag from source detection to refresh', async () => {
+    let refreshLocal;
+    await checkExistingAuth({}, undefined, {
+      ...baseDeps,
+      loadCreds: () => ({ credentials: { accessToken: 'tok', refreshToken: 'ref' }, local: true }),
+      isExpired: () => true,
+      refresh: async (_creds, _apiBase, local) => {
+        refreshLocal = local;
+      },
+    });
+    assert.strictEqual(refreshLocal, true);
+  });
+
+  it('passes local=true to refresh when --local flag is set', async () => {
+    let refreshLocal;
+    await checkExistingAuth({ local: true }, undefined, {
+      ...baseDeps,
+      loadLocalCreds: () => ({ accessToken: 'tok', refreshToken: 'ref' }),
+      isExpired: () => true,
+      refresh: async (_creds, _apiBase, local) => {
+        refreshLocal = local;
+      },
+    });
+    assert.strictEqual(refreshLocal, true);
+  });
+
   it('returns continue and removes credentials when refresh succeeds but getUser fails', async () => {
     let removeCalled = false;
     const result = await checkExistingAuth({}, undefined, {
       ...baseDeps,
-      loadCreds: () => ({ accessToken: 'tok', refreshToken: 'ref' }),
+      loadCreds: () => ({ credentials: { accessToken: 'tok', refreshToken: 'ref' }, local: false }),
       isExpired: () => true,
       refresh: async () => {},
       getUser: async () => {

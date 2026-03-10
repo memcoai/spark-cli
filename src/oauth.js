@@ -139,9 +139,12 @@ async function registerClient(redirectUri, apiBase) {
   return response.json();
 }
 
-export async function getClientId(redirectUri = null, apiBase = process.env.SPARK_API_BASE) {
+export async function getClientId(redirectUri = null, apiBase = null) {
   if (process.env.SPARK_CLIENT_ID) {
     return process.env.SPARK_CLIENT_ID;
+  }
+  if (!apiBase) {
+    apiBase = getApiBase();
   }
 
   const cached = loadClient(apiBase);

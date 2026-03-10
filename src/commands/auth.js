@@ -204,14 +204,23 @@ export async function checkExistingAuth(options, apiBase, deps = {}) {
     getUser = getCurrentUser,
   } = deps;
 
-  const existing = options.local ? loadLocalCreds(apiBase) : loadCreds(apiBase);
+  let existing;
+  let isLocal;
+  if (options.local) {
+    existing = loadLocalCreds(apiBase);
+    isLocal = true;
+  } else {
+    const result = loadCreds(apiBase, { withSource: true });
+    existing = result.credentials;
+    isLocal = result.local;
+  }
   if (!existing?.accessToken && !existing?.apiKey) {
     return 'continue';
   }
 
   if (existing.accessToken && isExpired(existing)) {
     try {
-      await refresh(existing, apiBase);
+      await refresh(existing, apiBase, isLocal);
     } catch {
       removeCreds(apiBase);
       return 'continue';
@@ -338,6 +347,7 @@ export function resolveApiBase(options, deps = {}) {
  */
 export async function loginCommand(options, _command) {
   const apiBase = resolveApiBase(options);
+  if (!apiBase) return;
   try {
     printBanner();
     console.log('');
