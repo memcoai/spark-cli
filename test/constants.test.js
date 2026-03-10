@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { getApiBase, validateApiBase, DEFAULT_API_BASE } from '../src/constants.js';
 
 describe('getApiBase', () => {
-  let originalEnv;
+  const originalEnv = process.env.SPARK_API_BASE;
+
+  function setEnv(value) {
+    process.env.SPARK_API_BASE = value;
+  }
 
   afterEach(() => {
     if (originalEnv === undefined) {
@@ -11,46 +15,36 @@ describe('getApiBase', () => {
     } else {
       process.env.SPARK_API_BASE = originalEnv;
     }
-    originalEnv = undefined;
   });
 
   it('returns SPARK_API_BASE env var when set', () => {
-    originalEnv = process.env.SPARK_API_BASE;
-    process.env.SPARK_API_BASE = 'https://custom.example.com';
+    setEnv('https://custom.example.com');
     assert.strictEqual(getApiBase(), 'https://custom.example.com');
   });
 
   it('env var takes priority over settings files', () => {
-    originalEnv = process.env.SPARK_API_BASE;
-    process.env.SPARK_API_BASE = 'https://env-override.example.com';
+    setEnv('https://env-override.example.com');
     // Even if local/global settings have apiBase, env var wins
     assert.strictEqual(getApiBase(), 'https://env-override.example.com');
   });
 
   it('strips trailing slashes from SPARK_API_BASE', () => {
-    originalEnv = process.env.SPARK_API_BASE;
-    process.env.SPARK_API_BASE = 'https://custom.example.com///';
+    setEnv('https://custom.example.com///');
     assert.strictEqual(getApiBase(), 'https://custom.example.com');
   });
 
   it('skips SPARK_API_BASE when it is empty string', () => {
-    originalEnv = process.env.SPARK_API_BASE;
-    process.env.SPARK_API_BASE = '';
-    // Empty env var is skipped; getApiBase falls through to next source
+    setEnv('');
     assert.notStrictEqual(getApiBase(), '');
   });
 
   it('skips SPARK_API_BASE when it is whitespace only', () => {
-    originalEnv = process.env.SPARK_API_BASE;
-    process.env.SPARK_API_BASE = '   ';
-    // Whitespace-only env var is skipped; getApiBase falls through to next source
+    setEnv('   ');
     assert.notStrictEqual(getApiBase(), '');
   });
 
   it('skips SPARK_API_BASE when it is not a valid URL', () => {
-    originalEnv = process.env.SPARK_API_BASE;
-    process.env.SPARK_API_BASE = 'not-a-url';
-    // Invalid URL env var is skipped; getApiBase falls through to next source
+    setEnv('not-a-url');
     assert.notStrictEqual(getApiBase(), 'not-a-url');
   });
 
