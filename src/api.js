@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { API_BASE, CALLBACK_PORT } from './constants.js';
+import { getApiBase, CALLBACK_PORT } from './constants.js';
 import { loadCredentials, saveCredentials, isTokenExpired } from './credentials.js';
 import { getOAuthEndpoints, getBearerMethods, getClientId } from './oauth.js';
 import { getParentOptions } from './output.js';
@@ -14,13 +14,13 @@ const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'))
 /**
  * Refresh the access token using the refresh token
  */
-export async function refreshToken(credentials) {
+export async function refreshToken(credentials, apiBase, local) {
   if (!credentials?.refreshToken) {
     throw new Error('No refresh token available');
   }
 
-  const { tokenEndpoint } = await getOAuthEndpoints();
-  const clientId = await getClientId(`http://localhost:${CALLBACK_PORT}/callback`);
+  const { tokenEndpoint } = await getOAuthEndpoints(apiBase);
+  const clientId = await getClientId(`http://localhost:${CALLBACK_PORT}/callback`, apiBase);
   const response = await fetch(tokenEndpoint, {
     method: 'POST',
     headers: {
@@ -51,7 +51,7 @@ export async function refreshToken(credentials) {
     tokenType: 'Bearer',
   };
 
-  saveCredentials(newCredentials);
+  saveCredentials(newCredentials, { local, apiBase });
   return newCredentials;
 }
 
@@ -59,7 +59,7 @@ export async function refreshToken(credentials) {
  * Get the auth token.
  * Priority: CLI flag > env var > OAuth token > credentials file (legacy apiKey)
  */
-export async function getAuthToken(options = {}) {
+export async function getAuthToken(apiBase, options = {}) {
   if (options.apiKey) {
     return { type: 'apiKey', token: options.apiKey };
   }
@@ -68,12 +68,13 @@ export async function getAuthToken(options = {}) {
     return { type: 'apiKey', token: process.env.SPARK_API_KEY };
   }
 
-  let credentials = loadCredentials();
-  if (credentials) {
+  const loaded = loadCredentials(apiBase, { withSource: true });
+  if (loaded.credentials) {
+    let { credentials } = loaded;
     if (credentials.accessToken) {
       if (isTokenExpired(credentials)) {
         try {
-          credentials = await refreshToken(credentials);
+          credentials = await refreshToken(credentials, apiBase, loaded.local);
         } catch (err) {
           throw new Error(`Session expired. Please run 'spark login' again. (${err.message})`);
         }
@@ -92,10 +93,11 @@ export async function getAuthToken(options = {}) {
 /**
  * Make an API request to the Spark backend
  */
-export async function apiRequest(endpoint, method = 'GET', body = null, command = null) {
+export async function apiRequest(endpoint, apiBase, method = 'GET', body = null, command = null) {
+  const base = (typeof apiBase === 'string' ? apiBase.replace(/\/+$/, '') : null) || getApiBase();
   let requestEndpoint = endpoint;
   const parentOpts = command ? getParentOptions(command) : {};
-  const auth = await getAuthToken({ apiKey: parentOpts.apiKey });
+  const auth = await getAuthToken(base, { apiKey: parentOpts.apiKey });
 
   const headers = {
     'Content-Type': 'application/json',
@@ -105,13 +107,13 @@ export async function apiRequest(endpoint, method = 'GET', body = null, command 
 
   if (auth) {
     if (auth.type === 'oauth') {
-      const bearerMethods = await getBearerMethods();
+      const bearerMethods = await getBearerMethods(base);
       const supported = new Set(bearerMethods || ['header', 'authorization_header']);
 
       if (supported.has('header') || supported.has('authorization_header')) {
         headers['Authorization'] = `Bearer ${auth.token}`;
       } else if (supported.has('query')) {
-        const requestUrl = new URL(`${API_BASE}${requestEndpoint}`);
+        const requestUrl = new URL(`${base}${requestEndpoint}`);
         requestUrl.searchParams.set('access_token', auth.token);
         requestEndpoint = `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
       } else {
@@ -131,7 +133,7 @@ export async function apiRequest(endpoint, method = 'GET', body = null, command 
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE}${requestEndpoint}`, options);
+  const response = await fetch(`${base}${requestEndpoint}`, options);
 
   if (!response.ok) {
     const error = await response.text();
@@ -145,7 +147,7 @@ export async function apiRequest(endpoint, method = 'GET', body = null, command 
  * Call a Spark API tool (mirrors MCP tool interface)
  */
 export async function callTool(toolName, params, command = null) {
-  return apiRequest(`/api/internal/v1/tools/${toolName}`, 'POST', params, command);
+  return apiRequest(`/api/internal/v1/tools/${toolName}`, undefined, 'POST', params, command);
 }
 
 /**
@@ -186,6 +188,6 @@ export async function shareFeedback(sessionId, feedback, command = null) {
 /**
  * Get current user info
  */
-export async function getCurrentUser(command = null) {
-  return apiRequest('/api/internal/v1/user', 'GET', null, command);
+export async function getCurrentUser(apiBase, command = null) {
+  return apiRequest('/api/internal/v1/user', apiBase, 'GET', null, command);
 }

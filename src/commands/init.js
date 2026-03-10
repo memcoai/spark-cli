@@ -8,7 +8,7 @@ import {
   colorize,
 } from '../banner.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
-import { SETTINGS_PATH, LOCAL_SETTINGS_PATH } from '../constants.js';
+import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, getApiBase } from '../constants.js';
 import { fetchSkillsVersion } from '../update-check.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 
@@ -270,7 +270,7 @@ export function printAuthInstructions() {
   );
   console.log('');
   console.log(
-    `  ${colorize('\x1b[33m', 'Option 2:')} Visit ${colorize('\x1b[32m', 'https://spark.memco.ai')}, log in, create an API key,`,
+    `  ${colorize('\x1b[33m', 'Option 2:')} Visit ${colorize('\x1b[32m', getApiBase())}, log in, create an API key,`,
   );
   console.log(`             then set: ${colorize('\x1b[32m', 'export SPARK_API_KEY=your_key')}`);
   console.log('');

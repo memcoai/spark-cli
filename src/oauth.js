@@ -1,10 +1,10 @@
-import { API_BASE, SETTINGS_PATH } from './constants.js';
+import { DEFAULT_API_BASE, getApiBase, SETTINGS_PATH } from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
 
 const PROTECTED_RESOURCE_WELL_KNOWN = '/.well-known/oauth-protected-resource';
 const AUTHORIZATION_SERVER_WELL_KNOWN = '/.well-known/oauth-authorization-server';
 
-let oauthMetadataPromise = null;
+const oauthMetadataCache = new Map();
 
 async function fetchJson(url) {
   const response = await fetch(url);
@@ -22,12 +22,12 @@ function normalizeBaseUrl(url) {
   return url.replace(/\/+$/, '');
 }
 
-async function resolveOAuthMetadata() {
-  const protectedUrl = `${API_BASE}${PROTECTED_RESOURCE_WELL_KNOWN}`;
+async function resolveOAuthMetadata(apiBase) {
+  const protectedUrl = `${apiBase}${PROTECTED_RESOURCE_WELL_KNOWN}`;
   const protectedMetadata = await fetchJson(protectedUrl);
 
   const servers = protectedMetadata.authorization_servers;
-  let issuerBase = API_BASE;
+  let issuerBase = apiBase;
 
   if (Array.isArray(servers) && servers.length > 0) {
     const firstServer = servers[0];
@@ -41,15 +41,16 @@ async function resolveOAuthMetadata() {
   return { protectedMetadata, authorizationMetadata };
 }
 
-async function getOAuthMetadata() {
-  if (!oauthMetadataPromise) {
-    oauthMetadataPromise = resolveOAuthMetadata();
+async function getOAuthMetadata(apiBase) {
+  const base = normalizeBaseUrl(apiBase) || getApiBase();
+  if (!oauthMetadataCache.has(base)) {
+    oauthMetadataCache.set(base, resolveOAuthMetadata(base));
   }
-  return oauthMetadataPromise;
+  return oauthMetadataCache.get(base);
 }
 
-export async function getOAuthEndpoints() {
-  const { authorizationMetadata } = await getOAuthMetadata();
+export async function getOAuthEndpoints(apiBase) {
+  const { authorizationMetadata } = await getOAuthMetadata(apiBase);
   const authorizationEndpoint =
     authorizationMetadata.authorization_endpoint || authorizationMetadata.authorizationEndpoint;
   const tokenEndpoint = authorizationMetadata.token_endpoint || authorizationMetadata.tokenEndpoint;
@@ -63,8 +64,8 @@ export async function getOAuthEndpoints() {
   return { authorizationEndpoint, tokenEndpoint, bearerMethods };
 }
 
-export async function getBearerMethods() {
-  const { protectedMetadata, authorizationMetadata } = await getOAuthMetadata();
+export async function getBearerMethods(apiBase) {
+  const { protectedMetadata, authorizationMetadata } = await getOAuthMetadata(apiBase);
   return (
     protectedMetadata.bearer_methods_supported ||
     authorizationMetadata.bearer_methods_supported ||
@@ -72,20 +73,45 @@ export async function getBearerMethods() {
   );
 }
 
-function loadClient() {
-  return readSettingsKey(SETTINGS_PATH, 'client');
+/**
+ * Migrate old flat `client` key to per-URL `clients` format.
+ */
+function migrateClient() {
+  const oldClient = readSettingsKey(SETTINGS_PATH, 'client');
+  if (oldClient?.client_id) {
+    const clients = readSettingsKey(SETTINGS_PATH, 'clients') || {};
+    if (!clients[DEFAULT_API_BASE]) {
+      clients[DEFAULT_API_BASE] = oldClient;
+      writeSettingsKey(SETTINGS_PATH, 'clients', clients);
+    }
+    writeSettingsKey(SETTINGS_PATH, 'client', null);
+    return clients;
+  }
+  return null;
 }
 
-function saveClient(client) {
-  writeSettingsKey(SETTINGS_PATH, 'client', client);
+function loadClient(apiBase) {
+  const base = normalizeBaseUrl(apiBase) || getApiBase();
+  let clients = readSettingsKey(SETTINGS_PATH, 'clients');
+  if (!clients) {
+    clients = migrateClient();
+  }
+  return clients?.[base] || null;
 }
 
-async function registerClient(redirectUri) {
+function saveClient(client, apiBase) {
+  const base = normalizeBaseUrl(apiBase) || getApiBase();
+  const clients = readSettingsKey(SETTINGS_PATH, 'clients') || {};
+  clients[base] = client;
+  writeSettingsKey(SETTINGS_PATH, 'clients', clients);
+}
+
+async function registerClient(redirectUri, apiBase) {
   if (!redirectUri) {
     throw new Error('OAuth client registration requires a redirect URI');
   }
 
-  const { authorizationMetadata } = await getOAuthMetadata();
+  const { authorizationMetadata } = await getOAuthMetadata(apiBase);
   const registrationEndpoint =
     authorizationMetadata.registration_endpoint || authorizationMetadata.registrationEndpoint;
 
@@ -113,17 +139,20 @@ async function registerClient(redirectUri) {
   return response.json();
 }
 
-export async function getClientId(redirectUri = null) {
+export async function getClientId(redirectUri = null, apiBase = null) {
   if (process.env.SPARK_CLIENT_ID) {
     return process.env.SPARK_CLIENT_ID;
   }
+  if (!apiBase) {
+    apiBase = getApiBase();
+  }
 
-  const cached = loadClient();
+  const cached = loadClient(apiBase);
   if (cached?.client_id) {
     return cached.client_id;
   }
 
-  const client = await registerClient(redirectUri);
-  saveClient(client);
+  const client = await registerClient(redirectUri, apiBase);
+  saveClient(client, apiBase);
   return client.client_id;
 }

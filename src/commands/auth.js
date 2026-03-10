@@ -14,7 +14,16 @@ import {
   createSpinner,
   colorize,
 } from '../banner.js';
-import { API_BASE, CALLBACK_PORT, AUTH_SUCCESS_URL, AUTH_ERROR_URL } from '../constants.js';
+import {
+  getApiBase,
+  validateApiBase,
+  CALLBACK_PORT,
+  getAuthSuccessUrl,
+  getAuthErrorUrl,
+  SETTINGS_PATH,
+  LOCAL_SETTINGS_PATH,
+} from '../constants.js';
+import { writeSettingsKey } from '../settings.js';
 import {
   loadCredentials,
   loadLocalCredentials,
@@ -110,7 +119,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
       const errorDescription = url.searchParams.get('error_description');
 
       if (error) {
-        const errorUrl = new URL(AUTH_ERROR_URL);
+        const errorUrl = new URL(getAuthErrorUrl());
         errorUrl.searchParams.set('error', error);
         if (errorDescription) errorUrl.searchParams.set('message', errorDescription);
         redirect(res, errorUrl.toString());
@@ -120,7 +129,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
       }
 
       if (state !== expectedState) {
-        const errorUrl = new URL(AUTH_ERROR_URL);
+        const errorUrl = new URL(getAuthErrorUrl());
         errorUrl.searchParams.set('error', 'invalid_state');
         errorUrl.searchParams.set('message', 'Security validation failed. Please try again.');
         redirect(res, errorUrl.toString());
@@ -130,7 +139,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
       }
 
       if (!code) {
-        const errorUrl = new URL(AUTH_ERROR_URL);
+        const errorUrl = new URL(getAuthErrorUrl());
         errorUrl.searchParams.set('error', 'missing_code');
         errorUrl.searchParams.set('message', 'No authorization code received.');
         redirect(res, errorUrl.toString());
@@ -139,7 +148,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
         return;
       }
 
-      redirect(res, AUTH_SUCCESS_URL);
+      redirect(res, getAuthSuccessUrl());
       server.close();
       resolve({ code, codeVerifier });
     });
@@ -149,9 +158,9 @@ function waitForCallback(server, expectedState, codeVerifier) {
 /**
  * Exchange authorization code for tokens
  */
-async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
-  const { tokenEndpoint } = await getOAuthEndpoints();
-  const clientId = await getClientId(redirectUri);
+async function exchangeCodeForTokens(code, codeVerifier, redirectUri, apiBase) {
+  const { tokenEndpoint } = await getOAuthEndpoints(apiBase);
+  const clientId = await getClientId(redirectUri, apiBase);
   const response = await fetch(tokenEndpoint, {
     method: 'POST',
     headers: {
@@ -185,27 +194,44 @@ async function exchangeCodeForTokens(code, codeVerifier, redirectUri) {
  * Check existing credentials and attempt refresh if expired.
  * Returns 'skip' if login should be skipped, 'continue' if login should proceed.
  */
-export async function checkExistingAuth(options, deps = {}) {
+export async function checkExistingAuth(options, apiBase, deps = {}) {
   const {
     loadCreds = loadCredentials,
     loadLocalCreds = loadLocalCredentials,
     isExpired = isTokenExpired,
     refresh = refreshToken,
     removeCreds = removeCredentials,
+    getUser = getCurrentUser,
   } = deps;
 
-  const existing = options.local ? loadLocalCreds() : loadCreds();
+  let existing;
+  let isLocal;
+  if (options.local) {
+    existing = loadLocalCreds(apiBase);
+    isLocal = true;
+  } else {
+    const result = loadCreds(apiBase, { withSource: true });
+    existing = result.credentials;
+    isLocal = result.local;
+  }
   if (!existing?.accessToken && !existing?.apiKey) {
     return 'continue';
   }
 
   if (existing.accessToken && isExpired(existing)) {
     try {
-      await refresh(existing);
+      await refresh(existing, apiBase, isLocal);
+    } catch {
+      removeCreds(apiBase);
+      return 'continue';
+    }
+
+    try {
+      await getUser(apiBase);
       printInfo('Your session has been refreshed. You are logged in.');
       return 'skip';
     } catch {
-      removeCreds();
+      removeCreds(apiBase);
       return 'continue';
     }
   }
@@ -221,14 +247,14 @@ export async function checkExistingAuth(options, deps = {}) {
  * Run the OAuth PKCE browser flow: start server, open browser, exchange tokens.
  * Returns the tokens on success, or null if the callback server failed to start.
  */
-async function runOAuthFlow() {
+async function runOAuthFlow(apiBase) {
   let serverInfo;
   try {
     serverInfo = await startCallbackServer();
   } catch (err) {
     printError(`Failed to start callback server: ${err.message}`);
     console.log('');
-    printApiKeyFallback();
+    printApiKeyFallback(apiBase);
     return null;
   }
 
@@ -240,10 +266,10 @@ async function runOAuthFlow() {
     const codeChallenge = generateCodeChallenge(codeVerifier);
     const state = generateState();
 
-    const { authorizationEndpoint } = await getOAuthEndpoints();
+    const { authorizationEndpoint } = await getOAuthEndpoints(apiBase);
     const authUrl = new URL(authorizationEndpoint);
     authUrl.searchParams.set('provider', 'authkit');
-    const clientId = await getClientId(redirectUri);
+    const clientId = await getClientId(redirectUri, apiBase);
     authUrl.searchParams.set('client_id', clientId);
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('response_type', 'code');
@@ -270,7 +296,12 @@ async function runOAuthFlow() {
 
     const tokenSpinner = createSpinner('Exchanging code for tokens...');
     try {
-      const tokens = await exchangeCodeForTokens(result.code, result.codeVerifier, redirectUri);
+      const tokens = await exchangeCodeForTokens(
+        result.code,
+        result.codeVerifier,
+        redirectUri,
+        apiBase,
+      );
       return { tokens, tokenSpinner };
     } catch (err) {
       tokenSpinner.fail('Token exchange failed');
@@ -286,9 +317,37 @@ async function runOAuthFlow() {
 }
 
 /**
+ * Resolve and optionally persist the API base URL from command options.
+ * Returns the resolved apiBase, or undefined if validation failed (after calling process.exit).
+ */
+export function resolveApiBase(options, deps = {}) {
+  const { validate = validateApiBase, getBase = getApiBase, writeKey = writeSettingsKey } = deps;
+
+  let apiBase;
+  if (options.apiBase) {
+    apiBase = validate(options.apiBase);
+    if (!apiBase) {
+      printError(`Invalid API base URL: ${options.apiBase}`);
+      process.exit(1);
+      return undefined;
+    }
+    const settingsPath = options.local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
+    writeKey(settingsPath, 'apiBase', apiBase);
+    printInfo(`API base set to ${apiBase}`);
+    console.log('');
+  } else {
+    apiBase = getBase();
+  }
+
+  return apiBase;
+}
+
+/**
  * Login command handler - OAuth PKCE flow
  */
 export async function loginCommand(options, _command) {
+  const apiBase = resolveApiBase(options);
+  if (!apiBase) return;
   try {
     printBanner();
     console.log('');
@@ -301,13 +360,13 @@ export async function loginCommand(options, _command) {
       return;
     }
 
-    const authCheck = await checkExistingAuth(options);
+    const authCheck = await checkExistingAuth(options, apiBase);
     if (authCheck === 'skip') return;
 
     console.log(colorize('\x1b[1m', 'Spark CLI Authentication'));
     console.log('');
 
-    const flowResult = await runOAuthFlow();
+    const flowResult = await runOAuthFlow(apiBase);
     if (!flowResult) return;
 
     const { tokens, tokenSpinner } = flowResult;
@@ -320,7 +379,7 @@ export async function loginCommand(options, _command) {
           expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
           tokenType: tokens.token_type || 'Bearer',
         },
-        { local },
+        { local, apiBase },
       );
       const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
       tokenSpinner.stop(`Credentials saved ${location}`);
@@ -328,6 +387,17 @@ export async function loginCommand(options, _command) {
       tokenSpinner.fail('Failed to save credentials');
       throw err;
     }
+
+    // Verify login by calling getUser
+    const verifySpinner = createSpinner('Verifying login...');
+    try {
+      await getCurrentUser(apiBase);
+      verifySpinner.stop('Login verified');
+    } catch (error) {
+      verifySpinner.fail('Login verification failed');
+      printWarning(`Could not verify login: ${error.message}`);
+    }
+
     console.log('');
     printSuccess('Successfully logged in to Spark!');
     console.log('');
@@ -335,13 +405,14 @@ export async function loginCommand(options, _command) {
   } catch (err) {
     printError(err.message);
     console.log('');
-    printApiKeyFallback();
+    printApiKeyFallback(apiBase);
   }
 }
 
-function printApiKeyFallback() {
+function printApiKeyFallback(apiBase) {
+  const base = apiBase || getApiBase();
   console.log(`${colorize('\x1b[33m', 'Alternative:')} Use an API key instead:`);
-  console.log(`  1. Visit: ${colorize('\x1b[36m', 'https://spark.memco.ai/settings/api')}`);
+  console.log(`  1. Visit: ${colorize('\x1b[36m', `${base}/settings/api`)}`);
   console.log('  2. Generate an API key');
   console.log(`  3. Run: ${colorize('\x1b[33m', 'export SPARK_API_KEY=your_api_key')}`);
 }
@@ -356,7 +427,7 @@ export async function logoutCommand() {
     if (credentials?.accessToken) {
       printInfo('Logging out of Spark server...');
       try {
-        const response = await fetch(`${API_BASE}/auth/logout-all`, {
+        const response = await fetch(`${getApiBase()}/auth/logout-all`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${credentials.accessToken}` },
           redirect: 'manual',
@@ -391,7 +462,7 @@ export async function logoutCommand() {
  */
 export async function whoamiCommand(_options, command) {
   try {
-    const user = await getCurrentUser(command);
+    const user = await getCurrentUser(undefined, command);
     output(user, command);
   } catch (err) {
     const apiKey = process.env.SPARK_API_KEY;
