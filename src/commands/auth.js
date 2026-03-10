@@ -16,6 +16,7 @@ import {
 } from '../banner.js';
 import {
   getApiBase,
+  validateApiBase,
   CALLBACK_PORT,
   getAuthSuccessUrl,
   getAuthErrorUrl,
@@ -310,7 +311,16 @@ async function runOAuthFlow(apiBase) {
  * Login command handler - OAuth PKCE flow
  */
 export async function loginCommand(options, _command) {
-  const apiBase = options.apiBase ? options.apiBase.replace(/\/+$/, '') : getApiBase();
+  let apiBase;
+  if (options.apiBase) {
+    apiBase = validateApiBase(options.apiBase);
+    if (!apiBase) {
+      printError(`Invalid API base URL: ${options.apiBase}`);
+      process.exit(1);
+    }
+  } else {
+    apiBase = getApiBase();
+  }
   try {
     printBanner();
     console.log('');

@@ -19,16 +19,32 @@ export const SKILLS_VERSION_URL =
   'https://raw.githubusercontent.com/memcoai/spark-cli-skills/main/VERSION';
 
 /**
+ * Validate and normalize an API base URL string.
+ * Returns the trimmed, trailing-slash-stripped string, or undefined if invalid/empty.
+ */
+export function validateApiBase(value) {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().replace(/\/+$/, '');
+  if (!normalized) return undefined;
+  try {
+    const url = new URL(normalized);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+    return normalized;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Get the active API base URL.
  * Priority: SPARK_API_BASE env var > local settings > global settings > default.
  */
 export function getApiBase() {
-  if (typeof process.env.SPARK_API_BASE === 'string') {
-    return process.env.SPARK_API_BASE.replace(/\/+$/, '');
-  }
-  const localApiBase = readSettingsKey(LOCAL_SETTINGS_PATH, 'apiBase');
-  if (typeof localApiBase === 'string') return localApiBase.replace(/\/+$/, '');
-  const globalApiBase = readSettingsKey(SETTINGS_PATH, 'apiBase');
-  if (typeof globalApiBase === 'string') return globalApiBase.replace(/\/+$/, '');
+  const envBase = validateApiBase(process.env.SPARK_API_BASE);
+  if (envBase) return envBase;
+  const localApiBase = validateApiBase(readSettingsKey(LOCAL_SETTINGS_PATH, 'apiBase'));
+  if (localApiBase) return localApiBase;
+  const globalApiBase = validateApiBase(readSettingsKey(SETTINGS_PATH, 'apiBase'));
+  if (globalApiBase) return globalApiBase;
   return DEFAULT_API_BASE;
 }
