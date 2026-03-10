@@ -308,29 +308,39 @@ async function runOAuthFlow(apiBase) {
 }
 
 /**
- * Login command handler - OAuth PKCE flow
+ * Resolve and optionally persist the API base URL from command options.
+ * Returns the resolved apiBase, or undefined if validation failed (after calling process.exit).
  */
-export async function loginCommand(options, _command) {
+export function resolveApiBase(options, deps = {}) {
+  const { validate = validateApiBase, getBase = getApiBase, writeKey = writeSettingsKey } = deps;
+
   let apiBase;
   if (options.apiBase) {
-    apiBase = validateApiBase(options.apiBase);
+    apiBase = validate(options.apiBase);
     if (!apiBase) {
       printError(`Invalid API base URL: ${options.apiBase}`);
       process.exit(1);
+      return undefined;
     }
+    const settingsPath = options.local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
+    writeKey(settingsPath, 'apiBase', apiBase);
+    printInfo(`API base set to ${apiBase}`);
+    console.log('');
   } else {
-    apiBase = getApiBase();
+    apiBase = getBase();
   }
+
+  return apiBase;
+}
+
+/**
+ * Login command handler - OAuth PKCE flow
+ */
+export async function loginCommand(options, _command) {
+  const apiBase = resolveApiBase(options);
   try {
     printBanner();
     console.log('');
-
-    if (options.apiBase) {
-      const settingsPath = options.local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
-      writeSettingsKey(settingsPath, 'apiBase', apiBase);
-      printInfo(`API base set to ${apiBase}`);
-      console.log('');
-    }
 
     if (process.env.SPARK_API_KEY) {
       printInfo('You are authenticated via SPARK_API_KEY environment variable.');

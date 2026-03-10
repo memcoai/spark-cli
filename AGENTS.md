@@ -30,7 +30,7 @@ Node.js CLI tool (`@memco/spark`) that provides a command-line interface to the 
 bin/spark.js          CLI entry point (commander.js), version check hooks
 src/
   commands/
-    auth.js           login (OAuth PKCE), logout, whoami
+    auth.js           login (OAuth PKCE), logout, whoami; exports resolveApiBase for testable --api-base handling
     query.js          Query knowledge network (get_recommendation)
     insights.js       Get detailed insights for a task
     share.js          Share an insight/solution
