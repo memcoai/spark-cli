@@ -202,6 +202,53 @@ describe('updateSkills', () => {
     assert.ok(output.includes('npx not found'));
   });
 
+  it('does not update stored skills version when Claude Code update fails', async () => {
+    const deps = defaultSkillsDeps({
+      exec: mock.fn(async () => {
+        throw new Error('claude not found');
+      }),
+      fetchVersion: mock.fn(async () => ({ version: '1.2.0' })),
+      readKey: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0' })),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
+    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+  });
+
+  it('does not update stored skills version when other IDE update fails', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['other'], skillsVersion: '1.0.0' })),
+      spawnInteractive: mock.fn(async () => {
+        throw new Error('npx not found');
+      }),
+      fetchVersion: mock.fn(async () => ({ version: '1.2.0' })),
+      readKey: mock.fn(() => ({ ides: ['other'], skillsVersion: '1.0.0' })),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
+    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+  });
+
+  it('does not update stored skills version when any IDE update fails', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['claude', 'other'], skillsVersion: '1.0.0' })),
+      spawnInteractive: mock.fn(async () => {
+        throw new Error('npx not found');
+      }),
+      fetchVersion: mock.fn(async () => ({ version: '1.2.0' })),
+      readKey: mock.fn(() => ({ ides: ['claude', 'other'], skillsVersion: '1.0.0' })),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
+    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+  });
+
   it('updates skills version in local settings when local init exists', async () => {
     const localInit = { ides: ['claude'], skillsVersion: '1.0.0' };
     const deps = defaultSkillsDeps({

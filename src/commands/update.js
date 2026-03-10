@@ -22,6 +22,7 @@ export async function updateSkills({
   if (!initData?.ides?.length) return;
 
   const ides = initData.ides;
+  let allSucceeded = true;
 
   if (ides.includes('claude')) {
     const spinner = createSpinner('Updating Spark plugin for Claude Code...');
@@ -29,6 +30,7 @@ export async function updateSkills({
       await exec('claude', ['plugin', 'update', 'spark-cli@MemCo']);
       spinner.stop('Spark plugin updated for Claude Code');
     } catch (err) {
+      allSucceeded = false;
       spinner.fail('Failed to update Spark plugin for Claude Code');
       printWarning(err.stderr?.trim() || err.message);
     }
@@ -40,11 +42,15 @@ export async function updateSkills({
       await spawnInteractive('npx', ['skills', 'update', 'memcoai/spark-cli-skills']);
       printInfo('Spark skills updated for Cursor/Windsurf');
     } catch (err) {
+      allSucceeded = false;
       printWarning(`Failed to update skills: ${err.message}`);
     }
   }
 
-  // Update stored skills version
+  // Only update stored skills version when all updates succeeded,
+  // otherwise future update notifications would be suppressed incorrectly
+  if (!allSucceeded) return;
+
   try {
     const versionInfo = await fetchVersion();
     if (versionInfo?.version) {
