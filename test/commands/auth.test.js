@@ -155,6 +155,7 @@ describe('resolveApiBase', () => {
     validate: (url) => (url.startsWith('http') ? url.replace(/\/+$/, '') : undefined),
     getBase: () => 'https://spark.memco.ai',
     writeKey: mock.fn(),
+    readKey: () => null,
   };
 
   it('returns default apiBase when no --api-base option is provided', () => {
@@ -217,5 +218,65 @@ describe('resolveApiBase', () => {
 
     assert.strictEqual(result, 'https://normalized.example.com');
     assert.strictEqual(writeKey.mock.calls[0].arguments[2], 'https://normalized.example.com');
+  });
+
+  it('also writes to local settings when local apiBase exists and differs', () => {
+    const writeKey = mock.fn();
+    const deps = {
+      ...baseDeps,
+      writeKey,
+      readKey: () => 'http://localhost:8080',
+    };
+
+    resolveApiBase({ apiBase: 'https://custom.example.com' }, deps);
+
+    assert.strictEqual(writeKey.mock.calls.length, 2);
+    assert.strictEqual(writeKey.mock.calls[0].arguments[0], SETTINGS_PATH);
+    assert.strictEqual(writeKey.mock.calls[1].arguments[0], LOCAL_SETTINGS_PATH);
+    assert.strictEqual(writeKey.mock.calls[1].arguments[2], 'https://custom.example.com');
+  });
+
+  it('does not write to local settings when local apiBase matches', () => {
+    const writeKey = mock.fn();
+    const deps = {
+      ...baseDeps,
+      writeKey,
+      readKey: () => 'https://custom.example.com',
+    };
+
+    resolveApiBase({ apiBase: 'https://custom.example.com' }, deps);
+
+    assert.strictEqual(writeKey.mock.calls.length, 1);
+    assert.strictEqual(writeKey.mock.calls[0].arguments[0], SETTINGS_PATH);
+  });
+
+  it('does not write to local settings when no local apiBase exists', () => {
+    const writeKey = mock.fn();
+    const deps = {
+      ...baseDeps,
+      writeKey,
+      readKey: () => null,
+    };
+
+    resolveApiBase({ apiBase: 'https://custom.example.com' }, deps);
+
+    assert.strictEqual(writeKey.mock.calls.length, 1);
+    assert.strictEqual(writeKey.mock.calls[0].arguments[0], SETTINGS_PATH);
+  });
+
+  it('does not update local settings when --local flag is set', () => {
+    const writeKey = mock.fn();
+    const readKey = mock.fn(() => 'http://localhost:8080');
+    const deps = {
+      ...baseDeps,
+      writeKey,
+      readKey,
+    };
+
+    resolveApiBase({ apiBase: 'https://custom.example.com', local: true }, deps);
+
+    assert.strictEqual(writeKey.mock.calls.length, 1);
+    assert.strictEqual(writeKey.mock.calls[0].arguments[0], LOCAL_SETTINGS_PATH);
+    assert.strictEqual(readKey.mock.calls.length, 0);
   });
 });
