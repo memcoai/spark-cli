@@ -123,14 +123,17 @@ export async function applyAuth(auth, headers, base, endpoint, deps = {}) {
  * Attempt token refresh and retry the request on 401.
  * Returns the retried response, or throws if refresh fails.
  */
-export async function retryWithRefresh(base, url, options, deps = {}) {
+export async function retryWithRefresh(base, endpoint, options, deps = {}) {
   const { loadCreds = loadCredentials, refresh = refreshToken, doFetch = fetch } = deps;
 
   const loaded = loadCreds(base, { withSource: true });
   try {
     const newCredentials = await refresh(loaded.credentials, base, loaded.local);
-    options.headers['Authorization'] = `Bearer ${newCredentials.accessToken}`;
-    return await doFetch(url, options);
+    const auth = { type: 'oauth', token: newCredentials.accessToken };
+    // Clear stale Authorization header before re-applying auth
+    delete options.headers['Authorization'];
+    const retryEndpoint = await applyAuth(auth, options.headers, base, endpoint, deps);
+    return await doFetch(`${base}${retryEndpoint}`, options);
   } catch {
     throw new Error("Session expired. Please run 'spark login' again.");
   }
@@ -170,7 +173,7 @@ export async function apiRequest(
   let response = await doFetch(url, options);
 
   if (response.status === 401 && auth?.type === 'oauth') {
-    response = await retryWithRefresh(base, url, options, deps);
+    response = await retryWithRefresh(base, endpoint, options, deps);
   }
 
   if (!response.ok) {
