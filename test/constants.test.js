@@ -1,6 +1,12 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { getApiBase, validateApiBase, DEFAULT_API_BASE } from '../src/constants.js';
+import {
+  getApiBase,
+  validateApiBase,
+  DEFAULT_API_BASE,
+  getAuthSuccessUrl,
+  getAuthErrorUrl,
+} from '../src/constants.js';
 
 describe('getApiBase', () => {
   const originalEnv = process.env.SPARK_API_BASE;
@@ -50,6 +56,34 @@ describe('getApiBase', () => {
 
   it('DEFAULT_API_BASE is the expected value', () => {
     assert.strictEqual(DEFAULT_API_BASE, 'https://spark.memco.ai');
+  });
+});
+
+describe('getAuthSuccessUrl', () => {
+  it('uses provided apiBase', () => {
+    assert.strictEqual(
+      getAuthSuccessUrl('https://custom.example.com'),
+      'https://custom.example.com/cli/auth_success',
+    );
+  });
+
+  it('falls back to getApiBase when no apiBase provided', () => {
+    const url = getAuthSuccessUrl();
+    assert.ok(url.endsWith('/cli/auth_success'));
+  });
+});
+
+describe('getAuthErrorUrl', () => {
+  it('uses provided apiBase', () => {
+    assert.strictEqual(
+      getAuthErrorUrl('https://custom.example.com'),
+      'https://custom.example.com/cli/auth_error',
+    );
+  });
+
+  it('falls back to getApiBase when no apiBase provided', () => {
+    const url = getAuthErrorUrl();
+    assert.ok(url.endsWith('/cli/auth_error'));
   });
 });
 

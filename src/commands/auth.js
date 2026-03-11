@@ -23,7 +23,7 @@ import {
   SETTINGS_PATH,
   LOCAL_SETTINGS_PATH,
 } from '../constants.js';
-import { writeSettingsKey } from '../settings.js';
+import { readSettingsKey, writeSettingsKey } from '../settings.js';
 import {
   loadCredentials,
   loadLocalCredentials,
@@ -92,7 +92,7 @@ function redirect(res, url) {
  * Wait for the OAuth callback on the server.
  * Returns { code, codeVerifier } on success.
  */
-function waitForCallback(server, expectedState, codeVerifier) {
+function waitForCallback(server, expectedState, codeVerifier, apiBase) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
       () => {
@@ -119,7 +119,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
       const errorDescription = url.searchParams.get('error_description');
 
       if (error) {
-        const errorUrl = new URL(getAuthErrorUrl());
+        const errorUrl = new URL(getAuthErrorUrl(apiBase));
         errorUrl.searchParams.set('error', error);
         if (errorDescription) errorUrl.searchParams.set('message', errorDescription);
         redirect(res, errorUrl.toString());
@@ -129,7 +129,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
       }
 
       if (state !== expectedState) {
-        const errorUrl = new URL(getAuthErrorUrl());
+        const errorUrl = new URL(getAuthErrorUrl(apiBase));
         errorUrl.searchParams.set('error', 'invalid_state');
         errorUrl.searchParams.set('message', 'Security validation failed. Please try again.');
         redirect(res, errorUrl.toString());
@@ -139,7 +139,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
       }
 
       if (!code) {
-        const errorUrl = new URL(getAuthErrorUrl());
+        const errorUrl = new URL(getAuthErrorUrl(apiBase));
         errorUrl.searchParams.set('error', 'missing_code');
         errorUrl.searchParams.set('message', 'No authorization code received.');
         redirect(res, errorUrl.toString());
@@ -148,7 +148,7 @@ function waitForCallback(server, expectedState, codeVerifier) {
         return;
       }
 
-      redirect(res, getAuthSuccessUrl());
+      redirect(res, getAuthSuccessUrl(apiBase));
       server.close();
       resolve({ code, codeVerifier });
     });
@@ -287,7 +287,7 @@ async function runOAuthFlow(apiBase) {
     const spinner = createSpinner('Waiting for authentication...');
     let result;
     try {
-      result = await waitForCallback(server, state, codeVerifier);
+      result = await waitForCallback(server, state, codeVerifier, apiBase);
       spinner.stop('Browser authentication complete');
     } catch (err) {
       spinner.fail('Authentication failed');
@@ -321,7 +321,12 @@ async function runOAuthFlow(apiBase) {
  * Returns the resolved apiBase, or undefined if validation failed (after calling process.exit).
  */
 export function resolveApiBase(options, deps = {}) {
-  const { validate = validateApiBase, getBase = getApiBase, writeKey = writeSettingsKey } = deps;
+  const {
+    validate = validateApiBase,
+    getBase = getApiBase,
+    writeKey = writeSettingsKey,
+    readKey = readSettingsKey,
+  } = deps;
 
   let apiBase;
   if (options.apiBase) {
@@ -333,6 +338,14 @@ export function resolveApiBase(options, deps = {}) {
     }
     const settingsPath = options.local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
     writeKey(settingsPath, 'apiBase', apiBase);
+    // Also update local settings if they exist with a different apiBase,
+    // so the local value doesn't shadow the intended URL.
+    if (!options.local) {
+      const localApiBase = readKey(LOCAL_SETTINGS_PATH, 'apiBase');
+      if (localApiBase && localApiBase !== apiBase) {
+        writeKey(LOCAL_SETTINGS_PATH, 'apiBase', apiBase);
+      }
+    }
     printInfo(`API base set to ${apiBase}`);
     console.log('');
   } else {

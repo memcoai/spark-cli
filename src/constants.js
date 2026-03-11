@@ -8,11 +8,11 @@ export const LOCAL_SPARK_DIR = join(process.cwd(), '.spark');
 export const SETTINGS_PATH = join(SPARK_DIR, 'settings.json');
 export const LOCAL_SETTINGS_PATH = join(LOCAL_SPARK_DIR, 'settings.json');
 export const CALLBACK_PORT = 8789;
-export function getAuthSuccessUrl() {
-  return `${getApiBase()}/cli/auth_success`;
+export function getAuthSuccessUrl(apiBase) {
+  return `${apiBase || getApiBase()}/cli/auth_success`;
 }
-export function getAuthErrorUrl() {
-  return `${getApiBase()}/cli/auth_error`;
+export function getAuthErrorUrl(apiBase) {
+  return `${apiBase || getApiBase()}/cli/auth_error`;
 }
 export const VERSION_CHECK_URL = 'https://registry.npmjs.org/@memco/spark/latest';
 export const SKILLS_VERSION_URL =
