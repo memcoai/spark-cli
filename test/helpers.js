@@ -127,6 +127,58 @@ export function getStdoutOutput(m) {
  * Shared npm exec error cases for update/uninstall command tests.
  * Each entry has a name, error object, and expected output substring.
  */
+/**
+ * Creates a mock fetch that returns responses in sequence.
+ * Each response is { status, ok, json?, text? }.
+ */
+export function mockFetchSequence(responses) {
+  let callIdx = 0;
+  const calls = [];
+  const fn = async (url, options) => {
+    calls.push({ url, options });
+    const r = responses[Math.min(callIdx++, responses.length - 1)];
+    return {
+      status: r.status,
+      ok: r.ok ?? (r.status >= 200 && r.status < 300),
+      json: () => Promise.resolve(r.json ?? {}),
+      text: () => Promise.resolve(r.text ?? ''),
+    };
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+/**
+ * Builds the deps object for apiRequest() tests.
+ * @param {object} overrides - Override specific deps (getAuth, loadCreds, refresh, bearerMethods, doFetch)
+ */
+export function buildApiRequestDeps(overrides = {}) {
+  return {
+    getAuth: overrides.getAuth ?? (async () => ({ type: 'oauth', token: 'test-token' })),
+    loadCreds:
+      overrides.loadCreds ??
+      (() => ({
+        credentials: { accessToken: 'test-token', refreshToken: 'refresh-token' },
+        local: false,
+      })),
+    refresh:
+      overrides.refresh ??
+      (async () => ({
+        accessToken: 'new-token',
+        refreshToken: 'refresh-token',
+      })),
+    bearerMethods: overrides.bearerMethods ?? (async () => ['header']),
+    doFetch:
+      overrides.doFetch ??
+      (async () => ({
+        status: 200,
+        ok: true,
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve(''),
+      })),
+  };
+}
+
 export const npmExecErrorCases = [
   {
     name: 'shows npm-not-found message on ENOENT',

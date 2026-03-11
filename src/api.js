@@ -93,11 +93,26 @@ export async function getAuthToken(apiBase, options = {}) {
 /**
  * Make an API request to the Spark backend
  */
-export async function apiRequest(endpoint, apiBase, method = 'GET', body = null, command = null) {
+export async function apiRequest(
+  endpoint,
+  apiBase,
+  method = 'GET',
+  body = null,
+  command = null,
+  deps = {},
+) {
+  const {
+    getAuth = getAuthToken,
+    loadCreds = loadCredentials,
+    refresh = refreshToken,
+    bearerMethods = getBearerMethods,
+    doFetch = fetch,
+  } = deps;
+
   const base = (typeof apiBase === 'string' ? apiBase.replace(/\/+$/, '') : null) || getApiBase();
   let requestEndpoint = endpoint;
   const parentOpts = command ? getParentOptions(command) : {};
-  const auth = await getAuthToken(base, { apiKey: parentOpts.apiKey });
+  const auth = await getAuth(base, { apiKey: parentOpts.apiKey });
 
   const headers = {
     'Content-Type': 'application/json',
@@ -107,8 +122,8 @@ export async function apiRequest(endpoint, apiBase, method = 'GET', body = null,
 
   if (auth) {
     if (auth.type === 'oauth') {
-      const bearerMethods = await getBearerMethods(base);
-      const supported = new Set(bearerMethods || ['header', 'authorization_header']);
+      const methods = await bearerMethods(base);
+      const supported = new Set(methods || ['header', 'authorization_header']);
 
       if (supported.has('header') || supported.has('authorization_header')) {
         headers['Authorization'] = `Bearer ${auth.token}`;
@@ -133,7 +148,18 @@ export async function apiRequest(endpoint, apiBase, method = 'GET', body = null,
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${base}${requestEndpoint}`, options);
+  let response = await doFetch(`${base}${requestEndpoint}`, options);
+
+  if (response.status === 401 && auth?.type === 'oauth') {
+    const loaded = loadCreds(base, { withSource: true });
+    try {
+      const newCredentials = await refresh(loaded.credentials, base, loaded.local);
+      options.headers['Authorization'] = `Bearer ${newCredentials.accessToken}`;
+      response = await doFetch(`${base}${requestEndpoint}`, options);
+    } catch {
+      throw new Error("Session expired. Please run 'spark login' again.");
+    }
+  }
 
   if (!response.ok) {
     const error = await response.text();
