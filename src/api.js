@@ -91,6 +91,52 @@ export async function getAuthToken(apiBase, options = {}) {
 }
 
 /**
+ * Apply auth to request headers/endpoint.
+ * Returns the (possibly modified) endpoint.
+ */
+export async function applyAuth(auth, headers, base, endpoint, deps = {}) {
+  const { bearerMethods: getBM = getBearerMethods } = deps;
+
+  if (!auth) return endpoint;
+
+  if (auth.type === 'oauth') {
+    const methods = await getBM(base);
+    const supported = new Set(methods || ['header', 'authorization_header']);
+
+    if (supported.has('header') || supported.has('authorization_header')) {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else if (supported.has('query')) {
+      const requestUrl = new URL(`${base}${endpoint}`);
+      requestUrl.searchParams.set('access_token', auth.token);
+      return `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
+    } else {
+      throw new Error('OAuth bearer method not supported by server');
+    }
+  } else {
+    headers['Authorization'] = `Bearer ${auth.token}`;
+  }
+
+  return endpoint;
+}
+
+/**
+ * Attempt token refresh and retry the request on 401.
+ * Returns the retried response, or throws if refresh fails.
+ */
+export async function retryWithRefresh(base, url, options, deps = {}) {
+  const { loadCreds = loadCredentials, refresh = refreshToken, doFetch = fetch } = deps;
+
+  const loaded = loadCreds(base, { withSource: true });
+  try {
+    const newCredentials = await refresh(loaded.credentials, base, loaded.local);
+    options.headers['Authorization'] = `Bearer ${newCredentials.accessToken}`;
+    return await doFetch(url, options);
+  } catch {
+    throw new Error("Session expired. Please run 'spark login' again.");
+  }
+}
+
+/**
  * Make an API request to the Spark backend
  */
 export async function apiRequest(
@@ -101,16 +147,9 @@ export async function apiRequest(
   command = null,
   deps = {},
 ) {
-  const {
-    getAuth = getAuthToken,
-    loadCreds = loadCredentials,
-    refresh = refreshToken,
-    bearerMethods = getBearerMethods,
-    doFetch = fetch,
-  } = deps;
+  const { getAuth = getAuthToken, doFetch = fetch } = deps;
 
   const base = (typeof apiBase === 'string' ? apiBase.replace(/\/+$/, '') : null) || getApiBase();
-  let requestEndpoint = endpoint;
   const parentOpts = command ? getParentOptions(command) : {};
   const auth = await getAuth(base, { apiKey: parentOpts.apiKey });
 
@@ -120,45 +159,18 @@ export async function apiRequest(
     'X-CLI-VERSION': pkg.version,
   };
 
-  if (auth) {
-    if (auth.type === 'oauth') {
-      const methods = await bearerMethods(base);
-      const supported = new Set(methods || ['header', 'authorization_header']);
+  const requestEndpoint = await applyAuth(auth, headers, base, endpoint, deps);
 
-      if (supported.has('header') || supported.has('authorization_header')) {
-        headers['Authorization'] = `Bearer ${auth.token}`;
-      } else if (supported.has('query')) {
-        const requestUrl = new URL(`${base}${requestEndpoint}`);
-        requestUrl.searchParams.set('access_token', auth.token);
-        requestEndpoint = `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
-      } else {
-        throw new Error('OAuth bearer method not supported by server');
-      }
-    } else {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    }
-  }
-
-  const options = {
-    method,
-    headers,
-  };
-
+  const options = { method, headers };
   if (body) {
     options.body = JSON.stringify(body);
   }
 
-  let response = await doFetch(`${base}${requestEndpoint}`, options);
+  const url = `${base}${requestEndpoint}`;
+  let response = await doFetch(url, options);
 
   if (response.status === 401 && auth?.type === 'oauth') {
-    const loaded = loadCreds(base, { withSource: true });
-    try {
-      const newCredentials = await refresh(loaded.credentials, base, loaded.local);
-      options.headers['Authorization'] = `Bearer ${newCredentials.accessToken}`;
-      response = await doFetch(`${base}${requestEndpoint}`, options);
-    } catch {
-      throw new Error("Session expired. Please run 'spark login' again.");
-    }
+    response = await retryWithRefresh(base, url, options, deps);
   }
 
   if (!response.ok) {
