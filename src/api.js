@@ -131,8 +131,9 @@ export async function retryWithRefresh(base, url, options, deps = {}) {
     const newCredentials = await refresh(loaded.credentials, base, loaded.local);
     options.headers['Authorization'] = `Bearer ${newCredentials.accessToken}`;
     return await doFetch(url, options);
-  } catch {
-    throw new Error("Session expired. Please run 'spark login' again.");
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`Session expired. Please run 'spark login' again. (${reason})`);
   }
 }
 
