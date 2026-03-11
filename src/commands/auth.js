@@ -341,9 +341,13 @@ export function resolveApiBase(options, deps = {}) {
     // Also update local settings if they exist with a different apiBase,
     // so the local value doesn't shadow the intended URL.
     if (!options.local) {
-      const localApiBase = readKey(LOCAL_SETTINGS_PATH, 'apiBase');
-      if (localApiBase && localApiBase !== apiBase) {
-        writeKey(LOCAL_SETTINGS_PATH, 'apiBase', apiBase);
+      const localApiBaseRaw = readKey(LOCAL_SETTINGS_PATH, 'apiBase');
+      if (localApiBaseRaw) {
+        const localApiBaseValidated = validate(localApiBaseRaw);
+        // Only sync when the validated local value is valid and actually differs.
+        if (localApiBaseValidated && localApiBaseValidated !== apiBase) {
+          writeKey(LOCAL_SETTINGS_PATH, 'apiBase', apiBase);
+        }
       }
     }
     printInfo(`API base set to ${apiBase}`);
