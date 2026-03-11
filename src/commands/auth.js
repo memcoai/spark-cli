@@ -328,30 +328,29 @@ export function resolveApiBase(options, deps = {}) {
     readKey = readSettingsKey,
   } = deps;
 
-  let apiBase;
-  if (options.apiBase) {
-    apiBase = validate(options.apiBase);
-    if (!apiBase) {
-      printError(`Invalid API base URL: ${options.apiBase}`);
-      process.exit(1);
-      return undefined;
-    }
-    const settingsPath = options.local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
-    writeKey(settingsPath, 'apiBase', apiBase);
-    // Also update local settings if they exist with a different apiBase,
-    // so the local value doesn't shadow the intended URL.
-    if (!options.local) {
-      const localApiBase = readKey(LOCAL_SETTINGS_PATH, 'apiBase');
-      if (localApiBase && localApiBase !== apiBase) {
-        writeKey(LOCAL_SETTINGS_PATH, 'apiBase', apiBase);
-      }
-    }
-    printInfo(`API base set to ${apiBase}`);
-    console.log('');
-  } else {
-    apiBase = getBase();
+  if (!options.apiBase) return getBase();
+
+  const apiBase = validate(options.apiBase);
+  if (!apiBase) {
+    printError(`Invalid API base URL: ${options.apiBase}`);
+    process.exit(1);
+    return undefined;
   }
 
+  const settingsPath = options.local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
+  writeKey(settingsPath, 'apiBase', apiBase);
+
+  // Also update local settings if they exist with a different apiBase,
+  // so the local value doesn't shadow the intended URL.
+  if (!options.local) {
+    const localApiBase = readKey(LOCAL_SETTINGS_PATH, 'apiBase');
+    if (localApiBase && localApiBase !== apiBase) {
+      writeKey(LOCAL_SETTINGS_PATH, 'apiBase', apiBase);
+    }
+  }
+
+  printInfo(`API base set to ${apiBase}`);
+  console.log('');
   return apiBase;
 }
 
