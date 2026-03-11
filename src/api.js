@@ -91,13 +91,70 @@ export async function getAuthToken(apiBase, options = {}) {
 }
 
 /**
+ * Apply auth to request headers/endpoint.
+ * Returns the (possibly modified) endpoint.
+ */
+export async function applyAuth(auth, headers, base, endpoint, deps = {}) {
+  const { bearerMethods: getBM = getBearerMethods } = deps;
+
+  if (!auth) return endpoint;
+
+  if (auth.type === 'oauth') {
+    const methods = await getBM(base);
+    const supported = new Set(methods || ['header', 'authorization_header']);
+
+    if (supported.has('header') || supported.has('authorization_header')) {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    } else if (supported.has('query')) {
+      const requestUrl = new URL(`${base}${endpoint}`);
+      requestUrl.searchParams.set('access_token', auth.token);
+      return `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
+    } else {
+      throw new Error('OAuth bearer method not supported by server');
+    }
+  } else {
+    headers['Authorization'] = `Bearer ${auth.token}`;
+  }
+
+  return endpoint;
+}
+
+/**
+ * Attempt token refresh and retry the request on 401.
+ * Returns the retried response, or throws if refresh fails.
+ */
+export async function retryWithRefresh(base, endpoint, options, deps = {}) {
+  const { loadCreds = loadCredentials, refresh = refreshToken, doFetch = fetch } = deps;
+
+  const loaded = loadCreds(base, { withSource: true });
+  try {
+    const newCredentials = await refresh(loaded.credentials, base, loaded.local);
+    const auth = { type: 'oauth', token: newCredentials.accessToken };
+    // Clear stale Authorization header before re-applying auth
+    delete options.headers['Authorization'];
+    const retryEndpoint = await applyAuth(auth, options.headers, base, endpoint, deps);
+    return await doFetch(`${base}${retryEndpoint}`, options);
+  } catch {
+    throw new Error("Session expired. Please run 'spark login' again.");
+  }
+}
+
+/**
  * Make an API request to the Spark backend
  */
-export async function apiRequest(endpoint, apiBase, method = 'GET', body = null, command = null) {
+export async function apiRequest(
+  endpoint,
+  apiBase,
+  method = 'GET',
+  body = null,
+  command = null,
+  deps = {},
+) {
+  const { getAuth = getAuthToken, doFetch = fetch } = deps;
+
   const base = (typeof apiBase === 'string' ? apiBase.replace(/\/+$/, '') : null) || getApiBase();
-  let requestEndpoint = endpoint;
   const parentOpts = command ? getParentOptions(command) : {};
-  const auth = await getAuthToken(base, { apiKey: parentOpts.apiKey });
+  const auth = await getAuth(base, { apiKey: parentOpts.apiKey });
 
   const headers = {
     'Content-Type': 'application/json',
@@ -105,35 +162,19 @@ export async function apiRequest(endpoint, apiBase, method = 'GET', body = null,
     'X-CLI-VERSION': pkg.version,
   };
 
-  if (auth) {
-    if (auth.type === 'oauth') {
-      const bearerMethods = await getBearerMethods(base);
-      const supported = new Set(bearerMethods || ['header', 'authorization_header']);
+  const requestEndpoint = await applyAuth(auth, headers, base, endpoint, deps);
 
-      if (supported.has('header') || supported.has('authorization_header')) {
-        headers['Authorization'] = `Bearer ${auth.token}`;
-      } else if (supported.has('query')) {
-        const requestUrl = new URL(`${base}${requestEndpoint}`);
-        requestUrl.searchParams.set('access_token', auth.token);
-        requestEndpoint = `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
-      } else {
-        throw new Error('OAuth bearer method not supported by server');
-      }
-    } else {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    }
-  }
-
-  const options = {
-    method,
-    headers,
-  };
-
+  const options = { method, headers };
   if (body) {
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(`${base}${requestEndpoint}`, options);
+  const url = `${base}${requestEndpoint}`;
+  let response = await doFetch(url, options);
+
+  if (response.status === 401 && auth?.type === 'oauth') {
+    response = await retryWithRefresh(base, endpoint, options, deps);
+  }
 
   if (!response.ok) {
     const error = await response.text();

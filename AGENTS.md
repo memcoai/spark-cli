@@ -43,7 +43,7 @@ src/
     disable.js        Disable Spark for the current project (reverse of enable); reuses uninstall helpers
     status.js         Status check — version freshness, auth verification, and skills version
   exec.js             Shared child process helpers (runCommand, runInteractiveCommand)
-  api.js              HTTP client — getAuthToken, apiRequest, callTool, and API wrappers
+  api.js              HTTP client — getAuthToken, apiRequest (with 401 retry via token refresh), callTool, and API wrappers
   oauth.js            OAuth discovery (well-known endpoints) and dynamic client registration
   credentials.js      Load/save/remove credentials via settings.json
   settings.js         Low-level settings.json read/write helpers
@@ -66,6 +66,7 @@ src/
 - **Per-URL OAuth clients:** OAuth client registrations are stored per URL under `clients` key: `{ clients: { "https://spark.memco.ai": { client_id, ... } } }`. Old flat `client` key is migrated to `clients[DEFAULT_API_BASE]`. OAuth metadata is cached per URL in a Map.
 - **Credentials resolution:** local-first (`./.spark/settings.json`) then global (`~/.spark/settings.json`). The `--local` flag on `spark login` scopes credentials to the current directory. Token refresh auto-detects which location to save back to. Logout removes the credentials for the active API base URL, not the file.
 - **Auth priority:** CLI `--api-key` flag > `SPARK_API_KEY` env var > OAuth access token > legacy API key in credentials file.
+- **Token refresh:** Two-layer strategy: (1) **proactive** — `getAuthToken()` checks `isTokenExpired()` (5-min buffer) and refreshes before each API call; (2) **reactive** — `apiRequest()` catches 401 responses for OAuth tokens, refreshes once, and retries. Both save the new token back to the same settings.json file the credentials were loaded from. API key auth (not OAuth) is never retried on 401.
 - **Post-login verification:** After saving credentials, `loginCommand` calls `getCurrentUser()` to verify the login succeeded (response < 400). Verification failure shows a warning but does not abort login.
 - **Tag format:** Two input formats, both repeatable. `--tag TYPE:NAME` or `--tag TYPE:NAME:VERSION` accepts colon-separated tags (e.g., `--tag language:python:3.11`). `--xml-tag` accepts pre-formed XML tags (e.g., `--xml-tag '<tag type="language" name="python" version="3.11" />'`). Both can be used together. Version in `--tag` accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH with optional pre-release suffix; `v` prefix is stripped. `--xml-tag` validates required `type` and `name` attributes, optional `version`, rejects unknown attributes, and normalizes to canonical attribute order. Command handlers use `collectTags(options)` from `parse-tags.js` to merge both sources into a single XML tags array. Sent as `tags` on all tool endpoints (get_recommendation, share_insight, share_task).
 - **Output:** Default output is compact JSON via `output()`. Use `--pretty` for human-readable output with markdown rendering and ANSI formatting. Auth commands (login, logout) always use styled terminal output via banner.js. Errors go through `outputError()` which calls `process.exit(1)`.
@@ -94,7 +95,8 @@ npm run format        # eslint --fix src/
 
 ```
 test/
-  helpers.js                  Shared test helpers (setupCommandMocks, setupFetchMock, getErrorOutput, tagValidationTests, xmlTagValidationTests)
+  helpers.js                  Shared test helpers (setupCommandMocks, setupFetchMock, getErrorOutput, tagValidationTests, xmlTagValidationTests, mockFetchSequence, buildApiRequestDeps)
+  api.test.js                 apiRequest 401 retry with token refresh (OAuth retry, API key no-retry, refresh failure)
   parse-tags.test.js          parseTags, tagsToXml, parseXmlTags, collectTags, parseSources
   constants.test.js            getApiBase (env var override, default fallback)
   credentials.test.js         isTokenExpired
