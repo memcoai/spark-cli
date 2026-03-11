@@ -124,14 +124,11 @@ export function getStdoutOutput(m) {
 }
 
 /**
- * Shared npm exec error cases for update/uninstall command tests.
- * Each entry has a name, error object, and expected output substring.
- */
-/**
  * Creates a mock fetch that returns responses in sequence.
  * Each response is { status, ok, json?, text? }.
  */
 export function mockFetchSequence(responses) {
+  if (!responses?.length) throw new Error('mockFetchSequence requires at least one response');
   let callIdx = 0;
   const calls = [];
   const fn = async (url, options) => {
@@ -179,6 +176,10 @@ export function buildApiRequestDeps(overrides = {}) {
   };
 }
 
+/**
+ * Shared npm exec error cases for update/uninstall command tests.
+ * Each entry has a name, error object, and expected output substring.
+ */
 export const npmExecErrorCases = [
   {
     name: 'shows npm-not-found message on ENOENT',
