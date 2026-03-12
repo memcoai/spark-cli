@@ -20,9 +20,9 @@ export function runCommand(cmd, args, options = {}) {
  * Run a command interactively with stdio inherited. Returns a promise that
  * resolves on exit code 0, rejects otherwise.
  */
-export function runInteractiveCommand(cmd, args) {
+export function runInteractiveCommand(cmd, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: 'inherit' });
+    const child = spawn(cmd, args, { stdio: 'inherit', ...options });
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) {

@@ -37,7 +37,7 @@ src/
     share-task.js     Share task insights with knowledge network (share_task)
     feedback.js       Provide feedback on recommendations
     update.js         Self-update command (CLI + skills); exports updateSkills for IDE-aware skills updating
-    uninstall.js      Self-uninstall command (npm uninstall -g @memco/spark)
+    uninstall.js      Self-uninstall command; cleans up all init targets (local, global, and registered projects) before npm uninstall
     init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings; exports runSetupFlow and shared helpers
     enable.js         Enable Spark for the current project; delegates to runSetupFlow from init.js with scope='project'
     disable.js        Disable Spark for the current project (reverse of enable); reuses uninstall helpers
