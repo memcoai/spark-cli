@@ -1,4 +1,6 @@
-import { getCurrentUser } from '../api.js';
+import { getCurrentUser, refreshToken } from '../api.js';
+import { loadCredentials, isTokenExpired } from '../credentials.js';
+import { getApiBase } from '../constants.js';
 import {
   checkForUpdate,
   getVersionNotification,
@@ -54,6 +56,10 @@ export async function runStatus({
   checkSkills = checkSkillsVersion,
   getSkillsNote = getSkillsNotification,
   getInit = getInitData,
+  loadCreds = loadCredentials,
+  isExpired = isTokenExpired,
+  refresh = refreshToken,
+  getBase = getApiBase,
 } = {}) {
   console.log(colorize('\x1b[1m', 'Spark Status'));
   console.log('');
@@ -76,11 +82,26 @@ export async function runStatus({
 
   console.log('');
 
-  // 2. Auth check
+  // 2. Auth check — proactively refresh expired tokens before hitting the API
+  let refreshed = false;
+  try {
+    const apiBase = getBase();
+    const loaded = loadCreds(apiBase, { withSource: true });
+    if (loaded.credentials?.accessToken && isExpired(loaded.credentials)) {
+      await refresh(loaded.credentials, apiBase, loaded.local);
+      refreshed = true;
+    }
+  } catch {
+    // Refresh failed — getUser will also fail and we'll show the auth error below
+  }
+
   try {
     const data = await getUser();
     const user = data.user || data;
     const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
+    if (refreshed) {
+      printSuccess('Session refreshed automatically.');
+    }
     printSuccess(`Authenticated as ${name || user.email || user.id || 'unknown user'}`);
     const orgName = user.organization_name;
     if (orgName && orgName !== 'Spark') {

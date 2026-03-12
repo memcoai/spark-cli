@@ -14,6 +14,10 @@ describe('runStatus', () => {
     checkSkills: mock.fn(async () => null),
     getSkillsNote: mock.fn(() => null),
     getInit: mock.fn(() => null),
+    loadCreds: mock.fn(() => ({ credentials: null, local: false })),
+    isExpired: mock.fn(() => false),
+    refresh: mock.fn(async () => ({})),
+    getBase: mock.fn(() => 'https://spark.memco.ai'),
     ...overrides,
   });
 
@@ -164,5 +168,83 @@ describe('runStatus', () => {
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Could not check for skills updates'));
+  });
+
+  it('refreshes expired token and shows success message', async () => {
+    const expiredCreds = { accessToken: 'old', refreshToken: 'rt', expiresAt: 1000 };
+    const refreshFn = mock.fn(async () => ({ accessToken: 'new', refreshToken: 'rt' }));
+
+    await runStatus(
+      defaultDeps({
+        loadCreds: mock.fn(() => ({ credentials: expiredCreds, local: false })),
+        isExpired: mock.fn(() => true),
+        refresh: refreshFn,
+        getUser: mock.fn(async () => ({
+          user: { first_name: 'Test', last_name: 'User' },
+        })),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(output.includes('Session refreshed automatically'));
+    assert.ok(output.includes('Test User'));
+    assert.equal(refreshFn.mock.calls.length, 1);
+  });
+
+  it('does not show refresh message when token is not expired', async () => {
+    const validCreds = { accessToken: 'valid', refreshToken: 'rt', expiresAt: Date.now() + 60000 };
+
+    await runStatus(
+      defaultDeps({
+        loadCreds: mock.fn(() => ({ credentials: validCreds, local: false })),
+        isExpired: mock.fn(() => false),
+        getUser: mock.fn(async () => ({
+          user: { first_name: 'Test', last_name: 'User' },
+        })),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(!output.includes('Session refreshed'));
+    assert.ok(output.includes('Test User'));
+  });
+
+  it('shows auth error when refresh fails and getUser fails', async () => {
+    const expiredCreds = { accessToken: 'old', refreshToken: 'rt', expiresAt: 1000 };
+
+    await runStatus(
+      defaultDeps({
+        loadCreds: mock.fn(() => ({ credentials: expiredCreds, local: false })),
+        isExpired: mock.fn(() => true),
+        refresh: mock.fn(async () => {
+          throw new Error('Token refresh failed');
+        }),
+        getUser: mock.fn(async () => {
+          throw new Error('Not authenticated');
+        }),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(output.includes('Not authenticated'));
+    assert.ok(!output.includes('Session refreshed'));
+  });
+
+  it('skips refresh when no credentials exist', async () => {
+    const refreshFn = mock.fn(async () => ({}));
+
+    await runStatus(
+      defaultDeps({
+        loadCreds: mock.fn(() => ({ credentials: null, local: false })),
+        refresh: refreshFn,
+        getUser: mock.fn(async () => ({
+          user: { first_name: 'Test', last_name: 'User' },
+        })),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(!output.includes('Session refreshed'));
+    assert.equal(refreshFn.mock.calls.length, 0);
   });
 });
