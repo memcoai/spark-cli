@@ -1,36 +1,55 @@
 import { execSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
 import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, SPARK_DIR, LOCAL_SPARK_DIR } from '../constants.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 
 /**
- * Read saved init choices. Returns { initData, scope, settingsPath, settingsKey } or null.
- * Checks local settings first, then global.
+ * Collect all init targets to clean up during uninstall.
+ * Returns an array of { initData, scope, settingsPath, settingsKey, cwd } objects.
+ * Checks local init, global init, and all entries in the global projects array.
  */
-function getInitChoices(readKey = readSettingsKey) {
+export function getAllInitTargets(readKey = readSettingsKey) {
+  const targets = [];
+  const cwd = process.cwd();
+
   const localInit = readKey(LOCAL_SETTINGS_PATH, 'init');
   if (localInit?.ides?.length) {
-    return {
+    targets.push({
       initData: localInit,
       scope: 'project',
       settingsPath: LOCAL_SETTINGS_PATH,
       settingsKey: 'init',
-    };
+    });
   }
 
   const globalInit = readKey(SETTINGS_PATH, 'globalInit');
   if (globalInit?.ides?.length) {
-    return {
+    targets.push({
       initData: globalInit,
       scope: 'global',
       settingsPath: SETTINGS_PATH,
       settingsKey: 'globalInit',
-    };
+    });
   }
 
-  return null;
+  const projects = readKey(SETTINGS_PATH, 'projects');
+  if (Array.isArray(projects)) {
+    for (const project of projects) {
+      if (project.path !== cwd && project.ides?.length) {
+        targets.push({
+          initData: project,
+          scope: 'project',
+          settingsPath: null,
+          settingsKey: null,
+          cwd: project.path,
+        });
+      }
+    }
+  }
+
+  return targets;
 }
 
 /**
@@ -71,15 +90,20 @@ function cleanupSparkDirs(rm = rmSync) {
 /**
  * Uninstall Claude Code plugin if it was installed via spark init.
  */
-export async function uninstallClaudePlugin(scope, { exec = runCommand } = {}) {
+export async function uninstallClaudePlugin(scope, { exec = runCommand, cwd } = {}) {
   const scopeFlag = scope === 'project' ? 'project' : 'user';
+  const suffix = cwd ? ` (${cwd})` : '';
 
-  const spinner = createSpinner('Removing Spark plugin from Claude Code...');
+  const spinner = createSpinner(`Removing Spark plugin from Claude Code${suffix}...`);
   try {
-    await exec('claude', ['plugin', 'uninstall', 'spark-cli@MemCo', '--scope', scopeFlag]);
-    spinner.stop('Spark plugin removed from Claude Code');
+    await exec(
+      'claude',
+      ['plugin', 'uninstall', 'spark-cli@MemCo', '--scope', scopeFlag],
+      cwd ? { cwd } : {},
+    );
+    spinner.stop(`Spark plugin removed from Claude Code${suffix}`);
   } catch (err) {
-    spinner.fail('Failed to remove Claude Code plugin');
+    spinner.fail(`Failed to remove Claude Code plugin${suffix}`);
     printWarning(err.stderr?.trim() || err.message);
     printInfo(
       `You can remove it manually: claude plugin uninstall spark-cli@MemCo --scope ${scopeFlag}`,
@@ -90,57 +114,72 @@ export async function uninstallClaudePlugin(scope, { exec = runCommand } = {}) {
 /**
  * Uninstall skills for other IDEs (Cursor, Windsurf, etc.) via skills CLI.
  */
-export async function uninstallOtherIDEs(scope, { spawnInteractive = runInteractiveCommand } = {}) {
+export async function uninstallOtherIDEs(
+  scope,
+  { spawnInteractive = runInteractiveCommand, cwd } = {},
+) {
   const args = ['skills', 'remove', 'memcoai/spark-cli-skills'];
   if (scope === 'global') {
     args.push('--global');
   }
 
   const globalFlag = scope === 'global' ? ' --global' : '';
-  printInfo(`Running: npx skills remove memcoai/spark-cli-skills${globalFlag}`);
+  const suffix = cwd ? ` (in ${cwd})` : '';
+  printInfo(`Running: npx skills remove memcoai/spark-cli-skills${globalFlag}${suffix}`);
   console.log('');
 
   try {
-    await spawnInteractive('npx', args);
+    await spawnInteractive('npx', args, cwd ? { cwd } : {});
     console.log('');
     printInfo('Spark skills removed');
   } catch (err) {
     console.log('');
-    printWarning(`Failed to remove skills: ${err.message}`);
+    printWarning(`Failed to remove skills${suffix}: ${err.message}`);
     printInfo(`You can remove manually: npx skills remove memcoai/spark-cli-skills${globalFlag}`);
   }
 }
 
 /**
- * Core uninstall logic, accepts dependencies for testability.
+ * Uninstall IDE plugins/skills for all init targets (local, global, and registered projects).
  */
-export async function runUninstall({
-  exec = execSync,
-  execAsync = runCommand,
-  spawnInteractive = runInteractiveCommand,
-  readKey = readSettingsKey,
-  writeKey = writeSettingsKey,
-  rm = rmSync,
-} = {}) {
-  // Uninstall IDE plugins/skills if they were installed via spark init
-  const choices = getInitChoices(readKey);
-  if (choices) {
-    const { initData, scope, settingsPath, settingsKey } = choices;
+async function uninstallAllTargets({ execAsync, spawnInteractive, readKey, writeKey, exists }) {
+  const targets = getAllInitTargets(readKey);
+
+  for (const target of targets) {
+    const { initData, scope, settingsPath, settingsKey, cwd: targetCwd } = target;
+
+    if (targetCwd && !exists(targetCwd)) {
+      printWarning(`Skipping ${targetCwd} — directory not found`);
+      continue;
+    }
+
+    if (targetCwd) {
+      printInfo(`Cleaning up project: ${targetCwd}`);
+    }
 
     if (initData.ides.includes('claude')) {
-      await uninstallClaudePlugin(scope, { exec: execAsync });
+      await uninstallClaudePlugin(scope, { exec: execAsync, cwd: targetCwd });
     }
 
     if (initData.ides.includes('other')) {
-      await uninstallOtherIDEs(scope, { spawnInteractive });
+      await uninstallOtherIDEs(scope, { spawnInteractive, cwd: targetCwd });
     }
 
-    removeInitData(settingsPath, settingsKey, { readKey, writeKey });
-
-    console.log('');
+    if (settingsKey) {
+      writeKey(settingsPath, settingsKey, null);
+    }
   }
 
-  // Uninstall CLI itself
+  if (targets.length > 0) {
+    writeKey(SETTINGS_PATH, 'projects', null);
+    console.log('');
+  }
+}
+
+/**
+ * Uninstall the CLI package itself and clean up .spark directories.
+ */
+function uninstallCli({ exec, rm }) {
   printInfo('Uninstalling @memco/spark...');
 
   const spinner = createSpinner('Uninstalling @memco/spark...');
@@ -154,7 +193,6 @@ export async function runUninstall({
 
     spinner.stop('Successfully uninstalled @memco/spark');
 
-    // Clean up .spark directories
     cleanupSparkDirs(rm);
   } catch (err) {
     spinner.fail('Uninstall failed');
@@ -171,6 +209,22 @@ export async function runUninstall({
 
     process.exit(1);
   }
+}
+
+/**
+ * Core uninstall logic, accepts dependencies for testability.
+ */
+export async function runUninstall({
+  exec = execSync,
+  execAsync = runCommand,
+  spawnInteractive = runInteractiveCommand,
+  readKey = readSettingsKey,
+  writeKey = writeSettingsKey,
+  rm = rmSync,
+  exists = existsSync,
+} = {}) {
+  await uninstallAllTargets({ execAsync, spawnInteractive, readKey, writeKey, exists });
+  uninstallCli({ exec, rm });
 }
 
 /**
