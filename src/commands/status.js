@@ -87,7 +87,11 @@ export async function runStatus({
   try {
     const apiBase = getBase();
     const loaded = loadCreds(apiBase, { withSource: true });
-    if (loaded.credentials?.accessToken && isExpired(loaded.credentials)) {
+    if (
+      loaded.credentials?.accessToken &&
+      loaded.credentials?.refreshToken &&
+      isExpired(loaded.credentials)
+    ) {
       await refresh(loaded.credentials, apiBase, loaded.local);
       refreshed = true;
     }
