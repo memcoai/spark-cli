@@ -193,11 +193,13 @@ describe('runStatus', () => {
 
   it('does not show refresh message when token is not expired', async () => {
     const validCreds = { accessToken: 'valid', refreshToken: 'rt', expiresAt: Date.now() + 60000 };
+    const refreshFn = mock.fn(async () => ({}));
 
     await runStatus(
       defaultDeps({
         loadCreds: mock.fn(() => ({ credentials: validCreds, local: false })),
         isExpired: mock.fn(() => false),
+        refresh: refreshFn,
         getUser: mock.fn(async () => ({
           user: { first_name: 'Test', last_name: 'User' },
         })),
@@ -207,18 +209,20 @@ describe('runStatus', () => {
     const output = getLogOutput(mocks.logMock);
     assert.ok(!output.includes('Session refreshed'));
     assert.ok(output.includes('Test User'));
+    assert.equal(refreshFn.mock.calls.length, 0);
   });
 
   it('shows auth error when refresh fails and getUser fails', async () => {
     const expiredCreds = { accessToken: 'old', refreshToken: 'rt', expiresAt: 1000 };
+    const refreshFn = mock.fn(async () => {
+      throw new Error('Token refresh failed');
+    });
 
     await runStatus(
       defaultDeps({
         loadCreds: mock.fn(() => ({ credentials: expiredCreds, local: false })),
         isExpired: mock.fn(() => true),
-        refresh: mock.fn(async () => {
-          throw new Error('Token refresh failed');
-        }),
+        refresh: refreshFn,
         getUser: mock.fn(async () => {
           throw new Error('Not authenticated');
         }),
@@ -228,6 +232,7 @@ describe('runStatus', () => {
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Not authenticated'));
     assert.ok(!output.includes('Session refreshed'));
+    assert.equal(refreshFn.mock.calls.length, 1);
   });
 
   it('skips refresh when no credentials exist', async () => {
