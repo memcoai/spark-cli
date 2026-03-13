@@ -190,7 +190,7 @@ export async function apiRequest(
       })
       .join('; ');
     throw new Error(
-      `API response validation failed for ${method} ${url} (${response.status}): ${issues}`
+      `API response validation failed for ${method} ${url} (${response.status}): ${issues}`,
     );
   }
   return result.data;
