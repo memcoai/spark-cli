@@ -6,6 +6,7 @@ import { getApiBase, CALLBACK_PORT } from './constants.js';
 import { loadCredentials, saveCredentials, isTokenExpired } from './credentials.js';
 import { getOAuthEndpoints, getBearerMethods, getClientId } from './oauth.js';
 import { getParentOptions } from './output.js';
+import { tokenResponseSchema, toolResponseSchema, userResponseSchema } from './schemas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,15 +40,13 @@ export async function refreshToken(credentials, apiBase, local) {
   }
 
   const data = await response.json();
+  const parsed = tokenResponseSchema.parse(data);
 
   const newCredentials = {
     ...credentials,
-    accessToken: data.accessToken || data.access_token,
-    refreshToken: data.refreshToken || data.refresh_token || credentials.refreshToken,
-    expiresAt:
-      data.expiresIn || data.expires_in
-        ? Date.now() + (data.expiresIn || data.expires_in) * 1000
-        : null,
+    accessToken: parsed.accessToken,
+    refreshToken: parsed.refreshToken || credentials.refreshToken,
+    expiresAt: parsed.expiresIn ? Date.now() + parsed.expiresIn * 1000 : null,
     tokenType: 'Bearer',
   };
 
@@ -150,7 +149,7 @@ export async function apiRequest(
   command = null,
   deps = {},
 ) {
-  const { getAuth = getAuthToken, doFetch = fetch } = deps;
+  const { getAuth = getAuthToken, doFetch = fetch, schema = toolResponseSchema } = deps;
 
   const base = (typeof apiBase === 'string' ? apiBase.replace(/\/+$/, '') : null) || getApiBase();
   const parentOpts = command ? getParentOptions(command) : {};
@@ -181,7 +180,8 @@ export async function apiRequest(
     throw new Error(`API error (${response.status}): ${error}`);
   }
 
-  return response.json();
+  const json = await response.json();
+  return schema.parse(json);
 }
 
 /**
@@ -230,5 +230,7 @@ export async function shareFeedback(sessionId, feedback, command = null) {
  * Get current user info
  */
 export async function getCurrentUser(apiBase, command = null) {
-  return apiRequest('/api/internal/v1/user', apiBase, 'GET', null, command);
+  return apiRequest('/api/internal/v1/user', apiBase, 'GET', null, command, {
+    schema: userResponseSchema,
+  });
 }

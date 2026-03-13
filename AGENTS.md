@@ -52,13 +52,15 @@ src/
   output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode
-  parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION), XML tag validation (parseXmlTags), XML conversion (tagsToXml), and merged tag collection (collectTags)
+  schemas.js          Zod schemas for all validation: CLI inputs (tags, XML tags, feedback), OAuth responses (token, discovery, registration), settings.json structure, and API responses
+  parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION), XML tag validation (parseXmlTags), XML conversion (tagsToXml), and merged tag collection (collectTags) — uses Zod schemas from schemas.js
   banner.js           Terminal UI (logos, spinners, colored output via colorize())
   index.js            Public API re-exports from api.js
 ```
 
 ## Key Patterns
 
+- **Zod validation:** All input validation and response parsing uses Zod schemas defined in `src/schemas.js`. CLI inputs (tags, feedback flags), OAuth responses (token exchange, discovery metadata), API responses, settings.json reads, and version check responses are all validated through Zod. Use `.passthrough()` on API/external response schemas to tolerate extra fields. Use `.safeParse()` with fail-open semantics for non-critical paths (version checks, settings reads). Use `.parse()` for critical paths (token exchange, API calls). When adding new schemas, preserve existing error messages by using `ctx.addIssue()` in `.transform()`.
 - **Avoid code duplication:** Extract shared logic into reusable helpers rather than duplicating code across commands. For example, `enable.js` and `disable.js` reuse helpers exported from `init.js` and `uninstall.js` respectively. When adding new commands or features, check for existing utilities before writing new code.
 - **Settings file:** All persistent state stored in `settings.json` with structure `{ apiBase, credentials, clients, latestVersion, compatibility, skillsVersion, projects, globalInit }`. Global at `~/.spark/settings.json`, local at `./.spark/settings.json`. Credentials and client data use `readSettingsKey`/`writeSettingsKey` from `settings.js`.
 - **API base URL:** Resolved via `getApiBase()` from `constants.js`. Priority: `SPARK_API_BASE` env var > local `apiBase` setting > global `apiBase` setting > `DEFAULT_API_BASE` (`https://spark.memco.ai`). Can be set via `spark login --api-base <url>` (persists to settings.json; `--local` controls which file). This is a developer-only feature.
@@ -96,6 +98,7 @@ npm run format        # eslint --fix src/
 ```
 test/
   helpers.js                  Shared test helpers (setupCommandMocks, setupFetchMock, getErrorOutput, tagValidationTests, xmlTagValidationTests, mockFetchSequence, buildApiRequestDeps)
+  schemas.test.js             Zod schema unit tests (tags, XML tags, feedback, token response normalization, OAuth discovery, settings, API responses)
   api.test.js                 apiRequest 401 retry with token refresh (OAuth retry, API key no-retry, refresh failure)
   parse-tags.test.js          parseTags, tagsToXml, parseXmlTags, collectTags, parseSources
   constants.test.js            getApiBase (env var override, default fallback)

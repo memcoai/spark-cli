@@ -61,7 +61,7 @@ spark query "how to setup fastmcp middleware"
 spark insights <session-id> 0
 
 # Share a solution you discovered
-spark share <session-id> --title "Fix for React map error" --content "The issue was..."
+spark share <session-id> --title "Fix for React map error" --content "The issue was..." --task-index <task-idx>
 
 # Provide feedback on recommendations
 spark feedback <session-id> --helpful
@@ -114,7 +114,7 @@ Contribute solutions back to the community:
 ```bash
 spark share <session-id> --title "Fixed CORS in Next.js" \
   --content "The solution was to add the appropriate headers in next.config.js" \
-  --task-index 0 \
+  --task-index task-0 \
   --tag library:nextjs:14 \
   --tag domain:web
 ```

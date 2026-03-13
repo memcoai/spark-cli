@@ -10,6 +10,7 @@ import {
   LOCAL_SETTINGS_PATH,
 } from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
+import { npmVersionResponseSchema, compatibilityResponseSchema } from './schemas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,9 +51,10 @@ export async function fetchLatestVersion() {
       signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) return null;
-    const data = await response.json();
-    if (!data?.version) return null;
-    const result = { version: data.version, checkedAt: Date.now() };
+    const raw = await response.json();
+    const parsed = npmVersionResponseSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    const result = { version: parsed.data.version, checkedAt: Date.now() };
     writeSettingsKey(SETTINGS_PATH, 'latestVersion', result);
     return result;
   } catch {
@@ -117,8 +119,11 @@ export async function fetchCompatibility() {
       signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) return null;
-    const data = await response.json();
-    if (!data || (!data.minimum_version && !data.deprecations)) return null;
+    const raw = await response.json();
+    const parsed = compatibilityResponseSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    const data = parsed.data;
+    if (!data.minimum_version && !data.deprecations) return null;
     const result = { data, checkedAt: Date.now() };
     writeSettingsKey(SETTINGS_PATH, 'compatibility', result);
     return result;
