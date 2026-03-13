@@ -181,7 +181,19 @@ export async function apiRequest(
   }
 
   const json = await response.json();
-  return schema.parse(json);
+  const result = schema.safeParse(json);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((issue) => {
+        const path = issue.path && issue.path.length > 0 ? issue.path.join('.') : '(root)';
+        return `${path}: ${issue.message}`;
+      })
+      .join('; ');
+    throw new Error(
+      `API response validation failed for ${method} ${url} (${response.status}): ${issues}`
+    );
+  }
+  return result.data;
 }
 
 /**
