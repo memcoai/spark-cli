@@ -8,7 +8,12 @@ import { queryInputSchema } from '../schemas.js';
  */
 export async function queryCommand(rawQuery, options, command) {
   try {
-    const { query } = queryInputSchema.parse({ query: rawQuery });
+    const parsed = queryInputSchema.safeParse({ query: rawQuery });
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      throw new Error(firstIssue?.message ?? 'Invalid query input.');
+    }
+    const { query } = parsed.data;
     const tags = collectTags(options);
 
     const result = await getRecommendation(query, tags, command);
