@@ -5,6 +5,10 @@ import {
   tagSchema,
   xmlTagSchema,
   feedbackOptionsSchema,
+  queryInputSchema,
+  insightsInputSchema,
+  shareInputSchema,
+  shareTaskInputSchema,
   tokenResponseSchema,
   protectedResourceSchema,
   authorizationServerSchema,
@@ -15,9 +19,8 @@ import {
   compatibilityCacheSchema,
   settingsSchema,
   toolResponseSchema,
-  userResponseSchema,
   npmVersionResponseSchema,
-  compatibilityResponseSchema,
+  compatibilityDataSchema,
 } from '../src/schemas.js';
 
 describe('normalizeVersion', () => {
@@ -231,12 +234,17 @@ describe('protectedResourceSchema', () => {
 });
 
 describe('authorizationServerSchema', () => {
-  it('accepts snake_case endpoints', () => {
+  it('normalizes snake_case to camelCase', () => {
     const result = authorizationServerSchema.parse({
       authorization_endpoint: 'https://auth.example.com/authorize',
       token_endpoint: 'https://auth.example.com/token',
+      registration_endpoint: 'https://auth.example.com/register',
+      bearer_methods_supported: ['header'],
     });
-    assert.strictEqual(result.authorization_endpoint, 'https://auth.example.com/authorize');
+    assert.strictEqual(result.authorizationEndpoint, 'https://auth.example.com/authorize');
+    assert.strictEqual(result.tokenEndpoint, 'https://auth.example.com/token');
+    assert.strictEqual(result.registrationEndpoint, 'https://auth.example.com/register');
+    assert.deepStrictEqual(result.bearerMethodsSupported, ['header']);
   });
 
   it('accepts camelCase endpoints', () => {
@@ -362,9 +370,9 @@ describe('npmVersionResponseSchema', () => {
   });
 });
 
-describe('compatibilityResponseSchema', () => {
+describe('compatibilityDataSchema', () => {
   it('accepts full response', () => {
-    const result = compatibilityResponseSchema.parse({
+    const result = compatibilityDataSchema.parse({
       minimum_version: '0.2.0',
       deprecations: [{ version_below: '0.3.0', message: 'Please upgrade' }],
       message: 'Global message',
@@ -374,12 +382,115 @@ describe('compatibilityResponseSchema', () => {
   });
 
   it('accepts empty object', () => {
-    const result = compatibilityResponseSchema.safeParse({});
+    const result = compatibilityDataSchema.safeParse({});
     assert.strictEqual(result.success, true);
   });
 
   it('preserves extra fields', () => {
-    const result = compatibilityResponseSchema.parse({ extra: 'data' });
+    const result = compatibilityDataSchema.parse({ extra: 'data' });
     assert.strictEqual(result.extra, 'data');
+  });
+});
+
+describe('queryInputSchema', () => {
+  it('accepts a non-empty query', () => {
+    const result = queryInputSchema.parse({ query: 'how to fix bug' });
+    assert.strictEqual(result.query, 'how to fix bug');
+  });
+
+  it('fails on empty query', () => {
+    const result = queryInputSchema.safeParse({ query: '' });
+    assert.strictEqual(result.success, false);
+  });
+
+  it('fails on missing query', () => {
+    const result = queryInputSchema.safeParse({});
+    assert.strictEqual(result.success, false);
+  });
+});
+
+describe('insightsInputSchema', () => {
+  it('accepts string sessionId and string taskIndex', () => {
+    const result = insightsInputSchema.parse({ sessionId: 'sess-1', taskIndex: '2' });
+    assert.strictEqual(result.sessionId, 'sess-1');
+    assert.strictEqual(result.taskIndex, '2');
+  });
+
+  it('coerces numeric taskIndex to string', () => {
+    const result = insightsInputSchema.parse({ sessionId: 'sess-1', taskIndex: 3 });
+    assert.strictEqual(result.taskIndex, '3');
+  });
+
+  it('fails on empty sessionId', () => {
+    const result = insightsInputSchema.safeParse({ sessionId: '', taskIndex: '1' });
+    assert.strictEqual(result.success, false);
+  });
+});
+
+describe('shareInputSchema', () => {
+  it('accepts valid share input', () => {
+    const result = shareInputSchema.parse({
+      sessionId: 'sess-1',
+      title: 'My Title',
+      content: 'My Content',
+    });
+    assert.strictEqual(result.sessionId, 'sess-1');
+    assert.strictEqual(result.title, 'My Title');
+    assert.strictEqual(result.content, 'My Content');
+    assert.strictEqual(result.taskIndex, undefined);
+    assert.strictEqual(result.sources, undefined);
+  });
+
+  it('accepts optional taskIndex and sources', () => {
+    const result = shareInputSchema.parse({
+      sessionId: 'sess-1',
+      title: 'T',
+      content: 'C',
+      taskIndex: 'new',
+      sources: 'a,b,c',
+    });
+    assert.strictEqual(result.taskIndex, 'new');
+    assert.strictEqual(result.sources, 'a,b,c');
+  });
+
+  it('fails on empty title', () => {
+    const result = shareInputSchema.safeParse({
+      sessionId: 'sess-1',
+      title: '',
+      content: 'C',
+    });
+    assert.strictEqual(result.success, false);
+  });
+
+  it('fails on empty content', () => {
+    const result = shareInputSchema.safeParse({
+      sessionId: 'sess-1',
+      title: 'T',
+      content: '',
+    });
+    assert.strictEqual(result.success, false);
+  });
+});
+
+describe('shareTaskInputSchema', () => {
+  it('accepts query and single insight string', () => {
+    const result = shareTaskInputSchema.parse({ query: 'q', insight: 'fix it' });
+    assert.strictEqual(result.query, 'q');
+    assert.strictEqual(result.insight, 'fix it');
+  });
+
+  it('accepts query and insight array', () => {
+    const result = shareTaskInputSchema.parse({ query: 'q', insight: ['a', 'b'] });
+    assert.deepStrictEqual(result.insight, ['a', 'b']);
+  });
+
+  it('fails on empty query', () => {
+    const result = shareTaskInputSchema.safeParse({ query: '', insight: 'x' });
+    assert.strictEqual(result.success, false);
+  });
+
+  it('fails on empty insight array', () => {
+    const result = shareTaskInputSchema.safeParse({ query: 'q', insight: [] });
+    assert.strictEqual(result.success, false);
   });
 });

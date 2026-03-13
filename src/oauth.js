@@ -58,20 +58,18 @@ async function getOAuthMetadata(apiBase) {
 
 export async function getOAuthEndpoints(apiBase) {
   const { authorizationMetadata } = await getOAuthMetadata(apiBase);
-  const authorizationEndpoint =
-    authorizationMetadata.authorization_endpoint || authorizationMetadata.authorizationEndpoint;
-  const tokenEndpoint = authorizationMetadata.token_endpoint || authorizationMetadata.tokenEndpoint;
-
-  const bearerMethods = authorizationMetadata.bearer_methods_supported || null;
-
-  return { authorizationEndpoint, tokenEndpoint, bearerMethods };
+  return {
+    authorizationEndpoint: authorizationMetadata.authorizationEndpoint,
+    tokenEndpoint: authorizationMetadata.tokenEndpoint,
+    bearerMethods: authorizationMetadata.bearerMethodsSupported || null,
+  };
 }
 
 export async function getBearerMethods(apiBase) {
   const { protectedMetadata, authorizationMetadata } = await getOAuthMetadata(apiBase);
   return (
     protectedMetadata.bearer_methods_supported ||
-    authorizationMetadata.bearer_methods_supported ||
+    authorizationMetadata.bearerMethodsSupported ||
     null
   );
 }
@@ -115,8 +113,7 @@ async function registerClient(redirectUri, apiBase) {
   }
 
   const { authorizationMetadata } = await getOAuthMetadata(apiBase);
-  const registrationEndpoint =
-    authorizationMetadata.registration_endpoint || authorizationMetadata.registrationEndpoint;
+  const registrationEndpoint = authorizationMetadata.registrationEndpoint;
 
   if (!registrationEndpoint) {
     throw new Error('OAuth server does not support dynamic client registration');

@@ -1,15 +1,21 @@
 import { shareTask } from '../api.js';
 import { output, outputError } from '../output.js';
 import { collectTags } from '../parse-tags.js';
+import { shareTaskInputSchema } from '../schemas.js';
 
 /**
  * Share-task command handler
  */
-export async function shareTaskCommand(query, options, command) {
+export async function shareTaskCommand(rawQuery, options, command) {
   try {
+    const input = shareTaskInputSchema.parse({
+      query: rawQuery,
+      insight: options.insight,
+    });
+
     const params = {
-      query,
-      insights: options.insight,
+      query: input.query,
+      insights: input.insight,
     };
 
     const tags = collectTags(options);

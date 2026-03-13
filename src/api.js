@@ -6,7 +6,7 @@ import { getApiBase, CALLBACK_PORT } from './constants.js';
 import { loadCredentials, saveCredentials, isTokenExpired } from './credentials.js';
 import { getOAuthEndpoints, getBearerMethods, getClientId } from './oauth.js';
 import { getParentOptions } from './output.js';
-import { tokenResponseSchema, toolResponseSchema, userResponseSchema } from './schemas.js';
+import { tokenResponseSchema, toolResponseSchema } from './schemas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -230,7 +230,5 @@ export async function shareFeedback(sessionId, feedback, command = null) {
  * Get current user info
  */
 export async function getCurrentUser(apiBase, command = null) {
-  return apiRequest('/api/internal/v1/user', apiBase, 'GET', null, command, {
-    schema: userResponseSchema,
-  });
+  return apiRequest('/api/internal/v1/user', apiBase, 'GET', null, command);
 }

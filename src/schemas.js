@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
 // ──────────────────────────────────────────────
+// Shared primitives
+// ──────────────────────────────────────────────
+
+const nonEmptyString = z.string().min(1);
+
+// ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────
 
@@ -159,6 +165,44 @@ export const feedbackOptionsSchema = z
   });
 
 // ──────────────────────────────────────────────
+// Command Input Schemas
+// ──────────────────────────────────────────────
+
+/**
+ * Schema for query command input.
+ */
+export const queryInputSchema = z.object({
+  query: nonEmptyString,
+});
+
+/**
+ * Schema for insights command input.
+ */
+export const insightsInputSchema = z.object({
+  sessionId: nonEmptyString,
+  taskIndex: z.union([z.string(), z.number()]).transform(String),
+});
+
+/**
+ * Schema for share command input.
+ */
+export const shareInputSchema = z.object({
+  sessionId: nonEmptyString,
+  title: nonEmptyString,
+  content: nonEmptyString,
+  taskIndex: z.union([z.string(), z.number()]).optional(),
+  sources: z.string().optional(),
+});
+
+/**
+ * Schema for share-task command input.
+ */
+export const shareTaskInputSchema = z.object({
+  query: nonEmptyString,
+  insight: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
+});
+
+// ──────────────────────────────────────────────
 // OAuth Schemas
 // ──────────────────────────────────────────────
 
@@ -205,7 +249,14 @@ export const authorizationServerSchema = z
   })
   .refine((d) => d.token_endpoint || d.tokenEndpoint, {
     message: 'OAuth discovery missing token_endpoint',
-  });
+  })
+  .transform((d) => ({
+    ...d,
+    authorizationEndpoint: d.authorizationEndpoint || d.authorization_endpoint,
+    tokenEndpoint: d.tokenEndpoint || d.token_endpoint,
+    registrationEndpoint: d.registrationEndpoint || d.registration_endpoint,
+    bearerMethodsSupported: d.bearer_methods_supported,
+  }));
 
 export const clientRegistrationResponseSchema = z.looseObject({
   client_id: z.string().min(1),
@@ -279,21 +330,6 @@ export const settingsSchema = z.looseObject({
 
 export const toolResponseSchema = z.looseObject({});
 
-export const userResponseSchema = z.looseObject({});
-
 export const npmVersionResponseSchema = z.looseObject({
   version: z.string().min(1),
-});
-
-export const compatibilityResponseSchema = z.looseObject({
-  minimum_version: z.string().optional(),
-  deprecations: z
-    .array(
-      z.looseObject({
-        version_below: z.string().optional(),
-        message: z.string().optional(),
-      }),
-    )
-    .optional(),
-  message: z.string().optional(),
 });

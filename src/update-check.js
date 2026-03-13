@@ -10,7 +10,7 @@ import {
   LOCAL_SETTINGS_PATH,
 } from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
-import { npmVersionResponseSchema, compatibilityResponseSchema } from './schemas.js';
+import { npmVersionResponseSchema, compatibilityDataSchema } from './schemas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -120,7 +120,7 @@ export async function fetchCompatibility() {
     });
     if (!response.ok) return null;
     const raw = await response.json();
-    const parsed = compatibilityResponseSchema.safeParse(raw);
+    const parsed = compatibilityDataSchema.safeParse(raw);
     if (!parsed.success) return null;
     const data = parsed.data;
     if (!data.minimum_version && !data.deprecations) return null;

@@ -10,25 +10,32 @@ function escapeXmlAttribute(value) {
 }
 
 /**
- * Parse tags from an array of strings (from repeated --tag flags).
- * Each tag must be TYPE:NAME or TYPE:NAME:VERSION.
+ * Validate an array of strings against a Zod schema.
+ * Normalizes input to an array, validates each item, and filters empty results.
  */
-export function parseTags(input) {
+function validateArray(input, schema, label) {
   if (!input) return [];
-
-  const tags = Array.isArray(input) ? input : [input];
-  return tags
+  const items = Array.isArray(input) ? input : [input];
+  return items
     .map((raw) => {
       if (typeof raw !== 'string') {
-        throw new TypeError(`Invalid tag value: expected a string but got ${typeof raw}`);
+        throw new TypeError(`Invalid ${label} value: expected a string but got ${typeof raw}`);
       }
-      const result = tagSchema.safeParse(raw);
+      const result = schema.safeParse(raw);
       if (!result.success) {
         throw new Error(result.error.issues[0].message);
       }
       return result.data;
     })
     .filter(Boolean);
+}
+
+/**
+ * Parse tags from an array of strings (from repeated --tag flags).
+ * Each tag must be TYPE:NAME or TYPE:NAME:VERSION.
+ */
+export function parseTags(input) {
+  return validateArray(input, tagSchema, 'tag');
 }
 
 /**
@@ -56,20 +63,7 @@ export function tagsToXml(tags) {
  * Each tag must be a valid XML tag with type and name attributes.
  */
 export function parseXmlTags(input) {
-  if (!input) return [];
-  const tags = Array.isArray(input) ? input : [input];
-  return tags
-    .map((raw) => {
-      if (typeof raw !== 'string') {
-        throw new TypeError(`Invalid XML tag value: expected a string but got ${typeof raw}`);
-      }
-      const result = xmlTagSchema.safeParse(raw);
-      if (!result.success) {
-        throw new Error(result.error.issues[0].message);
-      }
-      return result.data;
-    })
-    .filter(Boolean);
+  return validateArray(input, xmlTagSchema, 'XML tag');
 }
 
 /**

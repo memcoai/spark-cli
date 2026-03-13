@@ -52,7 +52,7 @@ src/
   output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode
-  schemas.js          Zod schemas for all validation: CLI inputs (tags, XML tags, feedback), OAuth responses (token, discovery, registration), settings.json structure, and API responses
+  schemas.js          Zod schemas for all validation: command inputs (query, insights, share, share-task, feedback), CLI inputs (tags, XML tags), OAuth responses (token, discovery, registration), settings.json structure, and API responses
   parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION), XML tag validation (parseXmlTags), XML conversion (tagsToXml), and merged tag collection (collectTags) — uses Zod schemas from schemas.js
   banner.js           Terminal UI (logos, spinners, colored output via colorize())
   index.js            Public API re-exports from api.js
