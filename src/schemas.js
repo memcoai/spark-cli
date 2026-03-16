@@ -104,12 +104,20 @@ export const xmlTagSchema = z.string().transform((raw, ctx) => {
     return z.NEVER;
   }
 
-  const attrs = {};
+  const attrs = Object.create(null);
+  const allowed = new Set(['type', 'name', 'version']);
   const attrRegex = /(\w+)="([^"<&]*)"/g;
   let match;
   while ((match = attrRegex.exec(tagMatch[1])) !== null) {
     const key = match[1];
     const value = match[2];
+    if (!allowed.has(key)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `Invalid XML tag "${trimmed}": unknown attribute "${key}"`,
+      });
+      return z.NEVER;
+    }
     if (Object.hasOwn(attrs, key)) {
       ctx.addIssue({
         code: 'custom',
@@ -133,17 +141,6 @@ export const xmlTagSchema = z.string().transform((raw, ctx) => {
       message: `Invalid XML tag "${trimmed}": missing required "name" attribute`,
     });
     return z.NEVER;
-  }
-
-  const allowed = new Set(['type', 'name', 'version']);
-  for (const key of Object.keys(attrs)) {
-    if (!allowed.has(key)) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `Invalid XML tag "${trimmed}": unknown attribute "${key}"`,
-      });
-      return z.NEVER;
-    }
   }
 
   if (attrs.version) {

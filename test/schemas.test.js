@@ -148,6 +148,18 @@ describe('xmlTagSchema', () => {
     assert.strictEqual(result.success, false);
     assert.match(result.error.issues[0].message, /Invalid XML tag/);
   });
+
+  it('rejects __proto__ attribute (prototype pollution)', () => {
+    const result = xmlTagSchema.safeParse('<tag __proto__="polluted" type="l" name="p" />');
+    assert.strictEqual(result.success, false);
+    assert.match(result.error.issues[0].message, /unknown attribute/);
+  });
+
+  it('rejects constructor attribute (prototype pollution)', () => {
+    const result = xmlTagSchema.safeParse('<tag constructor="polluted" type="l" name="p" />');
+    assert.strictEqual(result.success, false);
+    assert.match(result.error.issues[0].message, /unknown attribute/);
+  });
 });
 
 describe('feedbackOptionsSchema', () => {
