@@ -5,6 +5,7 @@ import open from 'open';
 import { getCurrentUser, refreshToken } from '../api.js';
 import { getClientId, getOAuthEndpoints } from '../oauth.js';
 import { output } from '../output.js';
+import { tokenResponseSchema } from '../schemas.js';
 import {
   printBanner,
   printSuccess,
@@ -181,12 +182,13 @@ async function exchangeCodeForTokens(code, codeVerifier, redirectUri, apiBase) {
   }
 
   const data = await response.json();
+  const parsed = tokenResponseSchema.parse(data);
 
   return {
-    access_token: data.accessToken || data.access_token,
-    refresh_token: data.refreshToken || data.refresh_token,
-    expires_in: data.expiresIn || data.expires_in,
-    token_type: 'Bearer',
+    access_token: parsed.accessToken,
+    refresh_token: parsed.refreshToken,
+    expires_in: parsed.expiresIn,
+    token_type: parsed.tokenType,
   };
 }
 

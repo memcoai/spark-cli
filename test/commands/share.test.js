@@ -13,11 +13,11 @@ describe('shareCommand', () => {
 
   tagValidationTests(mocks, shareCommand, () => [
     'session-1',
-    { title: 'Test', content: 'Content' },
+    { title: 'Test', content: 'Content', taskIndex: '0' },
   ]);
   xmlTagValidationTests(mocks, shareCommand, () => [
     'session-1',
-    { title: 'Test', content: 'Content' },
+    { title: 'Test', content: 'Content', taskIndex: '0' },
   ]);
 
   describe('API calls', () => {
@@ -40,7 +40,12 @@ describe('shareCommand', () => {
     it('sends tags as XML in request body', async () => {
       await shareCommand(
         'session-1',
-        { title: 'T', content: 'C', tag: ['language:python:3.11', 'task_type:bug_fix'] },
+        {
+          title: 'T',
+          content: 'C',
+          taskIndex: '0',
+          tag: ['language:python:3.11', 'task_type:bug_fix'],
+        },
         null,
       );
 
@@ -52,7 +57,7 @@ describe('shareCommand', () => {
     });
 
     it('omits tags when --tag is not provided', async () => {
-      await shareCommand('session-1', { title: 'T', content: 'C' }, null);
+      await shareCommand('session-1', { title: 'T', content: 'C', taskIndex: '0' }, null);
 
       const body = JSON.parse(api.fetchMock.mock.calls[0].arguments[1].body);
       assert.strictEqual(body.tags, undefined);
@@ -61,7 +66,12 @@ describe('shareCommand', () => {
     it('sends --xml-tag values in request body', async () => {
       await shareCommand(
         'session-1',
-        { title: 'T', content: 'C', xmlTag: ['<tag type="task_type" name="bug_fix" />'] },
+        {
+          title: 'T',
+          content: 'C',
+          taskIndex: '0',
+          xmlTag: ['<tag type="task_type" name="bug_fix" />'],
+        },
         null,
       );
 
@@ -75,6 +85,7 @@ describe('shareCommand', () => {
         {
           title: 'T',
           content: 'C',
+          taskIndex: '0',
           tag: ['language:python:3.11'],
           xmlTag: ['<tag type="task_type" name="bug_fix" />'],
         },

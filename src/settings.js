@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { settingsSchema } from './schemas.js';
 
 /**
  * Read the full settings object from a settings.json path.
@@ -8,7 +9,9 @@ import { dirname } from 'node:path';
 export function readSettings(settingsPath) {
   if (!existsSync(settingsPath)) return null;
   try {
-    return JSON.parse(readFileSync(settingsPath, 'utf8'));
+    const raw = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    const result = settingsSchema.safeParse(raw);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }

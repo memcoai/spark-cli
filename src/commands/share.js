@@ -1,26 +1,33 @@
 import { shareInsight } from '../api.js';
 import { output, outputError } from '../output.js';
 import { collectTags, parseSources } from '../parse-tags.js';
+import { shareInputSchema } from '../schemas.js';
 
 /**
  * Share command handler
  */
-export async function shareCommand(sessionId, options, command) {
+export async function shareCommand(rawSessionId, options, command) {
   try {
-    const params = {
+    const input = shareInputSchema.parse({
+      sessionId: rawSessionId,
       title: options.title,
       content: options.content,
-      session_id: sessionId,
+      taskIndex: options.taskIndex,
+      sources: options.sources,
+    });
+
+    const params = {
+      title: input.title,
+      content: input.content,
+      session_id: input.sessionId,
     };
-    if (options.taskIndex !== undefined) {
-      params.task_idx = options.taskIndex;
-    }
+    params.task_idx = input.taskIndex;
     const tags = collectTags(options);
     if (tags.length > 0) {
       params.tags = tags;
     }
-    if (options.sources) {
-      params.sources = parseSources(options.sources);
+    if (input.sources) {
+      params.sources = parseSources(input.sources);
     }
 
     const result = await shareInsight(params, command);

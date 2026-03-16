@@ -1,5 +1,10 @@
 import { DEFAULT_API_BASE, getApiBase, SETTINGS_PATH } from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
+import {
+  protectedResourceSchema,
+  authorizationServerSchema,
+  clientRegistrationResponseSchema,
+} from './schemas.js';
 
 const PROTECTED_RESOURCE_WELL_KNOWN = '/.well-known/oauth-protected-resource';
 const AUTHORIZATION_SERVER_WELL_KNOWN = '/.well-known/oauth-authorization-server';
@@ -24,7 +29,7 @@ function normalizeBaseUrl(url) {
 
 async function resolveOAuthMetadata(apiBase) {
   const protectedUrl = `${apiBase}${PROTECTED_RESOURCE_WELL_KNOWN}`;
-  const protectedMetadata = await fetchJson(protectedUrl);
+  const protectedMetadata = protectedResourceSchema.parse(await fetchJson(protectedUrl));
 
   const servers = protectedMetadata.authorization_servers;
   let issuerBase = apiBase;
@@ -36,7 +41,9 @@ async function resolveOAuthMetadata(apiBase) {
     }
   }
 
-  const authorizationMetadata = await fetchJson(`${issuerBase}${AUTHORIZATION_SERVER_WELL_KNOWN}`);
+  const authorizationMetadata = authorizationServerSchema.parse(
+    await fetchJson(`${issuerBase}${AUTHORIZATION_SERVER_WELL_KNOWN}`),
+  );
 
   return { protectedMetadata, authorizationMetadata };
 }
@@ -51,24 +58,18 @@ async function getOAuthMetadata(apiBase) {
 
 export async function getOAuthEndpoints(apiBase) {
   const { authorizationMetadata } = await getOAuthMetadata(apiBase);
-  const authorizationEndpoint =
-    authorizationMetadata.authorization_endpoint || authorizationMetadata.authorizationEndpoint;
-  const tokenEndpoint = authorizationMetadata.token_endpoint || authorizationMetadata.tokenEndpoint;
-
-  if (!authorizationEndpoint || !tokenEndpoint) {
-    throw new Error('OAuth discovery missing authorization_endpoint or token_endpoint');
-  }
-
-  const bearerMethods = authorizationMetadata.bearer_methods_supported || null;
-
-  return { authorizationEndpoint, tokenEndpoint, bearerMethods };
+  return {
+    authorizationEndpoint: authorizationMetadata.authorizationEndpoint,
+    tokenEndpoint: authorizationMetadata.tokenEndpoint,
+    bearerMethods: authorizationMetadata.bearerMethodsSupported || null,
+  };
 }
 
 export async function getBearerMethods(apiBase) {
   const { protectedMetadata, authorizationMetadata } = await getOAuthMetadata(apiBase);
   return (
     protectedMetadata.bearer_methods_supported ||
-    authorizationMetadata.bearer_methods_supported ||
+    authorizationMetadata.bearerMethodsSupported ||
     null
   );
 }
@@ -112,8 +113,7 @@ async function registerClient(redirectUri, apiBase) {
   }
 
   const { authorizationMetadata } = await getOAuthMetadata(apiBase);
-  const registrationEndpoint =
-    authorizationMetadata.registration_endpoint || authorizationMetadata.registrationEndpoint;
+  const registrationEndpoint = authorizationMetadata.registrationEndpoint;
 
   if (!registrationEndpoint) {
     throw new Error('OAuth server does not support dynamic client registration');
@@ -136,7 +136,7 @@ async function registerClient(redirectUri, apiBase) {
     throw new Error(`OAuth client registration failed (${response.status}): ${error}`);
   }
 
-  return response.json();
+  return clientRegistrationResponseSchema.parse(await response.json());
 }
 
 export async function getClientId(redirectUri = null, apiBase = null) {

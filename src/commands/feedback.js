@@ -1,23 +1,21 @@
 import { shareFeedback } from '../api.js';
 import { output, outputError } from '../output.js';
+import { feedbackOptionsSchema } from '../schemas.js';
 
 /**
  * Feedback command handler
  */
 export async function feedbackCommand(sessionId, options, command) {
   try {
-    // Determine feedback value
-    let feedback;
-    if (options.helpful) {
-      feedback = 'helpful';
-    } else if (options.notHelpful) {
-      feedback = 'not_helpful';
-    } else {
-      throw new Error('Must specify either --helpful or --not-helpful');
+    const result = feedbackOptionsSchema.safeParse(options);
+    if (!result.success) {
+      throw new Error(result.error.issues[0].message);
     }
 
-    const result = await shareFeedback(sessionId, feedback, command);
-    output(result, command);
+    const feedback = options.helpful ? 'helpful' : 'not_helpful';
+
+    const response = await shareFeedback(sessionId, feedback, command);
+    output(response, command);
   } catch (err) {
     outputError(err, command);
   }
