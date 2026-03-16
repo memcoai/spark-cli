@@ -164,7 +164,10 @@ program
   .description('Share an insight or solution with the knowledge network')
   .requiredOption('--title <title>', 'Short title describing the insight')
   .requiredOption('--content <content>', 'The insight content (supports markdown)')
-  .option('--task-index <index>', 'Task index to attach insight to (use "new" for a new task)')
+  .requiredOption(
+    '--task-index <index>',
+    'Task index to attach insight to (use "new" for a new task)',
+  )
   .option(
     '--tag <tag>',
     'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',

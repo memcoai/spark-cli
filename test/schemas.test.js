@@ -442,15 +442,16 @@ describe('shareInputSchema', () => {
       sessionId: 'sess-1',
       title: 'My Title',
       content: 'My Content',
+      taskIndex: '0',
     });
     assert.strictEqual(result.sessionId, 'sess-1');
     assert.strictEqual(result.title, 'My Title');
     assert.strictEqual(result.content, 'My Content');
-    assert.strictEqual(result.taskIndex, undefined);
+    assert.strictEqual(result.taskIndex, '0');
     assert.strictEqual(result.sources, undefined);
   });
 
-  it('accepts optional taskIndex and sources', () => {
+  it('accepts taskIndex and sources', () => {
     const result = shareInputSchema.parse({
       sessionId: 'sess-1',
       title: 'T',
@@ -460,6 +461,15 @@ describe('shareInputSchema', () => {
     });
     assert.strictEqual(result.taskIndex, 'new');
     assert.strictEqual(result.sources, 'a,b,c');
+  });
+
+  it('fails on missing taskIndex', () => {
+    const result = shareInputSchema.safeParse({
+      sessionId: 'sess-1',
+      title: 'T',
+      content: 'C',
+    });
+    assert.strictEqual(result.success, false);
   });
 
   it('fails on empty title', () => {

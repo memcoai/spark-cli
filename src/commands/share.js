@@ -21,9 +21,7 @@ export async function shareCommand(rawSessionId, options, command) {
       content: input.content,
       session_id: input.sessionId,
     };
-    if (input.taskIndex !== undefined) {
-      params.task_idx = input.taskIndex;
-    }
+    params.task_idx = input.taskIndex;
     const tags = collectTags(options);
     if (tags.length > 0) {
       params.tags = tags;

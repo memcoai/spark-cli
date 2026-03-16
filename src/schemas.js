@@ -187,7 +187,7 @@ export const shareInputSchema = z.object({
   sessionId: nonEmptyString,
   title: nonEmptyString,
   content: nonEmptyString,
-  taskIndex: z.union([z.string(), z.number()]).optional(),
+  taskIndex: nonEmptyString,
   sources: z.string().optional(),
 });
 
