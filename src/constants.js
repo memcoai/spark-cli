@@ -56,7 +56,8 @@ export function getVariantKey(variant) {
  * Returns null if the key is not recognized.
  */
 export function resolveVariant(key) {
-  return VARIANTS[key] || null;
+  if (!Object.hasOwn(VARIANTS, key)) return null;
+  return VARIANTS[key];
 }
 
 /**
