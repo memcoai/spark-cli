@@ -5,7 +5,7 @@ import semver from 'semver';
 import {
   getApiBase,
   VERSION_CHECK_URL,
-  SKILLS_VERSION_URL,
+  VARIANTS,
   SETTINGS_PATH,
   LOCAL_SETTINGS_PATH,
 } from './constants.js';
@@ -201,9 +201,9 @@ export function getCachedSkillsVersion() {
  * The VERSION file contains a plain version string (e.g. "1.0.0\n").
  * Never rejects.
  */
-export async function fetchSkillsVersion() {
+export async function fetchSkillsVersion(versionUrl = VARIANTS.public.skillsVersionUrl) {
   try {
-    const response = await fetch(SKILLS_VERSION_URL, {
+    const response = await fetch(versionUrl, {
       signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) return null;
@@ -222,13 +222,13 @@ export async function fetchSkillsVersion() {
  * Check for skills updates. Returns cached data if fresh (<24h), otherwise fetches.
  * Never rejects.
  */
-export async function checkSkillsVersion() {
+export async function checkSkillsVersion(versionUrl) {
   try {
     const cached = getCachedSkillsVersion();
     if (cached?.version && cached.checkedAt && Date.now() - cached.checkedAt < ONE_DAY_MS) {
       return cached;
     }
-    return await fetchSkillsVersion();
+    return await fetchSkillsVersion(versionUrl);
   } catch {
     return null;
   }
@@ -253,7 +253,7 @@ export function getInitData() {
  * Build a notification for skills version update.
  * Returns { type, message } or null.
  */
-export function getSkillsNotification(latestInfo, initData) {
+export function getSkillsNotification(latestInfo, initData, variant = VARIANTS.public) {
   if (!latestInfo?.version || !initData?.skillsVersion || !initData?.ides?.length) return null;
 
   const installed = semver.valid(semver.coerce(initData.skillsVersion));
@@ -266,10 +266,10 @@ export function getSkillsNotification(latestInfo, initData) {
 
   const ides = initData.ides;
   if (ides.includes('claude')) {
-    lines.push('  Claude Code: claude plugin update spark-cli@MemCo');
+    lines.push(`  Claude Code: claude plugin update ${variant.claudePlugin}`);
   }
   if (ides.includes('other')) {
-    lines.push('  Cursor/Windsurf: npx skills update memcoai/spark-cli-skills');
+    lines.push(`  Cursor/Windsurf: npx skills update ${variant.skillsRepo}`);
   }
 
   return { type: 'skills-update', message: lines.join('\n') };

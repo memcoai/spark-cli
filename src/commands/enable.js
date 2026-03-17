@@ -12,6 +12,7 @@ export async function runEnable({
   fetchVersion,
   writeKey,
   readKey,
+  detect,
 } = {}) {
   return runSetupFlow({
     scope: 'project',
@@ -21,6 +22,7 @@ export async function runEnable({
     fetchVersion,
     writeKey,
     readKey,
+    detect,
   });
 }
 

@@ -8,6 +8,7 @@ import {
   getInitData,
 } from '../update-check.js';
 import { printSuccess, printError, printInfo, printWarning, colorize } from '../banner.js';
+import { VARIANTS, getVariant } from '../constants.js';
 
 const IDE_LABELS = { claude: 'Claude Code', other: 'Cursor/Windsurf' };
 
@@ -18,7 +19,7 @@ function ideKeyToLabel(key) {
 /**
  * Print skills version status.
  */
-async function printSkillsStatus(initData, checkSkills, getSkillsNote) {
+async function printSkillsStatus(initData, checkSkills, getSkillsNote, variant) {
   if (!Array.isArray(initData.ides) || initData.ides.length === 0) {
     printInfo('No IDEs configured for skills. Run spark init to configure your IDE.');
     return;
@@ -31,8 +32,8 @@ async function printSkillsStatus(initData, checkSkills, getSkillsNote) {
   }
 
   try {
-    const latestSkills = await checkSkills();
-    const skillsNote = latestSkills ? getSkillsNote(latestSkills, initData) : null;
+    const latestSkills = await checkSkills(variant.skillsVersionUrl);
+    const skillsNote = latestSkills ? getSkillsNote(latestSkills, initData, variant) : null;
     if (skillsNote) {
       printWarning(skillsNote.message);
     } else if (latestSkills) {
@@ -77,9 +78,11 @@ export async function runStatus({
   console.log('');
 
   // 2. Auth check
+  let variant = VARIANTS.public;
   try {
     const data = await getUser();
     const user = data.user || data;
+    variant = getVariant(user);
     const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
     printSuccess(`Authenticated as ${name || user.email || user.id || 'unknown user'}`);
     const orgName = user.organization_name;
@@ -102,7 +105,7 @@ export async function runStatus({
   // 3. Skills version check
   const initData = getInit();
   if (initData) {
-    await printSkillsStatus(initData, checkSkills, getSkillsNote);
+    await printSkillsStatus(initData, checkSkills, getSkillsNote, variant);
   } else {
     printInfo('No skills configured. Run spark init to set up your IDE.');
   }

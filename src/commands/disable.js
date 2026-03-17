@@ -3,6 +3,7 @@ import { readSettingsKey, writeSettingsKey } from '../settings.js';
 import { LOCAL_SETTINGS_PATH } from '../constants.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 import { uninstallClaudePlugin, uninstallOtherIDEs, removeInitData } from './uninstall.js';
+import { detectVariant } from '../variant.js';
 
 /**
  * Core disable logic — removes Spark from the current project.
@@ -13,6 +14,7 @@ export async function runDisable({
   spawnInteractive = runInteractiveCommand,
   readKey = readSettingsKey,
   writeKey = writeSettingsKey,
+  detect = detectVariant,
 } = {}) {
   printBanner();
 
@@ -22,14 +24,15 @@ export async function runDisable({
     return;
   }
 
+  const variant = await detect();
   const scope = 'project';
 
   if (initData.ides.includes('claude')) {
-    await uninstallClaudePlugin(scope, { exec: execAsync });
+    await uninstallClaudePlugin(scope, { exec: execAsync, variant });
   }
 
   if (initData.ides.includes('other')) {
-    await uninstallOtherIDEs(scope, { spawnInteractive });
+    await uninstallOtherIDEs(scope, { spawnInteractive, variant });
   }
 
   removeInitData(LOCAL_SETTINGS_PATH, 'init', { readKey, writeKey });

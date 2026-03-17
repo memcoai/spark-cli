@@ -4,6 +4,7 @@ import { printError, printInfo, printWarning, createSpinner } from '../banner.js
 import { SETTINGS_PATH, LOCAL_SETTINGS_PATH } from '../constants.js';
 import { writeSettingsKey, readSettingsKey } from '../settings.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
+import { detectVariant } from '../variant.js';
 
 /**
  * Update skills for configured IDEs.
@@ -17,17 +18,19 @@ export async function updateSkills({
   fetchVersion = fetchSkillsVersion,
   writeKey = writeSettingsKey,
   readKey = readSettingsKey,
+  detect = detectVariant,
 } = {}) {
   const initData = getInit();
   if (!initData?.ides?.length) return;
 
+  const variant = await detect();
   const ides = initData.ides;
   let allSucceeded = true;
 
   if (ides.includes('claude')) {
     const spinner = createSpinner('Updating Spark plugin for Claude Code...');
     try {
-      await exec('claude', ['plugin', 'update', 'spark-cli@MemCo']);
+      await exec('claude', ['plugin', 'update', variant.claudePlugin]);
       spinner.stop('Spark plugin updated for Claude Code');
     } catch (err) {
       allSucceeded = false;
@@ -39,7 +42,7 @@ export async function updateSkills({
   if (ides.includes('other')) {
     printInfo('Updating Spark skills for Cursor/Windsurf...');
     try {
-      await spawnInteractive('npx', ['skills', 'update', 'memcoai/spark-cli-skills']);
+      await spawnInteractive('npx', ['skills', 'update', variant.skillsRepo]);
       printInfo('Spark skills updated for Cursor/Windsurf');
     } catch (err) {
       allSucceeded = false;
@@ -52,7 +55,7 @@ export async function updateSkills({
   if (!allSucceeded) return;
 
   try {
-    const versionInfo = await fetchVersion();
+    const versionInfo = await fetchVersion(variant.skillsVersionUrl);
     if (versionInfo?.version) {
       const local = readKey(LOCAL_SETTINGS_PATH, 'init');
       if (local?.ides?.length) {

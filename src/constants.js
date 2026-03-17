@@ -15,8 +15,34 @@ export function getAuthErrorUrl(apiBase) {
   return `${apiBase || getApiBase()}/cli/auth_error`;
 }
 export const VERSION_CHECK_URL = 'https://registry.npmjs.org/@memco/spark/latest';
-export const SKILLS_VERSION_URL =
-  'https://raw.githubusercontent.com/memcoai/spark-cli-skills/main/VERSION';
+
+export const SPARK_ORG_ID = '10000000-0000-0000-0000-000000000000';
+
+export const VARIANTS = {
+  public: {
+    claudePlugin: 'spark-cli@MemCo',
+    skillsRepo: 'memcoai/spark-cli-skills',
+    skillsVersionUrl: 'https://raw.githubusercontent.com/memcoai/spark-cli-skills/main/VERSION',
+  },
+  teams: {
+    claudePlugin: 'spark-teams-cli@MemCo',
+    skillsRepo: 'memcoai/spark-teams-cli-skills',
+    skillsVersionUrl:
+      'https://raw.githubusercontent.com/memcoai/spark-teams-cli-skills/main/VERSION',
+  },
+};
+
+/**
+ * Determine the variant (public or teams) from a user object.
+ * Returns teams variant if the user belongs to a non-Spark organization.
+ */
+export function getVariant(user) {
+  const orgId = user?.organization_id;
+  if (orgId && orgId !== SPARK_ORG_ID) {
+    return VARIANTS.teams;
+  }
+  return VARIANTS.public;
+}
 
 /**
  * Validate and normalize an API base URL string.

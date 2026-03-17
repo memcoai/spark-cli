@@ -1,6 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runEnable } from '../../src/commands/enable.js';
+import { VARIANTS } from '../../src/constants.js';
 import { setupCommandMocks } from '../helpers.js';
 
 // Shared setup flow behavior (IDE selection, cancel handling, error resilience,
@@ -17,6 +18,7 @@ describe('runEnable', () => {
     fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
     writeKey: mock.fn(),
     readKey: mock.fn(() => []),
+    detect: mock.fn(async () => VARIANTS.public),
     ...overrides,
   });
 
@@ -27,7 +29,7 @@ describe('runEnable', () => {
     assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
       'plugin',
       'install',
-      'spark-cli@MemCo',
+      VARIANTS.public.claudePlugin,
       '--scope',
       'project',
     ]);
@@ -43,7 +45,7 @@ describe('runEnable', () => {
     );
 
     const args = spawnInteractive.mock.calls[0].arguments[1];
-    assert.deepStrictEqual(args, ['skills', 'add', 'memcoai/spark-cli-skills']);
+    assert.deepStrictEqual(args, ['skills', 'add', VARIANTS.public.skillsRepo]);
     assert.ok(!args.includes('--global'));
   });
 

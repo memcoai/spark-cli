@@ -1,6 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runUninstall, getAllInitTargets } from '../../src/commands/uninstall.js';
+import { VARIANTS } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput, getStdoutOutput, npmExecErrorCases } from '../helpers.js';
 
 function initReadKey(initValue, globalInitValue = null, projects = null) {
@@ -125,20 +126,43 @@ describe('runUninstall — Claude Code plugin removal', () => {
     const deps = makeDeps({ readKey: initReadKey({ ides: ['claude'] }) });
     await runUninstall(deps);
 
-    assert.strictEqual(deps.execAsync.mock.calls.length, 1);
-    const [cmd, args] = deps.execAsync.mock.calls[0].arguments;
-    assert.strictEqual(cmd, 'claude');
-    assert.deepStrictEqual(args, ['plugin', 'uninstall', 'spark-cli@MemCo', '--scope', 'project']);
+    // Tries both variants (public + teams) for full cleanup
+    assert.strictEqual(deps.execAsync.mock.calls.length, 2);
+    const [cmd0, args0] = deps.execAsync.mock.calls[0].arguments;
+    assert.strictEqual(cmd0, 'claude');
+    assert.deepStrictEqual(args0, [
+      'plugin',
+      'uninstall',
+      VARIANTS.public.claudePlugin,
+      '--scope',
+      'project',
+    ]);
+    const [cmd1, args1] = deps.execAsync.mock.calls[1].arguments;
+    assert.strictEqual(cmd1, 'claude');
+    assert.deepStrictEqual(args1, [
+      'plugin',
+      'uninstall',
+      VARIANTS.teams.claudePlugin,
+      '--scope',
+      'project',
+    ]);
   });
 
   it('uninstalls claude plugin with user scope when globalInit has claude', async () => {
     const deps = makeDeps({ readKey: initReadKey(null, { ides: ['claude'] }) });
     await runUninstall(deps);
 
-    assert.strictEqual(deps.execAsync.mock.calls.length, 1);
+    // Tries both variants for full cleanup
+    assert.strictEqual(deps.execAsync.mock.calls.length, 2);
     const [cmd, args] = deps.execAsync.mock.calls[0].arguments;
     assert.strictEqual(cmd, 'claude');
-    assert.deepStrictEqual(args, ['plugin', 'uninstall', 'spark-cli@MemCo', '--scope', 'user']);
+    assert.deepStrictEqual(args, [
+      'plugin',
+      'uninstall',
+      VARIANTS.public.claudePlugin,
+      '--scope',
+      'user',
+    ]);
   });
 
   it('does not call claude uninstall when ides does not include claude', async () => {
@@ -166,6 +190,8 @@ describe('runUninstall — Claude Code plugin removal', () => {
 
     const output = getLogOutput(mocks.logMock) + getStdoutOutput(mocks.stdoutMock);
     assert.ok(output.includes('Failed to remove Claude Code plugin'));
+    // Both variants attempted, then npm uninstall
+    assert.strictEqual(deps.execAsync.mock.calls.length, 2);
     assert.strictEqual(deps.exec.mock.calls.length, 1);
     assert.strictEqual(deps.exec.mock.calls[0].arguments[0], 'npm uninstall -g @memco/spark');
   });
@@ -178,20 +204,24 @@ describe('runUninstall — Other IDEs skills removal', () => {
     const deps = makeDeps({ readKey: initReadKey({ ides: ['other'] }) });
     await runUninstall(deps);
 
-    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 1);
+    // Tries both variants for full cleanup
+    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 2);
     const [cmd, args] = deps.spawnInteractive.mock.calls[0].arguments;
     assert.strictEqual(cmd, 'npx');
-    assert.deepStrictEqual(args, ['skills', 'remove', 'memcoai/spark-cli-skills']);
+    assert.deepStrictEqual(args, ['skills', 'remove', VARIANTS.public.skillsRepo]);
+    const [, args1] = deps.spawnInteractive.mock.calls[1].arguments;
+    assert.deepStrictEqual(args1, ['skills', 'remove', VARIANTS.teams.skillsRepo]);
   });
 
   it('removes skills with --global flag for global scope', async () => {
     const deps = makeDeps({ readKey: initReadKey(null, { ides: ['other'] }) });
     await runUninstall(deps);
 
-    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 1);
+    // Tries both variants for full cleanup
+    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 2);
     const [cmd, args] = deps.spawnInteractive.mock.calls[0].arguments;
     assert.strictEqual(cmd, 'npx');
-    assert.deepStrictEqual(args, ['skills', 'remove', 'memcoai/spark-cli-skills', '--global']);
+    assert.deepStrictEqual(args, ['skills', 'remove', VARIANTS.public.skillsRepo, '--global']);
   });
 
   it('does not call skills remove when ides does not include other', async () => {
@@ -212,6 +242,8 @@ describe('runUninstall — Other IDEs skills removal', () => {
 
     const output = getLogOutput(mocks.logMock) + getStdoutOutput(mocks.stdoutMock);
     assert.ok(output.includes('Failed to remove skills'));
+    // Both variants attempted, then npm uninstall
+    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 2);
     assert.strictEqual(deps.exec.mock.calls.length, 1);
     assert.strictEqual(deps.exec.mock.calls[0].arguments[0], 'npm uninstall -g @memco/spark');
   });
@@ -224,22 +256,23 @@ describe('runUninstall — both IDEs', () => {
     const deps = makeDeps({ readKey: initReadKey({ ides: ['claude', 'other'] }) });
     await runUninstall(deps);
 
-    assert.strictEqual(deps.execAsync.mock.calls.length, 1);
-    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 1);
+    // Both variants tried for each IDE type
+    assert.strictEqual(deps.execAsync.mock.calls.length, 2);
+    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 2);
 
     const [claudeCmd, claudeArgs] = deps.execAsync.mock.calls[0].arguments;
     assert.strictEqual(claudeCmd, 'claude');
     assert.deepStrictEqual(claudeArgs, [
       'plugin',
       'uninstall',
-      'spark-cli@MemCo',
+      VARIANTS.public.claudePlugin,
       '--scope',
       'project',
     ]);
 
     const [npxCmd, npxArgs] = deps.spawnInteractive.mock.calls[0].arguments;
     assert.strictEqual(npxCmd, 'npx');
-    assert.deepStrictEqual(npxArgs, ['skills', 'remove', 'memcoai/spark-cli-skills']);
+    assert.deepStrictEqual(npxArgs, ['skills', 'remove', VARIANTS.public.skillsRepo]);
   });
 });
 
@@ -252,21 +285,21 @@ describe('runUninstall — multi-target cleanup', () => {
     });
     await runUninstall(deps);
 
-    // claude plugin from local init + skills from global init
-    assert.strictEqual(deps.execAsync.mock.calls.length, 1);
-    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 1);
+    // claude plugin from local init (2 variants) + skills from global init (2 variants)
+    assert.strictEqual(deps.execAsync.mock.calls.length, 2);
+    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 2);
 
     const [, claudeArgs] = deps.execAsync.mock.calls[0].arguments;
     assert.deepStrictEqual(claudeArgs, [
       'plugin',
       'uninstall',
-      'spark-cli@MemCo',
+      VARIANTS.public.claudePlugin,
       '--scope',
       'project',
     ]);
 
     const [, npxArgs] = deps.spawnInteractive.mock.calls[0].arguments;
-    assert.deepStrictEqual(npxArgs, ['skills', 'remove', 'memcoai/spark-cli-skills', '--global']);
+    assert.deepStrictEqual(npxArgs, ['skills', 'remove', VARIANTS.public.skillsRepo, '--global']);
   });
 
   it('processes remote projects from the projects array', async () => {
@@ -276,10 +309,17 @@ describe('runUninstall — multi-target cleanup', () => {
     });
     await runUninstall(deps);
 
-    assert.strictEqual(deps.execAsync.mock.calls.length, 1);
+    // Both variants tried for full cleanup
+    assert.strictEqual(deps.execAsync.mock.calls.length, 2);
     const [cmd, args, opts] = deps.execAsync.mock.calls[0].arguments;
     assert.strictEqual(cmd, 'claude');
-    assert.deepStrictEqual(args, ['plugin', 'uninstall', 'spark-cli@MemCo', '--scope', 'project']);
+    assert.deepStrictEqual(args, [
+      'plugin',
+      'uninstall',
+      VARIANTS.public.claudePlugin,
+      '--scope',
+      'project',
+    ]);
     assert.deepStrictEqual(opts, { cwd: '/remote/project' });
   });
 
@@ -290,10 +330,11 @@ describe('runUninstall — multi-target cleanup', () => {
     });
     await runUninstall(deps);
 
-    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 1);
+    // Both variants tried for full cleanup
+    assert.strictEqual(deps.spawnInteractive.mock.calls.length, 2);
     const [cmd, args, opts] = deps.spawnInteractive.mock.calls[0].arguments;
     assert.strictEqual(cmd, 'npx');
-    assert.deepStrictEqual(args, ['skills', 'remove', 'memcoai/spark-cli-skills']);
+    assert.deepStrictEqual(args, ['skills', 'remove', VARIANTS.public.skillsRepo]);
     assert.deepStrictEqual(opts, { cwd: '/remote/project' });
   });
 
@@ -321,12 +362,12 @@ describe('runUninstall — multi-target cleanup', () => {
     });
     await runUninstall(deps);
 
-    // 2 calls: one for local init (cwd), one for /other/project
-    assert.strictEqual(deps.execAsync.mock.calls.length, 2);
+    // 4 calls: 2 variants for local init (cwd) + 2 variants for /other/project
+    assert.strictEqual(deps.execAsync.mock.calls.length, 4);
     // First call should have empty options (local init, no cwd)
     assert.deepStrictEqual(deps.execAsync.mock.calls[0].arguments[2], {});
-    // Second call should have cwd for remote project
-    assert.deepStrictEqual(deps.execAsync.mock.calls[1].arguments[2], {
+    // Third call (first variant for remote project) should have cwd
+    assert.deepStrictEqual(deps.execAsync.mock.calls[2].arguments[2], {
       cwd: '/other/project',
     });
   });
@@ -347,8 +388,8 @@ describe('runUninstall — multi-target cleanup', () => {
     });
     await runUninstall(deps);
 
-    // Both projects should be attempted
-    assert.strictEqual(deps.execAsync.mock.calls.length, 2);
+    // Both projects attempted, 2 variants each = 4 calls
+    assert.strictEqual(deps.execAsync.mock.calls.length, 4);
   });
 });
 

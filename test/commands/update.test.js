@@ -1,6 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runUpdate, updateSkills } from '../../src/commands/update.js';
+import { VARIANTS } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput, getStdoutOutput, npmExecErrorCases } from '../helpers.js';
 
 const defaultRunDeps = (overrides = {}) => ({
@@ -17,6 +18,7 @@ const defaultSkillsDeps = (overrides = {}) => ({
   fetchVersion: mock.fn(async () => ({ version: '1.1.0' })),
   writeKey: mock.fn(),
   readKey: mock.fn(() => null),
+  detect: mock.fn(async () => VARIANTS.public),
   ...overrides,
 });
 
@@ -144,7 +146,7 @@ describe('updateSkills', () => {
     assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[1], [
       'plugin',
       'update',
-      'spark-cli@MemCo',
+      VARIANTS.public.claudePlugin,
     ]);
   });
 
@@ -160,7 +162,7 @@ describe('updateSkills', () => {
     assert.deepStrictEqual(deps.spawnInteractive.mock.calls[0].arguments[1], [
       'skills',
       'update',
-      'memcoai/spark-cli-skills',
+      VARIANTS.public.skillsRepo,
     ]);
   });
 

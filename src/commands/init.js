@@ -8,9 +8,10 @@ import {
   colorize,
 } from '../banner.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
-import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, getApiBase } from '../constants.js';
+import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, VARIANTS, getApiBase } from '../constants.js';
 import { fetchSkillsVersion } from '../update-check.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
+import { detectVariant } from '../variant.js';
 
 /**
  * Prompt a multi-select checklist. Users toggle with space, navigate with arrows, confirm with enter.
@@ -153,7 +154,10 @@ export function promptChoice(question, options) {
 /**
  * Set up Claude Code with Spark plugin.
  */
-export async function setupClaudeCode(scope, { exec = runCommand } = {}) {
+export async function setupClaudeCode(
+  scope,
+  { exec = runCommand, variant = VARIANTS.public } = {},
+) {
   const scopeFlag = scope === 'project' ? 'project' : 'user';
 
   const addSpinner = createSpinner('Adding Spark marketplace...');
@@ -173,13 +177,13 @@ export async function setupClaudeCode(scope, { exec = runCommand } = {}) {
 
   const installSpinner = createSpinner('Installing Spark plugin...');
   try {
-    await exec('claude', ['plugin', 'install', 'spark-cli@MemCo', '--scope', scopeFlag]);
+    await exec('claude', ['plugin', 'install', variant.claudePlugin, '--scope', scopeFlag]);
     installSpinner.stop(`Spark plugin installed (${scopeFlag} scope)`);
   } catch (err) {
     installSpinner.fail('Failed to install plugin');
     printWarning(err.stderr?.trim() || err.message);
     printInfo(
-      `You can install it manually: claude plugin install spark-cli@MemCo --scope ${scopeFlag}`,
+      `You can install it manually: claude plugin install ${variant.claudePlugin} --scope ${scopeFlag}`,
     );
   }
 }
@@ -187,14 +191,17 @@ export async function setupClaudeCode(scope, { exec = runCommand } = {}) {
 /**
  * Set up other IDEs (Cursor, Windsurf, etc.) via skills CLI.
  */
-export async function setupOtherIDEs(scope, { spawnInteractive = runInteractiveCommand } = {}) {
-  const args = ['skills', 'add', 'memcoai/spark-cli-skills'];
+export async function setupOtherIDEs(
+  scope,
+  { spawnInteractive = runInteractiveCommand, variant = VARIANTS.public } = {},
+) {
+  const args = ['skills', 'add', variant.skillsRepo];
   if (scope === 'global') {
     args.push('--global');
   }
 
   const globalFlag = scope === 'global' ? ' --global' : '';
-  printInfo(`Running: npx skills add memcoai/spark-cli-skills${globalFlag}`);
+  printInfo(`Running: npx skills add ${variant.skillsRepo}${globalFlag}`);
   console.log('');
 
   try {
@@ -204,7 +211,7 @@ export async function setupOtherIDEs(scope, { spawnInteractive = runInteractiveC
   } catch (err) {
     console.log('');
     printWarning(`Failed to install skills: ${err.message}`);
-    printInfo(`You can install manually: npx skills add memcoai/spark-cli-skills${globalFlag}`);
+    printInfo(`You can install manually: npx skills add ${variant.skillsRepo}${globalFlag}`);
   }
 }
 
@@ -228,12 +235,13 @@ export async function saveInitChoices(
     fetchVersion = fetchSkillsVersion,
     writeKey = writeSettingsKey,
     readKey = readSettingsKey,
+    variant = VARIANTS.public,
   } = {},
 ) {
   const ideKeys = ides.map((ide) => IDE_KEY_MAP[ide] || ide);
 
   // Fetch the current skills version to record what was installed
-  const versionInfo = await fetchVersion();
+  const versionInfo = await fetchVersion(variant.skillsVersionUrl);
   const skillsVersion = versionInfo?.version || '0.0.0';
 
   const initData = { ides: ideKeys, skillsVersion };
@@ -299,12 +307,12 @@ async function promptWithCancel(promptFn, ...args) {
 /**
  * Execute IDE setup for the given selections.
  */
-async function executeSetup(selectedIDEs, scope, { exec, spawnInteractive }) {
+async function executeSetup(selectedIDEs, scope, { exec, spawnInteractive, variant }) {
   for (const ide of selectedIDEs) {
     if (ide === 'Claude Code') {
-      await setupClaudeCode(scope, { exec });
+      await setupClaudeCode(scope, { exec, variant });
     } else {
-      await setupOtherIDEs(scope, { spawnInteractive });
+      await setupOtherIDEs(scope, { spawnInteractive, variant });
     }
   }
 }
@@ -322,8 +330,12 @@ export async function runSetupFlow({
   fetchVersion = fetchSkillsVersion,
   writeKey = writeSettingsKey,
   readKey = readSettingsKey,
+  detect = detectVariant,
 } = {}) {
   printBanner();
+
+  // Detect variant (public vs teams) based on current user's org
+  const variant = await detect();
 
   // Step 1: IDE selection
   const selectedIDEs = await promptWithCancel(promptChecklistFn, 'Select your IDE(s):', [
@@ -354,11 +366,11 @@ export async function runSetupFlow({
   }
 
   // Step 3: Execute setup
-  await executeSetup(selectedIDEs, scope, { exec, spawnInteractive });
+  await executeSetup(selectedIDEs, scope, { exec, spawnInteractive, variant });
 
   // Step 4: Save init choices
   try {
-    await saveInitChoices(selectedIDEs, scope, { fetchVersion, writeKey, readKey });
+    await saveInitChoices(selectedIDEs, scope, { fetchVersion, writeKey, readKey, variant });
   } catch {
     // Non-blocking — don't fail if we can't save preferences
   }

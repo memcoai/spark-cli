@@ -1,6 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runDisable } from '../../src/commands/disable.js';
+import { VARIANTS } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput, getStdoutOutput } from '../helpers.js';
 
 function makeDeps(overrides = {}) {
@@ -9,6 +10,7 @@ function makeDeps(overrides = {}) {
     spawnInteractive: mock.fn(async () => {}),
     readKey: mock.fn(() => null),
     writeKey: mock.fn(),
+    detect: mock.fn(async () => VARIANTS.public),
     ...overrides,
   };
 }
@@ -45,7 +47,13 @@ describe('runDisable', () => {
     assert.strictEqual(deps.execAsync.mock.calls.length, 1);
     const [cmd, args] = deps.execAsync.mock.calls[0].arguments;
     assert.strictEqual(cmd, 'claude');
-    assert.deepStrictEqual(args, ['plugin', 'uninstall', 'spark-cli@MemCo', '--scope', 'project']);
+    assert.deepStrictEqual(args, [
+      'plugin',
+      'uninstall',
+      VARIANTS.public.claudePlugin,
+      '--scope',
+      'project',
+    ]);
   });
 
   it('removes skills when init has other', async () => {
@@ -55,7 +63,7 @@ describe('runDisable', () => {
     assert.strictEqual(deps.spawnInteractive.mock.calls.length, 1);
     const [cmd, args] = deps.spawnInteractive.mock.calls[0].arguments;
     assert.strictEqual(cmd, 'npx');
-    assert.deepStrictEqual(args, ['skills', 'remove', 'memcoai/spark-cli-skills']);
+    assert.deepStrictEqual(args, ['skills', 'remove', VARIANTS.public.skillsRepo]);
   });
 
   it('does not add --global flag for skills removal', async () => {
