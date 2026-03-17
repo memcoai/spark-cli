@@ -1,7 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runStatus } from '../../src/commands/status.js';
-import { SPARK_ORG_ID, VARIANTS } from '../../src/constants.js';
+import { SPARK_ORG_ID } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput } from '../helpers.js';
 
 describe('runStatus', () => {
@@ -218,9 +218,9 @@ describe('runStatus', () => {
       }),
     );
 
-    // Skills check should use the stored (public) variant URL, not the detected (teams) one
+    // Skills check should use the stored (public) variant key, not the detected (teams) one
     assert.strictEqual(checkSkills.mock.calls.length, 1);
-    assert.strictEqual(checkSkills.mock.calls[0].arguments[0], VARIANTS.public.skillsVersionUrl);
+    assert.strictEqual(checkSkills.mock.calls[0].arguments[0], 'public');
   });
 
   it('does not auto-swap plugins on variant mismatch', async () => {

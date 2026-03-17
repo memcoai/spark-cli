@@ -8,6 +8,7 @@ import {
   SPARK_DIR,
   LOCAL_SPARK_DIR,
   VARIANTS,
+  resolveVariant,
 } from '../constants.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 
@@ -153,21 +154,23 @@ export async function uninstallOtherIDEs(
  */
 async function uninstallTarget(target, { execAsync, spawnInteractive, writeKey }) {
   const { initData, scope, settingsPath, settingsKey, cwd: targetCwd } = target;
-  const allVariants = [VARIANTS.public, VARIANTS.teams];
+
+  // Use stored variant when available; fall back to trying both for full cleanup
+  const storedVariant = resolveVariant(initData?.variant);
+  const variants = storedVariant ? [storedVariant] : [VARIANTS.public, VARIANTS.teams];
 
   if (targetCwd) {
     printInfo(`Cleaning up project: ${targetCwd}`);
   }
 
-  // Try both variants to ensure full cleanup regardless of which was installed
   if (initData.ides.includes('claude')) {
-    for (const variant of allVariants) {
+    for (const variant of variants) {
       await uninstallClaudePlugin(scope, { exec: execAsync, cwd: targetCwd, variant });
     }
   }
 
   if (initData.ides.includes('other')) {
-    for (const variant of allVariants) {
+    for (const variant of variants) {
       await uninstallOtherIDEs(scope, { spawnInteractive, cwd: targetCwd, variant });
     }
   }

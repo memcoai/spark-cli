@@ -247,7 +247,7 @@ export async function saveInitChoices(
   const ideKeys = ides.map((ide) => IDE_KEY_MAP[ide] || ide);
 
   // Fetch the current skills version to record what was installed
-  const versionInfo = await fetchVersion(variant.skillsVersionUrl);
+  const versionInfo = await fetchVersion(getVariantKey(variant));
   const skillsVersion = versionInfo?.version || '0.0.0';
 
   const variantKey = getVariantKey(variant);

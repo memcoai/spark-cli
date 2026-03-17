@@ -28,10 +28,9 @@ async function resolveSkillsVariant(initData, { exec, spawnInteractive, detect, 
  */
 async function persistSkillsVersion(variant, { fetchVersion, readKey, writeKey }) {
   try {
-    const versionInfo = await fetchVersion(variant.skillsVersionUrl);
-    if (!versionInfo?.version) return;
-
     const variantKey = getVariantKey(variant);
+    const versionInfo = await fetchVersion(variantKey);
+    if (!versionInfo?.version) return;
     const updates = [
       [LOCAL_SETTINGS_PATH, 'init'],
       [SETTINGS_PATH, 'globalInit'],

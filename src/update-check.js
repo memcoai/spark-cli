@@ -201,17 +201,17 @@ export function getCachedSkillsVersion() {
  * The VERSION file contains a plain version string (e.g. "1.0.0\n").
  * Never rejects.
  */
-export async function fetchSkillsVersion(versionUrl = VARIANTS.public.skillsVersionUrl) {
+export async function fetchSkillsVersion(variantKey = 'public') {
   try {
-    const response = await fetch(versionUrl, {
+    const v = VARIANTS[variantKey] || VARIANTS.public;
+    const response = await fetch(v.skillsVersionUrl, {
       signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) return null;
     const text = await response.text();
     const version = text.trim();
     if (!version) return null;
-    const variant = versionUrl === VARIANTS.teams.skillsVersionUrl ? 'teams' : 'public';
-    const result = { version, checkedAt: Date.now(), variant };
+    const result = { version, checkedAt: Date.now(), variant: variantKey };
     writeSettingsKey(SETTINGS_PATH, 'skillsVersion', result);
     return result;
   } catch {
@@ -223,18 +223,17 @@ export async function fetchSkillsVersion(versionUrl = VARIANTS.public.skillsVers
  * Check for skills updates. Returns cached data if fresh (<24h), otherwise fetches.
  * Never rejects.
  */
-export async function checkSkillsVersion(versionUrl) {
+export async function checkSkillsVersion(variantKey = 'public') {
   try {
     const cached = getCachedSkillsVersion();
     if (cached?.version && cached.checkedAt && Date.now() - cached.checkedAt < ONE_DAY_MS) {
       // Ensure cache is for the requested variant
       const cachedVariant = cached.variant || 'public';
-      const requestedVariant = versionUrl === VARIANTS.teams.skillsVersionUrl ? 'teams' : 'public';
-      if (cachedVariant === requestedVariant) {
+      if (cachedVariant === variantKey) {
         return cached;
       }
     }
-    return await fetchSkillsVersion(versionUrl);
+    return await fetchSkillsVersion(variantKey);
   } catch {
     return null;
   }

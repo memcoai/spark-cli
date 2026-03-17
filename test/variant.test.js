@@ -79,16 +79,18 @@ describe('ensureCorrectVariant', () => {
       ...overrides,
     });
 
-  it('returns null when no init data exists', async () => {
-    const result = await ensureCorrectVariant(defaultDeps({ getInit: mock.fn(() => null) }));
-    assert.strictEqual(result, null);
+  it('returns detected variant without swapping when no init data exists', async () => {
+    const deps = defaultDeps({ getInit: mock.fn(() => null) });
+    const result = await ensureCorrectVariant(deps);
+    assert.strictEqual(result, VARIANTS.public);
+    assert.strictEqual(deps.exec.mock.calls.length, 0);
   });
 
-  it('returns null when init data has no IDEs', async () => {
-    const result = await ensureCorrectVariant(
-      defaultDeps({ getInit: mock.fn(() => ({ ides: [], skillsVersion: '1.0.0' })) }),
-    );
-    assert.strictEqual(result, null);
+  it('returns detected variant without swapping when init data has no IDEs', async () => {
+    const deps = defaultDeps({ getInit: mock.fn(() => ({ ides: [], skillsVersion: '1.0.0' })) });
+    const result = await ensureCorrectVariant(deps);
+    assert.strictEqual(result, VARIANTS.public);
+    assert.strictEqual(deps.exec.mock.calls.length, 0);
   });
 
   it('returns null when user is not authenticated', async () => {

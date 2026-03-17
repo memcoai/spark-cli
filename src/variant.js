@@ -48,9 +48,6 @@ export async function ensureCorrectVariant({
   spawnInteractive = runInteractiveCommand,
   fetchVersion = fetchSkillsVersion,
 } = {}) {
-  const initData = getInit();
-  if (!initData?.ides?.length) return null;
-
   let variant;
   try {
     const data = await getUser();
@@ -60,6 +57,9 @@ export async function ensureCorrectVariant({
     // Not authenticated — can't detect, skip
     return null;
   }
+
+  const initData = getInit();
+  if (!initData?.ides?.length) return variant;
 
   const detectedKey = getVariantKey(variant);
   const storedKey = initData.variant || 'public';
@@ -94,7 +94,7 @@ export async function ensureCorrectVariant({
 
   // Update init data with new variant and version
   try {
-    const versionInfo = await fetchVersion(variant.skillsVersionUrl);
+    const versionInfo = await fetchVersion(getVariantKey(variant));
     const skillsVersion = versionInfo?.version || initData.skillsVersion || '0.0.0';
     const updatedInit = { ...initData, variant: detectedKey, skillsVersion };
 

@@ -32,7 +32,7 @@ async function printSkillsStatus(initData, checkSkills, getSkillsNote, variant) 
   }
 
   try {
-    const latestSkills = await checkSkills(variant.skillsVersionUrl);
+    const latestSkills = await checkSkills(getVariantKey(variant));
     const skillsNote = latestSkills ? getSkillsNote(latestSkills, initData, variant) : null;
     if (skillsNote) {
       printWarning(skillsNote.message);
