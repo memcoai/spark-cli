@@ -26,9 +26,16 @@ export async function updateSkills({
 
   // Ensure correct variant before updating (auto-swap if mismatched)
   const swappedVariant = await ensureVariant({ exec, spawnInteractive });
-  // Prefer stored variant from init data when detection is unavailable (e.g. unauthenticated),
-  // only fall back to detectVariant() if no stored variant exists.
-  const variant = swappedVariant || resolveVariant(initData.variant) || (await detect());
+  // Prefer stored variant from init data; only detect from API as last resort.
+  let variant = swappedVariant || resolveVariant(initData.variant);
+  if (!variant) {
+    try {
+      variant = await detect();
+    } catch {
+      printError('Could not detect variant: not authenticated or API unavailable.');
+      return;
+    }
+  }
   const ides = initData.ides;
   let allSucceeded = true;
 

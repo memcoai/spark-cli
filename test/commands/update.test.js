@@ -288,6 +288,22 @@ describe('updateSkills', () => {
     ]);
   });
 
+  it('shows error when detectVariant throws and no stored variant exists', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0' })),
+      ensureVariant: mock.fn(async () => null),
+      detect: mock.fn(async () => {
+        throw new Error('401 Unauthorized');
+      }),
+    });
+
+    await updateSkills(deps);
+
+    const output = getLogOutput(mocks.logMock) + getStdoutOutput(mocks.stdoutMock);
+    assert.ok(output.includes('Could not detect variant'));
+    assert.strictEqual(deps.exec.mock.calls.length, 0);
+  });
+
   it('updates skills version in local settings when local init exists', async () => {
     const localInit = { ides: ['claude'], skillsVersion: '1.0.0' };
     const deps = defaultSkillsDeps({

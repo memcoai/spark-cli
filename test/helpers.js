@@ -180,6 +180,21 @@ export function buildApiRequestDeps(overrides = {}) {
  * Shared npm exec error cases for update/uninstall command tests.
  * Each entry has a name, error object, and expected output substring.
  */
+/**
+ * Builds common mock dependencies shared by setup-related command tests (init, enable, variant).
+ * Pass overrides to customize or add command-specific deps.
+ */
+export function buildSetupDeps(overrides = {}) {
+  return {
+    exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
+    spawnInteractive: mock.fn(async () => {}),
+    fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
+    writeKey: mock.fn(),
+    readKey: mock.fn(() => []),
+    ...overrides,
+  };
+}
+
 export const npmExecErrorCases = [
   {
     name: 'shows npm-not-found message on ENOENT',

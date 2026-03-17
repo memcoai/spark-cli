@@ -1,9 +1,9 @@
 import { printBanner, printError, printInfo, printSuccess } from '../banner.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
-import { LOCAL_SETTINGS_PATH } from '../constants.js';
+import { LOCAL_SETTINGS_PATH, VARIANTS } from '../constants.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 import { uninstallClaudePlugin, uninstallOtherIDEs, removeInitData } from './uninstall.js';
-import { detectVariant, VARIANTS } from '../variant.js';
+import { detectVariant } from '../variant.js';
 
 /**
  * Core disable logic — removes Spark from the current project.
@@ -24,22 +24,25 @@ export async function runDisable({
     return;
   }
 
-  const detectedVariant = await detect();
-  let variant = detectedVariant;
   const storedVariant = initData?.variant;
+  let variant;
 
   if (storedVariant) {
     if (typeof storedVariant === 'string') {
-      // Map stored key ('public' | 'teams') to the corresponding variant object
-      variant = VARIANTS[storedVariant] || detectedVariant || VARIANTS.public;
+      variant = VARIANTS[storedVariant] || VARIANTS.public;
     } else if (typeof storedVariant === 'object') {
-      // Backwards compatibility if an object was persisted
       variant = storedVariant;
     }
   }
 
   if (!variant) {
-    variant = VARIANTS.public;
+    try {
+      variant = await detect();
+    } catch {
+      printError('Could not detect variant: not authenticated or API unavailable.');
+      process.exit(1);
+      return;
+    }
   }
 
   const scope = 'project';

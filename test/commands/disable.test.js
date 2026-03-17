@@ -141,4 +141,32 @@ describe('runDisable', () => {
 
     assert.strictEqual(deps.spawnInteractive.mock.calls.length, 0);
   });
+
+  it('uses stored variant instead of calling detect', async () => {
+    const deps = makeDeps({
+      readKey: initReadKey({ ides: ['claude'], variant: 'teams' }),
+      detect: mock.fn(async () => {
+        throw new Error('should not be called');
+      }),
+    });
+    await runDisable(deps);
+
+    assert.strictEqual(deps.detect.mock.calls.length, 0);
+    const [, args] = deps.execAsync.mock.calls[0].arguments;
+    assert.ok(args.includes(VARIANTS.teams.claudePlugin));
+  });
+
+  it('errors when detect throws and no stored variant exists', async () => {
+    const deps = makeDeps({
+      readKey: initReadKey({ ides: ['claude'] }),
+      detect: mock.fn(async () => {
+        throw new Error('401 Unauthorized');
+      }),
+    });
+    await runDisable(deps);
+
+    const output = getLogOutput(mocks.logMock) + getStdoutOutput(mocks.stdoutMock);
+    assert.ok(output.includes('Could not detect variant'));
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+  });
 });

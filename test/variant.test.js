@@ -46,13 +46,16 @@ describe('detectVariant', () => {
     assert.strictEqual(result, VARIANTS.teams);
   });
 
-  it('returns public variant when getUser throws (unauthenticated)', async () => {
-    const result = await detectVariant({
-      getUser: mock.fn(async () => {
-        throw new Error('401 Unauthorized');
-      }),
-    });
-    assert.strictEqual(result, VARIANTS.public);
+  it('throws when getUser throws (unauthenticated)', async () => {
+    await assert.rejects(
+      () =>
+        detectVariant({
+          getUser: mock.fn(async () => {
+            throw new Error('401 Unauthorized');
+          }),
+        }),
+      { message: '401 Unauthorized' },
+    );
   });
 
   it('handles response without user wrapper', async () => {

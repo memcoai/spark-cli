@@ -15,16 +15,12 @@ import { printInfo, printWarning } from './banner.js';
 
 /**
  * Detect the variant (public or teams) by fetching the current user.
- * Returns VARIANTS.public if unauthenticated or on any error.
+ * Throws on auth/network errors so callers can fall back to stored variant.
  */
 export async function detectVariant({ getUser = getCurrentUser } = {}) {
-  try {
-    const data = await getUser();
-    const user = data.user || data;
-    return getVariant(user);
-  } catch {
-    return VARIANTS.public;
-  }
+  const data = await getUser();
+  const user = data.user || data;
+  return getVariant(user);
 }
 
 /**

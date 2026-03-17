@@ -342,11 +342,18 @@ export async function runSetupFlow({
 } = {}) {
   printBanner();
 
-  // Ensure existing installation uses the correct variant (auto-swap if mismatched)
-  const swappedVariant = await ensureVariant({ exec, spawnInteractive });
-
   // Detect variant (public vs teams) based on current user's org
-  const variant = swappedVariant || (await detect());
+  let variant = await ensureVariant({ exec, spawnInteractive });
+  if (!variant) {
+    try {
+      variant = await detect();
+    } catch {
+      printError('Could not detect variant: not authenticated or API unavailable.');
+      printInfo('Please run "spark login" first, then try again.');
+      process.exit(1);
+      return;
+    }
+  }
 
   // Step 1: IDE selection
   const selectedIDEs = await promptWithCancel(promptChecklistFn, 'Select your IDE(s):', [
