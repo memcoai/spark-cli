@@ -178,6 +178,28 @@ describe('ensureCorrectVariant', () => {
     assert.ok(writeCall, 'should write updated init data with teams variant');
   });
 
+  it('uses global scope when local init has ides but no skillsVersion', async () => {
+    const deps = defaultDeps({
+      getUser: mock.fn(async () => ({
+        user: { organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e' },
+      })),
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+      readKey: mock.fn((path, key) => {
+        // Local init exists but is missing skillsVersion (partial/corrupt state)
+        if (key === 'init') return { ides: ['claude'] };
+        return null;
+      }),
+    });
+
+    await ensureCorrectVariant(deps);
+
+    // Should write to globalInit (global scope), not local init
+    const writeCall = deps.writeKey.mock.calls.find((c) => c.arguments[1] === 'globalInit');
+    assert.ok(writeCall, 'should write to globalInit when local init is missing skillsVersion');
+    const localWrite = deps.writeKey.mock.calls.find((c) => c.arguments[1] === 'init');
+    assert.strictEqual(localWrite, undefined, 'should not write to local init');
+  });
+
   it('prints warning and info messages during swap', async () => {
     await ensureCorrectVariant(
       defaultDeps({

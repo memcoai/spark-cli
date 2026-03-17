@@ -1,7 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runStatus } from '../../src/commands/status.js';
-import { SPARK_ORG_ID } from '../../src/constants.js';
+import { SPARK_ORG_ID, VARIANTS } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput } from '../helpers.js';
 
 describe('runStatus', () => {
@@ -200,6 +200,27 @@ describe('runStatus', () => {
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(!output.includes('Variant mismatch'));
+  });
+
+  it('checks skills version using stored variant, not detected variant on mismatch', async () => {
+    const checkSkills = mock.fn(async () => ({ version: '1.0.0' }));
+    await runStatus(
+      defaultDeps({
+        getUser: mock.fn(async () => ({
+          user: {
+            first_name: 'Test',
+            organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e',
+            organization_name: 'Acme Corp',
+          },
+        })),
+        getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+        checkSkills,
+      }),
+    );
+
+    // Skills check should use the stored (public) variant URL, not the detected (teams) one
+    assert.strictEqual(checkSkills.mock.calls.length, 1);
+    assert.strictEqual(checkSkills.mock.calls[0].arguments[0], VARIANTS.public.skillsVersionUrl);
   });
 
   it('does not auto-swap plugins on variant mismatch', async () => {

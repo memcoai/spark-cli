@@ -52,6 +52,14 @@ export function getVariantKey(variant) {
 }
 
 /**
+ * Get the variant object for a string key ('public' or 'teams').
+ * Returns null if the key is not recognized.
+ */
+export function resolveVariant(key) {
+  return VARIANTS[key] || null;
+}
+
+/**
  * Validate and normalize an API base URL string.
  * Returns the trimmed, trailing-slash-stripped string, or undefined if invalid/empty.
  */

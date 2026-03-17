@@ -29,11 +29,12 @@ export async function detectVariant({ getUser = getCurrentUser } = {}) {
 
 /**
  * Determine scope from init data location.
- * Returns 'project' if local init exists, otherwise 'global'.
+ * Returns 'project' if a valid local init exists (with ides and skillsVersion),
+ * otherwise 'global'. Mirrors the same criteria used by getInitData().
  */
 function getInitScope(readKey = readSettingsKey) {
   const local = readKey(LOCAL_SETTINGS_PATH, 'init');
-  if (local?.ides?.length) return 'project';
+  if (local?.ides?.length && local?.skillsVersion) return 'project';
   return 'global';
 }
 

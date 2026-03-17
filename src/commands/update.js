@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 import { getLocalVersion, getInitData, fetchSkillsVersion } from '../update-check.js';
 import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
-import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, getVariantKey } from '../constants.js';
+import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, getVariantKey, resolveVariant } from '../constants.js';
 import { writeSettingsKey, readSettingsKey } from '../settings.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 import { detectVariant, ensureCorrectVariant } from '../variant.js';
@@ -26,7 +26,9 @@ export async function updateSkills({
 
   // Ensure correct variant before updating (auto-swap if mismatched)
   const swappedVariant = await ensureVariant({ exec, spawnInteractive });
-  const variant = swappedVariant || (await detect());
+  // Prefer stored variant from init data when detection is unavailable (e.g. unauthenticated),
+  // only fall back to detectVariant() if no stored variant exists.
+  const variant = swappedVariant || resolveVariant(initData.variant) || (await detect());
   const ides = initData.ides;
   let allSucceeded = true;
 

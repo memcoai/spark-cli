@@ -252,6 +252,42 @@ describe('updateSkills', () => {
     assert.strictEqual(deps.writeKey.mock.calls.length, 0);
   });
 
+  it('uses stored variant from init data when ensureVariant returns null', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'teams' })),
+      ensureVariant: mock.fn(async () => null),
+      detect: mock.fn(async () => {
+        throw new Error('should not be called');
+      }),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.detect.mock.calls.length, 0);
+    assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[1], [
+      'plugin',
+      'update',
+      VARIANTS.teams.claudePlugin,
+    ]);
+  });
+
+  it('falls back to detectVariant when no stored variant exists', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0' })),
+      ensureVariant: mock.fn(async () => null),
+      detect: mock.fn(async () => VARIANTS.teams),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.detect.mock.calls.length, 1);
+    assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[1], [
+      'plugin',
+      'update',
+      VARIANTS.teams.claudePlugin,
+    ]);
+  });
+
   it('updates skills version in local settings when local init exists', async () => {
     const localInit = { ides: ['claude'], skillsVersion: '1.0.0' };
     const deps = defaultSkillsDeps({
