@@ -24,7 +24,8 @@ export async function runDisable({
     return;
   }
 
-  const variant = await detect();
+  const detectedVariant = await detect();
+  const variant = initData?.variant || detectedVariant || 'public';
   const scope = 'project';
 
   if (initData.ides.includes('claude')) {
