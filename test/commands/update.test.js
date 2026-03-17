@@ -1,6 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runUpdate, updateSkills } from '../../src/commands/update.js';
+import { VARIANTS } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput, getStdoutOutput, npmExecErrorCases } from '../helpers.js';
 
 const defaultRunDeps = (overrides = {}) => ({
@@ -17,6 +18,8 @@ const defaultSkillsDeps = (overrides = {}) => ({
   fetchVersion: mock.fn(async () => ({ version: '1.1.0' })),
   writeKey: mock.fn(),
   readKey: mock.fn(() => null),
+  detect: mock.fn(async () => VARIANTS.public),
+  ensureVariant: mock.fn(async () => null),
   ...overrides,
 });
 
@@ -144,7 +147,7 @@ describe('updateSkills', () => {
     assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[1], [
       'plugin',
       'update',
-      'spark-cli@MemCo',
+      VARIANTS.public.claudePlugin,
     ]);
   });
 
@@ -160,7 +163,7 @@ describe('updateSkills', () => {
     assert.deepStrictEqual(deps.spawnInteractive.mock.calls[0].arguments[1], [
       'skills',
       'update',
-      'memcoai/spark-cli-skills',
+      VARIANTS.public.skillsRepo,
     ]);
   });
 
@@ -247,6 +250,58 @@ describe('updateSkills', () => {
 
     assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
     assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+  });
+
+  it('uses stored variant from init data when ensureVariant returns null', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'teams' })),
+      ensureVariant: mock.fn(async () => null),
+      detect: mock.fn(async () => {
+        throw new Error('should not be called');
+      }),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.detect.mock.calls.length, 0);
+    assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[1], [
+      'plugin',
+      'update',
+      VARIANTS.teams.claudePlugin,
+    ]);
+  });
+
+  it('falls back to detectVariant when no stored variant exists', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0' })),
+      ensureVariant: mock.fn(async () => null),
+      detect: mock.fn(async () => VARIANTS.teams),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.detect.mock.calls.length, 1);
+    assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[1], [
+      'plugin',
+      'update',
+      VARIANTS.teams.claudePlugin,
+    ]);
+  });
+
+  it('shows error when detectVariant throws and no stored variant exists', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0' })),
+      ensureVariant: mock.fn(async () => null),
+      detect: mock.fn(async () => {
+        throw new Error('401 Unauthorized');
+      }),
+    });
+
+    await updateSkills(deps);
+
+    const output = getLogOutput(mocks.logMock) + getStdoutOutput(mocks.stdoutMock);
+    assert.ok(output.includes('Could not detect variant'));
+    assert.strictEqual(deps.exec.mock.calls.length, 0);
   });
 
   it('updates skills version in local settings when local init exists', async () => {

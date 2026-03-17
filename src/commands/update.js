@@ -1,9 +1,51 @@
 import { execSync } from 'node:child_process';
 import { getLocalVersion, getInitData, fetchSkillsVersion } from '../update-check.js';
 import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
-import { SETTINGS_PATH, LOCAL_SETTINGS_PATH } from '../constants.js';
+import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, getVariantKey, resolveVariant } from '../constants.js';
 import { writeSettingsKey, readSettingsKey } from '../settings.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
+import { detectVariant, ensureCorrectVariant } from '../variant.js';
+
+/**
+ * Resolve the variant to use for skills updates.
+ * Prefers a swapped variant, then stored variant, then detects from API.
+ */
+async function resolveSkillsVariant(initData, { exec, spawnInteractive, detect, ensureVariant }) {
+  const swappedVariant = await ensureVariant({ exec, spawnInteractive });
+  const variant = swappedVariant || resolveVariant(initData.variant);
+  if (variant) return variant;
+
+  try {
+    return await detect();
+  } catch {
+    printError('Could not detect variant: not authenticated or API unavailable.');
+    return null;
+  }
+}
+
+/**
+ * Persist the latest skills version to local and global init data after a successful update.
+ */
+async function persistSkillsVersion(variant, { fetchVersion, readKey, writeKey }) {
+  try {
+    const variantKey = getVariantKey(variant);
+    const versionInfo = await fetchVersion(variantKey);
+    if (!versionInfo?.version) return;
+    const updates = [
+      [LOCAL_SETTINGS_PATH, 'init'],
+      [SETTINGS_PATH, 'globalInit'],
+    ];
+
+    for (const [path, key] of updates) {
+      const data = readKey(path, key);
+      if (data?.ides?.length) {
+        writeKey(path, key, { ...data, skillsVersion: versionInfo.version, variant: variantKey });
+      }
+    }
+  } catch {
+    // Non-critical — version will be refreshed on next check
+  }
+}
 
 /**
  * Update skills for configured IDEs.
@@ -17,9 +59,19 @@ export async function updateSkills({
   fetchVersion = fetchSkillsVersion,
   writeKey = writeSettingsKey,
   readKey = readSettingsKey,
+  detect = detectVariant,
+  ensureVariant = ensureCorrectVariant,
 } = {}) {
   const initData = getInit();
   if (!initData?.ides?.length) return;
+
+  const variant = await resolveSkillsVariant(initData, {
+    exec,
+    spawnInteractive,
+    detect,
+    ensureVariant,
+  });
+  if (!variant) return;
 
   const ides = initData.ides;
   let allSucceeded = true;
@@ -27,7 +79,7 @@ export async function updateSkills({
   if (ides.includes('claude')) {
     const spinner = createSpinner('Updating Spark plugin for Claude Code...');
     try {
-      await exec('claude', ['plugin', 'update', 'spark-cli@MemCo']);
+      await exec('claude', ['plugin', 'update', variant.claudePlugin]);
       spinner.stop('Spark plugin updated for Claude Code');
     } catch (err) {
       allSucceeded = false;
@@ -39,7 +91,7 @@ export async function updateSkills({
   if (ides.includes('other')) {
     printInfo('Updating Spark skills for Cursor/Windsurf...');
     try {
-      await spawnInteractive('npx', ['skills', 'update', 'memcoai/spark-cli-skills']);
+      await spawnInteractive('npx', ['skills', 'update', variant.skillsRepo]);
       printInfo('Spark skills updated for Cursor/Windsurf');
     } catch (err) {
       allSucceeded = false;
@@ -49,22 +101,8 @@ export async function updateSkills({
 
   // Only update stored skills version when all updates succeeded,
   // otherwise future update notifications would be suppressed incorrectly
-  if (!allSucceeded) return;
-
-  try {
-    const versionInfo = await fetchVersion();
-    if (versionInfo?.version) {
-      const local = readKey(LOCAL_SETTINGS_PATH, 'init');
-      if (local?.ides?.length) {
-        writeKey(LOCAL_SETTINGS_PATH, 'init', { ...local, skillsVersion: versionInfo.version });
-      }
-      const global = readKey(SETTINGS_PATH, 'globalInit');
-      if (global?.ides?.length) {
-        writeKey(SETTINGS_PATH, 'globalInit', { ...global, skillsVersion: versionInfo.version });
-      }
-    }
-  } catch {
-    // Non-critical — version will be refreshed on next check
+  if (allSucceeded) {
+    await persistSkillsVersion(variant, { fetchVersion, readKey, writeKey });
   }
 }
 

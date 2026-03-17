@@ -1,21 +1,20 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInit } from '../../src/commands/init.js';
-import { setupCommandMocks, getLogOutput, getStdoutOutput } from '../helpers.js';
+import { VARIANTS } from '../../src/constants.js';
+import { setupCommandMocks, getLogOutput, getStdoutOutput, buildSetupDeps } from '../helpers.js';
 
 describe('runInit', () => {
   const mocks = setupCommandMocks();
 
-  const defaultDeps = (overrides = {}) => ({
-    promptChecklist: mock.fn(async () => ['Claude Code']),
-    promptChoice: mock.fn(async () => 'This project (current directory)'),
-    exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
-    spawnInteractive: mock.fn(async () => {}),
-    fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
-    writeKey: mock.fn(),
-    readKey: mock.fn(() => []),
-    ...overrides,
-  });
+  const defaultDeps = (overrides = {}) =>
+    buildSetupDeps({
+      promptChecklist: mock.fn(async () => ['Claude Code']),
+      promptChoice: mock.fn(async () => 'This project (current directory)'),
+      detect: mock.fn(async () => VARIANTS.public),
+      ensureVariant: mock.fn(async () => null),
+      ...overrides,
+    });
 
   it('shows warning when no IDE is selected', async () => {
     await runInit(defaultDeps({ promptChecklist: mock.fn(async () => []) }));
@@ -55,7 +54,7 @@ describe('runInit', () => {
     assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
       'plugin',
       'install',
-      'spark-cli@MemCo',
+      VARIANTS.public.claudePlugin,
       '--scope',
       'project',
     ]);
@@ -73,7 +72,7 @@ describe('runInit', () => {
     assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
       'plugin',
       'install',
-      'spark-cli@MemCo',
+      VARIANTS.public.claudePlugin,
       '--scope',
       'user',
     ]);
@@ -93,7 +92,7 @@ describe('runInit', () => {
     assert.deepStrictEqual(spawnInteractive.mock.calls[0].arguments[1], [
       'skills',
       'add',
-      'memcoai/spark-cli-skills',
+      VARIANTS.public.skillsRepo,
     ]);
   });
 
@@ -110,7 +109,7 @@ describe('runInit', () => {
     assert.deepStrictEqual(spawnInteractive.mock.calls[0].arguments[1], [
       'skills',
       'add',
-      'memcoai/spark-cli-skills',
+      VARIANTS.public.skillsRepo,
       '--global',
     ]);
   });
@@ -191,5 +190,41 @@ describe('runInit', () => {
     const output = getLogOutput(mocks.logMock);
     // Should still show auth instructions even after failures
     assert.ok(output.includes('Next: Authenticate with Spark'));
+  });
+
+  it('installs teams plugin when variant is teams', async () => {
+    const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
+    await runInit(
+      defaultDeps({
+        exec,
+        detect: mock.fn(async () => VARIANTS.teams),
+      }),
+    );
+
+    // Plugin install should use teams plugin name
+    assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
+      'plugin',
+      'install',
+      VARIANTS.teams.claudePlugin,
+      '--scope',
+      'project',
+    ]);
+  });
+
+  it('installs teams skills when variant is teams for Other IDEs', async () => {
+    const spawnInteractive = mock.fn(async () => {});
+    await runInit(
+      defaultDeps({
+        promptChecklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
+        spawnInteractive,
+        detect: mock.fn(async () => VARIANTS.teams),
+      }),
+    );
+
+    assert.deepStrictEqual(spawnInteractive.mock.calls[0].arguments[1], [
+      'skills',
+      'add',
+      VARIANTS.teams.skillsRepo,
+    ]);
   });
 });

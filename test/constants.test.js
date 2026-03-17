@@ -6,6 +6,8 @@ import {
   DEFAULT_API_BASE,
   getAuthSuccessUrl,
   getAuthErrorUrl,
+  VARIANTS,
+  resolveVariant,
 } from '../src/constants.js';
 
 describe('getApiBase', () => {
@@ -84,6 +86,24 @@ describe('getAuthErrorUrl', () => {
   it('falls back to getApiBase when no apiBase provided', () => {
     const url = getAuthErrorUrl();
     assert.ok(url.endsWith('/cli/auth_error'));
+  });
+});
+
+describe('resolveVariant', () => {
+  it('returns teams variant for "teams" key', () => {
+    assert.strictEqual(resolveVariant('teams'), VARIANTS.teams);
+  });
+
+  it('returns public variant for "public" key', () => {
+    assert.strictEqual(resolveVariant('public'), VARIANTS.public);
+  });
+
+  it('returns null for unrecognized key', () => {
+    assert.strictEqual(resolveVariant('unknown'), null);
+  });
+
+  it('returns null for undefined', () => {
+    assert.strictEqual(resolveVariant(undefined), null);
   });
 });
 

@@ -1,7 +1,8 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runEnable } from '../../src/commands/enable.js';
-import { setupCommandMocks } from '../helpers.js';
+import { VARIANTS } from '../../src/constants.js';
+import { setupCommandMocks, buildSetupDeps } from '../helpers.js';
 
 // Shared setup flow behavior (IDE selection, cancel handling, error resilience,
 // auth instructions) is tested via runInit in init.test.js since both use runSetupFlow.
@@ -10,15 +11,13 @@ import { setupCommandMocks } from '../helpers.js';
 describe('runEnable', () => {
   setupCommandMocks();
 
-  const defaultDeps = (overrides = {}) => ({
-    promptChecklist: mock.fn(async () => ['Claude Code']),
-    exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
-    spawnInteractive: mock.fn(async () => {}),
-    fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
-    writeKey: mock.fn(),
-    readKey: mock.fn(() => []),
-    ...overrides,
-  });
+  const defaultDeps = (overrides = {}) =>
+    buildSetupDeps({
+      promptChecklist: mock.fn(async () => ['Claude Code']),
+      detect: mock.fn(async () => VARIANTS.public),
+      ensureVariant: mock.fn(async () => null),
+      ...overrides,
+    });
 
   it('always uses project scope for Claude Code setup', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
@@ -27,7 +26,7 @@ describe('runEnable', () => {
     assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
       'plugin',
       'install',
-      'spark-cli@MemCo',
+      VARIANTS.public.claudePlugin,
       '--scope',
       'project',
     ]);
@@ -43,7 +42,7 @@ describe('runEnable', () => {
     );
 
     const args = spawnInteractive.mock.calls[0].arguments[1];
-    assert.deepStrictEqual(args, ['skills', 'add', 'memcoai/spark-cli-skills']);
+    assert.deepStrictEqual(args, ['skills', 'add', VARIANTS.public.skillsRepo]);
     assert.ok(!args.includes('--global'));
   });
 

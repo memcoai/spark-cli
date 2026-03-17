@@ -1,6 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runDisable } from '../../src/commands/disable.js';
+import { VARIANTS } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput, getStdoutOutput } from '../helpers.js';
 
 function makeDeps(overrides = {}) {
@@ -9,6 +10,7 @@ function makeDeps(overrides = {}) {
     spawnInteractive: mock.fn(async () => {}),
     readKey: mock.fn(() => null),
     writeKey: mock.fn(),
+    detect: mock.fn(async () => VARIANTS.public),
     ...overrides,
   };
 }
@@ -45,7 +47,13 @@ describe('runDisable', () => {
     assert.strictEqual(deps.execAsync.mock.calls.length, 1);
     const [cmd, args] = deps.execAsync.mock.calls[0].arguments;
     assert.strictEqual(cmd, 'claude');
-    assert.deepStrictEqual(args, ['plugin', 'uninstall', 'spark-cli@MemCo', '--scope', 'project']);
+    assert.deepStrictEqual(args, [
+      'plugin',
+      'uninstall',
+      VARIANTS.public.claudePlugin,
+      '--scope',
+      'project',
+    ]);
   });
 
   it('removes skills when init has other', async () => {
@@ -55,7 +63,7 @@ describe('runDisable', () => {
     assert.strictEqual(deps.spawnInteractive.mock.calls.length, 1);
     const [cmd, args] = deps.spawnInteractive.mock.calls[0].arguments;
     assert.strictEqual(cmd, 'npx');
-    assert.deepStrictEqual(args, ['skills', 'remove', 'memcoai/spark-cli-skills']);
+    assert.deepStrictEqual(args, ['skills', 'remove', VARIANTS.public.skillsRepo]);
   });
 
   it('does not add --global flag for skills removal', async () => {
@@ -132,5 +140,33 @@ describe('runDisable', () => {
     await runDisable(deps);
 
     assert.strictEqual(deps.spawnInteractive.mock.calls.length, 0);
+  });
+
+  it('uses stored variant instead of calling detect', async () => {
+    const deps = makeDeps({
+      readKey: initReadKey({ ides: ['claude'], variant: 'teams' }),
+      detect: mock.fn(async () => {
+        throw new Error('should not be called');
+      }),
+    });
+    await runDisable(deps);
+
+    assert.strictEqual(deps.detect.mock.calls.length, 0);
+    const [, args] = deps.execAsync.mock.calls[0].arguments;
+    assert.ok(args.includes(VARIANTS.teams.claudePlugin));
+  });
+
+  it('errors when detect throws and no stored variant exists', async () => {
+    const deps = makeDeps({
+      readKey: initReadKey({ ides: ['claude'] }),
+      detect: mock.fn(async () => {
+        throw new Error('401 Unauthorized');
+      }),
+    });
+    await runDisable(deps);
+
+    const output = getLogOutput(mocks.logMock) + getStdoutOutput(mocks.stdoutMock);
+    assert.ok(output.includes('Could not detect variant'));
+    assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
   });
 });

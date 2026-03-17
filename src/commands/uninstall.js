@@ -2,7 +2,14 @@ import { execSync } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
 import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
-import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, SPARK_DIR, LOCAL_SPARK_DIR } from '../constants.js';
+import {
+  SETTINGS_PATH,
+  LOCAL_SETTINGS_PATH,
+  SPARK_DIR,
+  LOCAL_SPARK_DIR,
+  VARIANTS,
+  resolveVariant,
+} from '../constants.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 
 /**
@@ -90,7 +97,10 @@ function cleanupSparkDirs(rm = rmSync) {
 /**
  * Uninstall Claude Code plugin if it was installed via spark init.
  */
-export async function uninstallClaudePlugin(scope, { exec = runCommand, cwd } = {}) {
+export async function uninstallClaudePlugin(
+  scope,
+  { exec = runCommand, cwd, variant = VARIANTS.public } = {},
+) {
   const scopeFlag = scope === 'project' ? 'project' : 'user';
   const suffix = cwd ? ` (${cwd})` : '';
 
@@ -98,7 +108,7 @@ export async function uninstallClaudePlugin(scope, { exec = runCommand, cwd } = 
   try {
     await exec(
       'claude',
-      ['plugin', 'uninstall', 'spark-cli@MemCo', '--scope', scopeFlag],
+      ['plugin', 'uninstall', variant.claudePlugin, '--scope', scopeFlag],
       cwd ? { cwd } : {},
     );
     spinner.stop(`Spark plugin removed from Claude Code${suffix}`);
@@ -106,7 +116,7 @@ export async function uninstallClaudePlugin(scope, { exec = runCommand, cwd } = 
     spinner.fail(`Failed to remove Claude Code plugin${suffix}`);
     printWarning(err.stderr?.trim() || err.message);
     printInfo(
-      `You can remove it manually: claude plugin uninstall spark-cli@MemCo --scope ${scopeFlag}`,
+      `You can remove it manually: claude plugin uninstall ${variant.claudePlugin} --scope ${scopeFlag}`,
     );
   }
 }
@@ -116,16 +126,16 @@ export async function uninstallClaudePlugin(scope, { exec = runCommand, cwd } = 
  */
 export async function uninstallOtherIDEs(
   scope,
-  { spawnInteractive = runInteractiveCommand, cwd } = {},
+  { spawnInteractive = runInteractiveCommand, cwd, variant = VARIANTS.public } = {},
 ) {
-  const args = ['skills', 'remove', 'memcoai/spark-cli-skills'];
+  const args = ['skills', 'remove', variant.skillsRepo];
   if (scope === 'global') {
     args.push('--global');
   }
 
   const globalFlag = scope === 'global' ? ' --global' : '';
   const suffix = cwd ? ` (in ${cwd})` : '';
-  printInfo(`Running: npx skills remove memcoai/spark-cli-skills${globalFlag}${suffix}`);
+  printInfo(`Running: npx skills remove ${variant.skillsRepo}${globalFlag}${suffix}`);
   console.log('');
 
   try {
@@ -135,7 +145,38 @@ export async function uninstallOtherIDEs(
   } catch (err) {
     console.log('');
     printWarning(`Failed to remove skills${suffix}: ${err.message}`);
-    printInfo(`You can remove manually: npx skills remove memcoai/spark-cli-skills${globalFlag}`);
+    printInfo(`You can remove manually: npx skills remove ${variant.skillsRepo}${globalFlag}`);
+  }
+}
+
+/**
+ * Uninstall IDE plugins/skills for a single init target.
+ */
+async function uninstallTarget(target, { execAsync, spawnInteractive, writeKey }) {
+  const { initData, scope, settingsPath, settingsKey, cwd: targetCwd } = target;
+
+  // Use stored variant when available; fall back to trying both for full cleanup
+  const storedVariant = resolveVariant(initData?.variant);
+  const variants = storedVariant ? [storedVariant] : [VARIANTS.public, VARIANTS.teams];
+
+  if (targetCwd) {
+    printInfo(`Cleaning up project: ${targetCwd}`);
+  }
+
+  if (initData.ides.includes('claude')) {
+    for (const variant of variants) {
+      await uninstallClaudePlugin(scope, { exec: execAsync, cwd: targetCwd, variant });
+    }
+  }
+
+  if (initData.ides.includes('other')) {
+    for (const variant of variants) {
+      await uninstallOtherIDEs(scope, { spawnInteractive, cwd: targetCwd, variant });
+    }
+  }
+
+  if (settingsKey) {
+    writeKey(settingsPath, settingsKey, null);
   }
 }
 
@@ -146,28 +187,12 @@ async function uninstallAllTargets({ execAsync, spawnInteractive, readKey, write
   const targets = getAllInitTargets(readKey);
 
   for (const target of targets) {
-    const { initData, scope, settingsPath, settingsKey, cwd: targetCwd } = target;
-
-    if (targetCwd && !exists(targetCwd)) {
-      printWarning(`Skipping ${targetCwd} — directory not found`);
+    if (target.cwd && !exists(target.cwd)) {
+      printWarning(`Skipping ${target.cwd} — directory not found`);
       continue;
     }
 
-    if (targetCwd) {
-      printInfo(`Cleaning up project: ${targetCwd}`);
-    }
-
-    if (initData.ides.includes('claude')) {
-      await uninstallClaudePlugin(scope, { exec: execAsync, cwd: targetCwd });
-    }
-
-    if (initData.ides.includes('other')) {
-      await uninstallOtherIDEs(scope, { spawnInteractive, cwd: targetCwd });
-    }
-
-    if (settingsKey) {
-      writeKey(settingsPath, settingsKey, null);
-    }
+    await uninstallTarget(target, { execAsync, spawnInteractive, writeKey });
   }
 
   if (targets.length > 0) {
