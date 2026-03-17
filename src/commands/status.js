@@ -79,10 +79,12 @@ export async function runStatus({
 
   // 2. Auth check
   let variant = VARIANTS.public;
+  let isAuthenticated = false;
   try {
     const data = await getUser();
     const user = data.user || data;
     variant = getVariant(user);
+    isAuthenticated = true;
     const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
     printSuccess(`Authenticated as ${name || user.email || user.id || 'unknown user'}`);
     const orgName = user.organization_name;
@@ -105,7 +107,7 @@ export async function runStatus({
   // 3. Variant mismatch check (read-only — no auto-swap)
   const initData = getInit();
   const storedVariant = resolveVariant(initData?.variant) || VARIANTS.public;
-  if (initData?.ides?.length) {
+  if (isAuthenticated && initData?.ides?.length) {
     const detectedKey = getVariantKey(variant);
     const storedKey = getVariantKey(storedVariant);
     if (detectedKey !== storedKey) {

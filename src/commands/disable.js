@@ -1,6 +1,6 @@
 import { printBanner, printError, printInfo, printSuccess } from '../banner.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
-import { LOCAL_SETTINGS_PATH, VARIANTS } from '../constants.js';
+import { LOCAL_SETTINGS_PATH, VARIANTS, resolveVariant } from '../constants.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 import { uninstallClaudePlugin, uninstallOtherIDEs, removeInitData } from './uninstall.js';
 import { detectVariant } from '../variant.js';
@@ -29,7 +29,7 @@ export async function runDisable({
 
   if (storedVariant) {
     if (typeof storedVariant === 'string') {
-      variant = VARIANTS[storedVariant] || VARIANTS.public;
+      variant = resolveVariant(storedVariant) || VARIANTS.public;
     } else if (typeof storedVariant === 'object') {
       variant = storedVariant;
     }
