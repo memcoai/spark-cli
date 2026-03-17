@@ -2,23 +2,19 @@ import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runInit } from '../../src/commands/init.js';
 import { VARIANTS } from '../../src/constants.js';
-import { setupCommandMocks, getLogOutput, getStdoutOutput } from '../helpers.js';
+import { setupCommandMocks, getLogOutput, getStdoutOutput, buildSetupDeps } from '../helpers.js';
 
 describe('runInit', () => {
   const mocks = setupCommandMocks();
 
-  const defaultDeps = (overrides = {}) => ({
-    promptChecklist: mock.fn(async () => ['Claude Code']),
-    promptChoice: mock.fn(async () => 'This project (current directory)'),
-    exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
-    spawnInteractive: mock.fn(async () => {}),
-    fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
-    writeKey: mock.fn(),
-    readKey: mock.fn(() => []),
-    detect: mock.fn(async () => VARIANTS.public),
-    ensureVariant: mock.fn(async () => null),
-    ...overrides,
-  });
+  const defaultDeps = (overrides = {}) =>
+    buildSetupDeps({
+      promptChecklist: mock.fn(async () => ['Claude Code']),
+      promptChoice: mock.fn(async () => 'This project (current directory)'),
+      detect: mock.fn(async () => VARIANTS.public),
+      ensureVariant: mock.fn(async () => null),
+      ...overrides,
+    });
 
   it('shows warning when no IDE is selected', async () => {
     await runInit(defaultDeps({ promptChecklist: mock.fn(async () => []) }));

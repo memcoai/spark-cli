@@ -2,7 +2,7 @@ import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { VARIANTS, SPARK_ORG_ID, getVariant } from '../src/constants.js';
 import { detectVariant, ensureCorrectVariant } from '../src/variant.js';
-import { setupCommandMocks, getLogOutput } from './helpers.js';
+import { setupCommandMocks, getLogOutput, buildSetupDeps } from './helpers.js';
 
 describe('getVariant', () => {
   it('returns public variant when user is null', () => {
@@ -68,16 +68,13 @@ describe('detectVariant', () => {
 describe('ensureCorrectVariant', () => {
   const mocks = setupCommandMocks();
 
-  const defaultDeps = (overrides = {}) => ({
-    getUser: mock.fn(async () => ({ user: { organization_id: SPARK_ORG_ID } })),
-    getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
-    readKey: mock.fn(() => null),
-    writeKey: mock.fn(),
-    exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
-    spawnInteractive: mock.fn(async () => {}),
-    fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
-    ...overrides,
-  });
+  const defaultDeps = (overrides = {}) =>
+    buildSetupDeps({
+      getUser: mock.fn(async () => ({ user: { organization_id: SPARK_ORG_ID } })),
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+      readKey: mock.fn(() => null),
+      ...overrides,
+    });
 
   it('returns null when no init data exists', async () => {
     const result = await ensureCorrectVariant(defaultDeps({ getInit: mock.fn(() => null) }));
