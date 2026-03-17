@@ -149,40 +149,47 @@ export async function uninstallOtherIDEs(
 }
 
 /**
+ * Uninstall IDE plugins/skills for a single init target.
+ */
+async function uninstallTarget(target, { execAsync, spawnInteractive, writeKey }) {
+  const { initData, scope, settingsPath, settingsKey, cwd: targetCwd } = target;
+  const allVariants = [VARIANTS.public, VARIANTS.teams];
+
+  if (targetCwd) {
+    printInfo(`Cleaning up project: ${targetCwd}`);
+  }
+
+  // Try both variants to ensure full cleanup regardless of which was installed
+  if (initData.ides.includes('claude')) {
+    for (const variant of allVariants) {
+      await uninstallClaudePlugin(scope, { exec: execAsync, cwd: targetCwd, variant });
+    }
+  }
+
+  if (initData.ides.includes('other')) {
+    for (const variant of allVariants) {
+      await uninstallOtherIDEs(scope, { spawnInteractive, cwd: targetCwd, variant });
+    }
+  }
+
+  if (settingsKey) {
+    writeKey(settingsPath, settingsKey, null);
+  }
+}
+
+/**
  * Uninstall IDE plugins/skills for all init targets (local, global, and registered projects).
  */
 async function uninstallAllTargets({ execAsync, spawnInteractive, readKey, writeKey, exists }) {
   const targets = getAllInitTargets(readKey);
-  const allVariants = [VARIANTS.public, VARIANTS.teams];
 
   for (const target of targets) {
-    const { initData, scope, settingsPath, settingsKey, cwd: targetCwd } = target;
-
-    if (targetCwd && !exists(targetCwd)) {
-      printWarning(`Skipping ${targetCwd} — directory not found`);
+    if (target.cwd && !exists(target.cwd)) {
+      printWarning(`Skipping ${target.cwd} — directory not found`);
       continue;
     }
 
-    if (targetCwd) {
-      printInfo(`Cleaning up project: ${targetCwd}`);
-    }
-
-    // Try both variants to ensure full cleanup regardless of which was installed
-    if (initData.ides.includes('claude')) {
-      for (const variant of allVariants) {
-        await uninstallClaudePlugin(scope, { exec: execAsync, cwd: targetCwd, variant });
-      }
-    }
-
-    if (initData.ides.includes('other')) {
-      for (const variant of allVariants) {
-        await uninstallOtherIDEs(scope, { spawnInteractive, cwd: targetCwd, variant });
-      }
-    }
-
-    if (settingsKey) {
-      writeKey(settingsPath, settingsKey, null);
-    }
+    await uninstallTarget(target, { execAsync, spawnInteractive, writeKey });
   }
 
   if (targets.length > 0) {

@@ -7,6 +7,48 @@ import { runCommand, runInteractiveCommand } from '../exec.js';
 import { detectVariant, ensureCorrectVariant } from '../variant.js';
 
 /**
+ * Resolve the variant to use for skills updates.
+ * Prefers a swapped variant, then stored variant, then detects from API.
+ */
+async function resolveSkillsVariant(initData, { exec, spawnInteractive, detect, ensureVariant }) {
+  const swappedVariant = await ensureVariant({ exec, spawnInteractive });
+  const variant = swappedVariant || resolveVariant(initData.variant);
+  if (variant) return variant;
+
+  try {
+    return await detect();
+  } catch {
+    printError('Could not detect variant: not authenticated or API unavailable.');
+    return null;
+  }
+}
+
+/**
+ * Persist the latest skills version to local and global init data after a successful update.
+ */
+async function persistSkillsVersion(variant, { fetchVersion, readKey, writeKey }) {
+  try {
+    const versionInfo = await fetchVersion(variant.skillsVersionUrl);
+    if (!versionInfo?.version) return;
+
+    const variantKey = getVariantKey(variant);
+    const updates = [
+      [LOCAL_SETTINGS_PATH, 'init'],
+      [SETTINGS_PATH, 'globalInit'],
+    ];
+
+    for (const [path, key] of updates) {
+      const data = readKey(path, key);
+      if (data?.ides?.length) {
+        writeKey(path, key, { ...data, skillsVersion: versionInfo.version, variant: variantKey });
+      }
+    }
+  } catch {
+    // Non-critical — version will be refreshed on next check
+  }
+}
+
+/**
  * Update skills for configured IDEs.
  * Reads init data to determine which IDEs are set up, then runs the appropriate
  * update commands. Failures are warnings — they never abort the overall update.
@@ -24,18 +66,14 @@ export async function updateSkills({
   const initData = getInit();
   if (!initData?.ides?.length) return;
 
-  // Ensure correct variant before updating (auto-swap if mismatched)
-  const swappedVariant = await ensureVariant({ exec, spawnInteractive });
-  // Prefer stored variant from init data; only detect from API as last resort.
-  let variant = swappedVariant || resolveVariant(initData.variant);
-  if (!variant) {
-    try {
-      variant = await detect();
-    } catch {
-      printError('Could not detect variant: not authenticated or API unavailable.');
-      return;
-    }
-  }
+  const variant = await resolveSkillsVariant(initData, {
+    exec,
+    spawnInteractive,
+    detect,
+    ensureVariant,
+  });
+  if (!variant) return;
+
   const ides = initData.ides;
   let allSucceeded = true;
 
@@ -64,31 +102,8 @@ export async function updateSkills({
 
   // Only update stored skills version when all updates succeeded,
   // otherwise future update notifications would be suppressed incorrectly
-  if (!allSucceeded) return;
-
-  try {
-    const versionInfo = await fetchVersion(variant.skillsVersionUrl);
-    const variantKey = getVariantKey(variant);
-    if (versionInfo?.version) {
-      const local = readKey(LOCAL_SETTINGS_PATH, 'init');
-      if (local?.ides?.length) {
-        writeKey(LOCAL_SETTINGS_PATH, 'init', {
-          ...local,
-          skillsVersion: versionInfo.version,
-          variant: variantKey,
-        });
-      }
-      const global = readKey(SETTINGS_PATH, 'globalInit');
-      if (global?.ides?.length) {
-        writeKey(SETTINGS_PATH, 'globalInit', {
-          ...global,
-          skillsVersion: versionInfo.version,
-          variant: variantKey,
-        });
-      }
-    }
-  } catch {
-    // Non-critical — version will be refreshed on next check
+  if (allSucceeded) {
+    await persistSkillsVersion(variant, { fetchVersion, readKey, writeKey });
   }
 }
 
