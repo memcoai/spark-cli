@@ -3,7 +3,7 @@ import { readSettingsKey, writeSettingsKey } from '../settings.js';
 import { LOCAL_SETTINGS_PATH } from '../constants.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 import { uninstallClaudePlugin, uninstallOtherIDEs, removeInitData } from './uninstall.js';
-import { detectVariant } from '../variant.js';
+import { detectVariant, VARIANTS } from '../variant.js';
 
 /**
  * Core disable logic — removes Spark from the current project.
@@ -25,7 +25,23 @@ export async function runDisable({
   }
 
   const detectedVariant = await detect();
-  const variant = initData?.variant || detectedVariant || 'public';
+  let variant = detectedVariant;
+  const storedVariant = initData?.variant;
+
+  if (storedVariant) {
+    if (typeof storedVariant === 'string') {
+      // Map stored key ('public' | 'teams') to the corresponding variant object
+      variant = VARIANTS[storedVariant] || detectedVariant || VARIANTS.public;
+    } else if (typeof storedVariant === 'object') {
+      // Backwards compatibility if an object was persisted
+      variant = storedVariant;
+    }
+  }
+
+  if (!variant) {
+    variant = VARIANTS.public;
+  }
+
   const scope = 'project';
 
   if (initData.ides.includes('claude')) {
