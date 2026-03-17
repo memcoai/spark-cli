@@ -8,10 +8,16 @@ import {
   colorize,
 } from '../banner.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
-import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, VARIANTS, getApiBase } from '../constants.js';
+import {
+  SETTINGS_PATH,
+  LOCAL_SETTINGS_PATH,
+  VARIANTS,
+  getApiBase,
+  getVariantKey,
+} from '../constants.js';
 import { fetchSkillsVersion } from '../update-check.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
-import { detectVariant } from '../variant.js';
+import { detectVariant, ensureCorrectVariant } from '../variant.js';
 
 /**
  * Prompt a multi-select checklist. Users toggle with space, navigate with arrows, confirm with enter.
@@ -244,7 +250,8 @@ export async function saveInitChoices(
   const versionInfo = await fetchVersion(variant.skillsVersionUrl);
   const skillsVersion = versionInfo?.version || '0.0.0';
 
-  const initData = { ides: ideKeys, skillsVersion };
+  const variantKey = getVariantKey(variant);
+  const initData = { ides: ideKeys, skillsVersion, variant: variantKey };
 
   if (scope === 'global') {
     writeKey(SETTINGS_PATH, 'globalInit', initData);
@@ -331,11 +338,15 @@ export async function runSetupFlow({
   writeKey = writeSettingsKey,
   readKey = readSettingsKey,
   detect = detectVariant,
+  ensureVariant = ensureCorrectVariant,
 } = {}) {
   printBanner();
 
+  // Ensure existing installation uses the correct variant (auto-swap if mismatched)
+  const swappedVariant = await ensureVariant({ exec, spawnInteractive });
+
   // Detect variant (public vs teams) based on current user's org
-  const variant = await detect();
+  const variant = swappedVariant || (await detect());
 
   // Step 1: IDE selection
   const selectedIDEs = await promptWithCancel(promptChecklistFn, 'Select your IDE(s):', [

@@ -8,7 +8,7 @@ import {
   getInitData,
 } from '../update-check.js';
 import { printSuccess, printError, printInfo, printWarning, colorize } from '../banner.js';
-import { VARIANTS, getVariant } from '../constants.js';
+import { VARIANTS, getVariant, getVariantKey } from '../constants.js';
 
 const IDE_LABELS = { claude: 'Claude Code', other: 'Cursor/Windsurf' };
 
@@ -102,8 +102,21 @@ export async function runStatus({
 
   console.log('');
 
-  // 3. Skills version check
+  // 3. Variant mismatch check (read-only — no auto-swap)
   const initData = getInit();
+  if (initData?.ides?.length) {
+    const detectedKey = getVariantKey(variant);
+    const storedKey = initData.variant || 'public';
+    if (detectedKey !== storedKey) {
+      printWarning(
+        `Variant mismatch: ${storedKey} plugins installed, but your organization requires ${detectedKey}.`,
+      );
+      printInfo('Run spark update to switch to the correct variant.');
+      console.log('');
+    }
+  }
+
+  // 4. Skills version check (uses detected variant, not stored)
   if (initData) {
     await printSkillsStatus(initData, checkSkills, getSkillsNote, variant);
   } else {

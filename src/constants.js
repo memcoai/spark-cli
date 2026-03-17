@@ -45,6 +45,13 @@ export function getVariant(user) {
 }
 
 /**
+ * Get the string key ('public' or 'teams') for a variant object.
+ */
+export function getVariantKey(variant) {
+  return variant === VARIANTS.teams ? 'teams' : 'public';
+}
+
+/**
  * Validate and normalize an API base URL string.
  * Returns the trimmed, trailing-slash-stripped string, or undefined if invalid/empty.
  */

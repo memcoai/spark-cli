@@ -210,7 +210,8 @@ export async function fetchSkillsVersion(versionUrl = VARIANTS.public.skillsVers
     const text = await response.text();
     const version = text.trim();
     if (!version) return null;
-    const result = { version, checkedAt: Date.now() };
+    const variant = versionUrl === VARIANTS.teams.skillsVersionUrl ? 'teams' : 'public';
+    const result = { version, checkedAt: Date.now(), variant };
     writeSettingsKey(SETTINGS_PATH, 'skillsVersion', result);
     return result;
   } catch {
@@ -226,7 +227,12 @@ export async function checkSkillsVersion(versionUrl) {
   try {
     const cached = getCachedSkillsVersion();
     if (cached?.version && cached.checkedAt && Date.now() - cached.checkedAt < ONE_DAY_MS) {
-      return cached;
+      // Ensure cache is for the requested variant
+      const cachedVariant = cached.variant || 'public';
+      const requestedVariant = versionUrl === VARIANTS.teams.skillsVersionUrl ? 'teams' : 'public';
+      if (cachedVariant === requestedVariant) {
+        return cached;
+      }
     }
     return await fetchSkillsVersion(versionUrl);
   } catch {

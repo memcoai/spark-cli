@@ -19,6 +19,7 @@ describe('runEnable', () => {
     writeKey: mock.fn(),
     readKey: mock.fn(() => []),
     detect: mock.fn(async () => VARIANTS.public),
+    ensureVariant: mock.fn(async () => null),
     ...overrides,
   });
 

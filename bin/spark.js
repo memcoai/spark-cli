@@ -30,6 +30,12 @@ import {
   getInitData,
 } from '../src/update-check.js';
 import { setVersionNotification, printVersionNotification } from '../src/output.js';
+import { VARIANTS } from '../src/constants.js';
+
+function getVariantFromInitData(initData) {
+  if (initData?.variant === 'teams') return VARIANTS.teams;
+  return VARIANTS.public;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -85,7 +91,8 @@ program.hook('preAction', (thisCommand, actionCommand) => {
   const cachedSkills = getCachedSkillsVersion();
   const initData = getInitData();
   if (cachedSkills && initData) {
-    const skillsNotification = getSkillsNotification(cachedSkills, initData);
+    const initVariant = getVariantFromInitData(initData);
+    const skillsNotification = getSkillsNotification(cachedSkills, initData, initVariant);
     if (skillsNotification) {
       setVersionNotification(skillsNotification.message);
     }
@@ -110,11 +117,18 @@ program.hook('preAction', (thisCommand, actionCommand) => {
     }
   });
 
-  skillsCheckPromise = checkSkillsVersion().then((latestSkills) => {
+  const bgInitData = getInitData();
+  const bgVariant = getVariantFromInitData(bgInitData);
+  skillsCheckPromise = checkSkillsVersion(bgVariant.skillsVersionUrl).then((latestSkills) => {
     if (latestSkills) {
       const currentInitData = getInitData();
       if (currentInitData) {
-        const skillsNotification = getSkillsNotification(latestSkills, currentInitData);
+        const currentVariant = getVariantFromInitData(currentInitData);
+        const skillsNotification = getSkillsNotification(
+          latestSkills,
+          currentInitData,
+          currentVariant,
+        );
         if (skillsNotification) {
           setVersionNotification(skillsNotification.message);
         }

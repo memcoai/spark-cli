@@ -1,10 +1,10 @@
 import { execSync } from 'node:child_process';
 import { getLocalVersion, getInitData, fetchSkillsVersion } from '../update-check.js';
 import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
-import { SETTINGS_PATH, LOCAL_SETTINGS_PATH } from '../constants.js';
+import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, getVariantKey } from '../constants.js';
 import { writeSettingsKey, readSettingsKey } from '../settings.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
-import { detectVariant } from '../variant.js';
+import { detectVariant, ensureCorrectVariant } from '../variant.js';
 
 /**
  * Update skills for configured IDEs.
@@ -19,11 +19,14 @@ export async function updateSkills({
   writeKey = writeSettingsKey,
   readKey = readSettingsKey,
   detect = detectVariant,
+  ensureVariant = ensureCorrectVariant,
 } = {}) {
   const initData = getInit();
   if (!initData?.ides?.length) return;
 
-  const variant = await detect();
+  // Ensure correct variant before updating (auto-swap if mismatched)
+  const swappedVariant = await ensureVariant({ exec, spawnInteractive });
+  const variant = swappedVariant || (await detect());
   const ides = initData.ides;
   let allSucceeded = true;
 
@@ -56,14 +59,23 @@ export async function updateSkills({
 
   try {
     const versionInfo = await fetchVersion(variant.skillsVersionUrl);
+    const variantKey = getVariantKey(variant);
     if (versionInfo?.version) {
       const local = readKey(LOCAL_SETTINGS_PATH, 'init');
       if (local?.ides?.length) {
-        writeKey(LOCAL_SETTINGS_PATH, 'init', { ...local, skillsVersion: versionInfo.version });
+        writeKey(LOCAL_SETTINGS_PATH, 'init', {
+          ...local,
+          skillsVersion: versionInfo.version,
+          variant: variantKey,
+        });
       }
       const global = readKey(SETTINGS_PATH, 'globalInit');
       if (global?.ides?.length) {
-        writeKey(SETTINGS_PATH, 'globalInit', { ...global, skillsVersion: versionInfo.version });
+        writeKey(SETTINGS_PATH, 'globalInit', {
+          ...global,
+          skillsVersion: versionInfo.version,
+          variant: variantKey,
+        });
       }
     }
   } catch {

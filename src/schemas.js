@@ -283,6 +283,7 @@ const clientsMapSchema = z.record(z.string(), clientEntrySchema);
 export const initDataSchema = z.looseObject({
   ides: z.array(z.string()),
   skillsVersion: z.string(),
+  variant: z.string().optional(),
 });
 
 export const versionCacheSchema = z.looseObject({

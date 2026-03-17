@@ -1,6 +1,7 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { runStatus } from '../../src/commands/status.js';
+import { SPARK_ORG_ID } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput } from '../helpers.js';
 
 describe('runStatus', () => {
@@ -164,5 +165,60 @@ describe('runStatus', () => {
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Could not check for skills updates'));
+  });
+
+  it('shows variant mismatch warning when stored variant differs from detected', async () => {
+    await runStatus(
+      defaultDeps({
+        getUser: mock.fn(async () => ({
+          user: {
+            first_name: 'Test',
+            organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e',
+            organization_name: 'Acme Corp',
+          },
+        })),
+        getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+        checkSkills: mock.fn(async () => null),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(output.includes('Variant mismatch'));
+    assert.ok(output.includes('spark update'));
+  });
+
+  it('does not show variant mismatch when variants match', async () => {
+    await runStatus(
+      defaultDeps({
+        getUser: mock.fn(async () => ({
+          user: { first_name: 'Test', organization_id: SPARK_ORG_ID },
+        })),
+        getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+        checkSkills: mock.fn(async () => null),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(!output.includes('Variant mismatch'));
+  });
+
+  it('does not auto-swap plugins on variant mismatch', async () => {
+    await runStatus(
+      defaultDeps({
+        getUser: mock.fn(async () => ({
+          user: {
+            first_name: 'Test',
+            organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e',
+          },
+        })),
+        getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+        checkSkills: mock.fn(async () => null),
+      }),
+    );
+
+    // No exec calls should be made — status is read-only
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(!output.includes('Swapping'));
+    assert.ok(!output.includes('plugin installed'));
   });
 });

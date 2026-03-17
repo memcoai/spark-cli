@@ -1,7 +1,8 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { VARIANTS, SPARK_ORG_ID, getVariant } from '../src/constants.js';
-import { detectVariant } from '../src/variant.js';
+import { detectVariant, ensureCorrectVariant } from '../src/variant.js';
+import { setupCommandMocks, getLogOutput } from './helpers.js';
 
 describe('getVariant', () => {
   it('returns public variant when user is null', () => {
@@ -61,5 +62,135 @@ describe('detectVariant', () => {
       })),
     });
     assert.strictEqual(result, VARIANTS.teams);
+  });
+});
+
+describe('ensureCorrectVariant', () => {
+  const mocks = setupCommandMocks();
+
+  const defaultDeps = (overrides = {}) => ({
+    getUser: mock.fn(async () => ({ user: { organization_id: SPARK_ORG_ID } })),
+    getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+    readKey: mock.fn(() => null),
+    writeKey: mock.fn(),
+    exec: mock.fn(async () => ({ stdout: '', stderr: '' })),
+    spawnInteractive: mock.fn(async () => {}),
+    fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
+    ...overrides,
+  });
+
+  it('returns null when no init data exists', async () => {
+    const result = await ensureCorrectVariant(defaultDeps({ getInit: mock.fn(() => null) }));
+    assert.strictEqual(result, null);
+  });
+
+  it('returns null when init data has no IDEs', async () => {
+    const result = await ensureCorrectVariant(
+      defaultDeps({ getInit: mock.fn(() => ({ ides: [], skillsVersion: '1.0.0' })) }),
+    );
+    assert.strictEqual(result, null);
+  });
+
+  it('returns null when user is not authenticated', async () => {
+    const result = await ensureCorrectVariant(
+      defaultDeps({
+        getUser: mock.fn(async () => {
+          throw new Error('401 Unauthorized');
+        }),
+      }),
+    );
+    assert.strictEqual(result, null);
+  });
+
+  it('returns variant without swapping when variant matches', async () => {
+    const deps = defaultDeps();
+    const result = await ensureCorrectVariant(deps);
+
+    // Should return the detected variant
+    assert.strictEqual(result, VARIANTS.public);
+    // Should NOT call exec for uninstall/reinstall
+    assert.strictEqual(deps.exec.mock.calls.length, 0);
+  });
+
+  it('swaps from public to teams when mismatch detected', async () => {
+    const deps = defaultDeps({
+      getUser: mock.fn(async () => ({
+        user: { organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e' },
+      })),
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+    });
+
+    const result = await ensureCorrectVariant(deps);
+
+    assert.strictEqual(result, VARIANTS.teams);
+    // Should have called exec for uninstall + reinstall
+    assert.ok(deps.exec.mock.calls.length >= 2);
+    // Verify uninstall used public plugin
+    const uninstallCall = deps.exec.mock.calls.find(
+      (c) => c.arguments[1]?.includes('uninstall') || c.arguments[1]?.includes('remove'),
+    );
+    assert.ok(uninstallCall);
+    // Verify install used teams plugin
+    const installCall = deps.exec.mock.calls.find(
+      (c) =>
+        c.arguments[1]?.includes('install') &&
+        c.arguments[1]?.includes(VARIANTS.teams.claudePlugin),
+    );
+    assert.ok(installCall);
+  });
+
+  it('swaps from teams to public when mismatch detected', async () => {
+    const deps = defaultDeps({
+      getUser: mock.fn(async () => ({ user: { organization_id: SPARK_ORG_ID } })),
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'teams' })),
+    });
+
+    const result = await ensureCorrectVariant(deps);
+
+    assert.strictEqual(result, VARIANTS.public);
+    assert.ok(deps.exec.mock.calls.length >= 2);
+  });
+
+  it('defaults stored variant to public when not set', async () => {
+    const deps = defaultDeps({
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0' })),
+    });
+
+    // User is public, stored is defaulted to public → no swap
+    const result = await ensureCorrectVariant(deps);
+    assert.strictEqual(result, VARIANTS.public);
+    assert.strictEqual(deps.exec.mock.calls.length, 0);
+  });
+
+  it('updates init data after swap', async () => {
+    const deps = defaultDeps({
+      getUser: mock.fn(async () => ({
+        user: { organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e' },
+      })),
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+      readKey: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+    });
+
+    await ensureCorrectVariant(deps);
+
+    // Should have written updated init data with new variant
+    const writeCall = deps.writeKey.mock.calls.find((c) => c.arguments[2]?.variant === 'teams');
+    assert.ok(writeCall, 'should write updated init data with teams variant');
+  });
+
+  it('prints warning and info messages during swap', async () => {
+    await ensureCorrectVariant(
+      defaultDeps({
+        getUser: mock.fn(async () => ({
+          user: { organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e' },
+        })),
+        getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(output.includes('Variant mismatch'));
+    assert.ok(output.includes('Swapping to teams'));
+    assert.ok(output.includes('Variant swap complete'));
   });
 });

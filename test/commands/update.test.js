@@ -19,6 +19,7 @@ const defaultSkillsDeps = (overrides = {}) => ({
   writeKey: mock.fn(),
   readKey: mock.fn(() => null),
   detect: mock.fn(async () => VARIANTS.public),
+  ensureVariant: mock.fn(async () => null),
   ...overrides,
 });
 
