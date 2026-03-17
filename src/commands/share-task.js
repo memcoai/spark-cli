@@ -10,12 +10,14 @@ export async function shareTaskCommand(rawQuery, options, command) {
   try {
     const input = shareTaskInputSchema.parse({
       query: rawQuery,
-      insight: options.insight,
+      title: options.title,
+      content: options.content,
     });
 
     const params = {
       query: input.query,
-      insights: input.insight,
+      title: input.title,
+      content: input.content,
     };
 
     const tags = collectTags(options);

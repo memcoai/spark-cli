@@ -492,24 +492,25 @@ describe('shareInputSchema', () => {
 });
 
 describe('shareTaskInputSchema', () => {
-  it('accepts query and single insight string', () => {
-    const result = shareTaskInputSchema.parse({ query: 'q', insight: 'fix it' });
+  it('accepts query with title and content', () => {
+    const result = shareTaskInputSchema.parse({ query: 'q', title: 'T', content: 'C' });
     assert.strictEqual(result.query, 'q');
-    assert.strictEqual(result.insight, 'fix it');
-  });
-
-  it('accepts query and insight array', () => {
-    const result = shareTaskInputSchema.parse({ query: 'q', insight: ['a', 'b'] });
-    assert.deepStrictEqual(result.insight, ['a', 'b']);
+    assert.strictEqual(result.title, 'T');
+    assert.strictEqual(result.content, 'C');
   });
 
   it('fails on empty query', () => {
-    const result = shareTaskInputSchema.safeParse({ query: '', insight: 'x' });
+    const result = shareTaskInputSchema.safeParse({ query: '', title: 'T', content: 'C' });
     assert.strictEqual(result.success, false);
   });
 
-  it('fails on empty insight array', () => {
-    const result = shareTaskInputSchema.safeParse({ query: 'q', insight: [] });
+  it('fails on empty title', () => {
+    const result = shareTaskInputSchema.safeParse({ query: 'q', title: '', content: 'C' });
+    assert.strictEqual(result.success, false);
+  });
+
+  it('fails on empty content', () => {
+    const result = shareTaskInputSchema.safeParse({ query: 'q', title: 'T', content: '' });
     assert.strictEqual(result.success, false);
   });
 });

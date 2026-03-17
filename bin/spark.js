@@ -194,9 +194,8 @@ program
 program
   .command('share-task <query>')
   .description('Share task insights with the knowledge network')
-  .requiredOption('--insight <insight>', 'Insight to share (can be repeated)', (val, prev) =>
-    prev ? [...prev, val] : [val],
-  )
+  .requiredOption('--title <title>', 'Short title describing the task')
+  .requiredOption('--content <content>', 'The task content')
   .option(
     '--tag <tag>',
     'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
