@@ -196,7 +196,8 @@ export const shareInputSchema = z.object({
  */
 export const shareTaskInputSchema = z.object({
   query: nonEmptyString,
-  insight: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
+  title: nonEmptyString,
+  content: nonEmptyString,
 });
 
 // ──────────────────────────────────────────────
