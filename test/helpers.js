@@ -207,7 +207,7 @@ export function schemaValidationTests(schema, cases) {
       it(c.name, () => {
         const result = schema.safeParse(c.input);
         assert.strictEqual(result.success, true, `Expected success for: ${c.input}`);
-        if (c.expected !== undefined) {
+        if (Object.hasOwn(c, 'expected')) {
           assert.strictEqual(result.data, c.expected);
         }
       });

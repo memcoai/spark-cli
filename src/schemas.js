@@ -189,19 +189,26 @@ export const feedbackEntrySchema = z.string().transform((raw, ctx) => {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
 
-  // Match self-closing: <feedback ... /> (single or double-quoted attributes)
-  const selfClosing = /^<feedback\s+((?:\w+=(?:'[^']*'|"[^"]*")(?:\s+|(?=\/>)))+)\/>$/s.exec(
-    trimmed,
-  );
-  // Match open/close: <feedback ...>text</feedback> (single or double-quoted attributes)
-  const openClose =
-    /^<feedback\s+((?:\w+=(?:'[^']*'|"[^"]*")(?:\s+|(?=>)))+)>(.*)<\/feedback>$/s.exec(trimmed);
+  // Attribute fragment shared by both self-closing and open/close patterns.
+  // Matches: key='value' or key="value", followed by whitespace or lookahead to closing delimiter.
+  const attr = String.raw`\w+=(?:'[^']*'|"[^"]*")`;
+
+  // Match self-closing: <feedback ... />
+  const selfClosing = new RegExp(
+    String.raw`^<feedback\s+((?:${attr}(?:\s+|(?=\/?>)))+)\/>$`,
+    's',
+  ).exec(trimmed);
+  // Match open/close: <feedback ...>text</feedback>
+  const openClose = new RegExp(
+    String.raw`^<feedback\s+((?:${attr}(?:\s+|(?=\/?>)))+)>(.*)<\/feedback>$`,
+    's',
+  ).exec(trimmed);
 
   const attrStr = selfClosing?.[1] || openClose?.[1];
   if (!attrStr) {
     ctx.addIssue({
       code: 'custom',
-      message: `Invalid feedback entry "${trimmed}": expected <feedback idx='...' relevant='true|false' correct='true|false'>optional comment</feedback>`,
+      message: `Invalid feedback entry "${trimmed}": expected <feedback idx='...' relevant='true|false' correct='true|false'>optional comment</feedback> or <feedback idx='...' relevant='true|false' correct='true|false' />`,
     });
     return z.NEVER;
   }

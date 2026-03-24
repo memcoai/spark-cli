@@ -233,6 +233,18 @@ describe('feedbackEntrySchema', () => {
       valid: true,
       expected: "<feedback idx='doc-3' relevant='true' correct='false'>mixed</feedback>",
     },
+    {
+      name: 'rejects invalid correct value',
+      input: "<feedback idx='rec-1' relevant='true' correct='maybe'></feedback>",
+      valid: false,
+      errorMatch: /"correct" must be/,
+    },
+    {
+      name: 'escapes special characters in comment content',
+      input: "<feedback idx='rec-1' relevant='true' correct='true'>a & b</feedback>",
+      valid: true,
+      expected: "<feedback idx='rec-1' relevant='true' correct='true'>a &amp; b</feedback>",
+    },
   ]);
 });
 
