@@ -212,8 +212,12 @@ program
 program
   .command('feedback <session-id>')
   .description('Provide feedback on recommendations from a previous query session')
-  .option('--helpful', 'Mark recommendations as helpful')
-  .option('--not-helpful', 'Mark recommendations as not helpful')
+  .option(
+    '--feedback <xml>',
+    "Feedback entry: <feedback idx='TYPE-IDX' relevant='true|false' correct='true|false'>optional comment</feedback>",
+    (val, prev) => prev.concat(val),
+    [],
+  )
   .action(feedbackCommand);
 
 // Auth commands

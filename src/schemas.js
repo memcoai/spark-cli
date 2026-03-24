@@ -150,16 +150,82 @@ export const xmlTagSchema = z.string().transform((raw, ctx) => {
 });
 
 /**
- * Schema for feedback command options.
+ * Schema for a single XML feedback entry string.
+ * Accepts <feedback idx="..." relevant="true|false" correct="true|false">optional comment</feedback>
+ * or self-closing <feedback ... /> (normalized to expanded form).
+ * Transforms to a canonical XML string with attribute order: idx, relevant, correct.
  */
-export const feedbackOptionsSchema = z
-  .object({
-    helpful: z.boolean().optional(),
-    notHelpful: z.boolean().optional(),
-  })
-  .refine((d) => d.helpful || d.notHelpful, {
-    message: 'Must specify either --helpful or --not-helpful',
-  });
+export const feedbackEntrySchema = z.string().transform((raw, ctx) => {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  // Match self-closing: <feedback ... />
+  const selfClosing = /^<feedback\s+((?:\w+='[^']*'(?:\s+|(?=\/>)))+)\/>$/s.exec(trimmed);
+  // Match open/close: <feedback ...>text</feedback>
+  const openClose = /^<feedback\s+((?:\w+='[^']*'(?:\s+|(?=>)))+)>([\s\S]*)<\/feedback>$/s.exec(
+    trimmed,
+  );
+
+  const attrStr = selfClosing?.[1] || openClose?.[1];
+  if (!attrStr) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Invalid feedback entry "${trimmed}": expected <feedback idx='...' relevant='true|false' correct='true|false'>optional comment</feedback>`,
+    });
+    return z.NEVER;
+  }
+
+  const comment = openClose ? openClose[2].trim() : '';
+
+  const attrs = Object.create(null);
+  const allowed = new Set(['idx', 'relevant', 'correct']);
+  const attrRegex = /(\w+)='([^']*)'/g;
+  let match;
+  while ((match = attrRegex.exec(attrStr)) !== null) {
+    const key = match[1];
+    const value = match[2];
+    if (!allowed.has(key)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `Invalid feedback entry "${trimmed}": unknown attribute "${key}"`,
+      });
+      return z.NEVER;
+    }
+    if (Object.hasOwn(attrs, key)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `Invalid feedback entry "${trimmed}": duplicate attribute "${key}"`,
+      });
+      return z.NEVER;
+    }
+    attrs[key] = value;
+  }
+
+  if (!attrs.idx) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Invalid feedback entry "${trimmed}": missing required "idx" attribute`,
+    });
+    return z.NEVER;
+  }
+  const boolValues = new Set(['true', 'false']);
+  if (!boolValues.has(attrs.relevant)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Invalid feedback entry "${trimmed}": "relevant" must be 'true' or 'false'`,
+    });
+    return z.NEVER;
+  }
+  if (!boolValues.has(attrs.correct)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Invalid feedback entry "${trimmed}": "correct" must be 'true' or 'false'`,
+    });
+    return z.NEVER;
+  }
+
+  return `<feedback idx='${attrs.idx}' relevant='${attrs.relevant}' correct='${attrs.correct}'>${comment}</feedback>`;
+});
 
 // ──────────────────────────────────────────────
 // Command Input Schemas

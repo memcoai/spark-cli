@@ -4,7 +4,7 @@ import {
   normalizeVersion,
   tagSchema,
   xmlTagSchema,
-  feedbackOptionsSchema,
+  feedbackEntrySchema,
   queryInputSchema,
   insightsInputSchema,
   shareInputSchema,
@@ -162,21 +162,95 @@ describe('xmlTagSchema', () => {
   });
 });
 
-describe('feedbackOptionsSchema', () => {
-  it('accepts helpful=true', () => {
-    const result = feedbackOptionsSchema.safeParse({ helpful: true });
+describe('feedbackEntrySchema', () => {
+  it('accepts valid feedback with comment', () => {
+    const result = feedbackEntrySchema.safeParse(
+      "<feedback idx='rec-1' relevant='true' correct='true'>great match</feedback>",
+    );
     assert.strictEqual(result.success, true);
+    assert.strictEqual(
+      result.data,
+      "<feedback idx='rec-1' relevant='true' correct='true'>great match</feedback>",
+    );
   });
 
-  it('accepts notHelpful=true', () => {
-    const result = feedbackOptionsSchema.safeParse({ notHelpful: true });
+  it('accepts valid feedback without comment', () => {
+    const result = feedbackEntrySchema.safeParse(
+      "<feedback idx='rec-2' relevant='false' correct='true'></feedback>",
+    );
     assert.strictEqual(result.success, true);
+    assert.strictEqual(
+      result.data,
+      "<feedback idx='rec-2' relevant='false' correct='true'></feedback>",
+    );
   });
 
-  it('rejects when neither is set', () => {
-    const result = feedbackOptionsSchema.safeParse({});
+  it('normalizes self-closing to expanded form', () => {
+    const result = feedbackEntrySchema.safeParse(
+      "<feedback idx='rec-3' relevant='true' correct='false' />",
+    );
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(
+      result.data,
+      "<feedback idx='rec-3' relevant='true' correct='false'></feedback>",
+    );
+  });
+
+  it('normalizes attribute order', () => {
+    const result = feedbackEntrySchema.safeParse(
+      "<feedback correct='true' idx='rec-4' relevant='false'>comment</feedback>",
+    );
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(
+      result.data,
+      "<feedback idx='rec-4' relevant='false' correct='true'>comment</feedback>",
+    );
+  });
+
+  it('rejects missing idx', () => {
+    const result = feedbackEntrySchema.safeParse(
+      "<feedback relevant='true' correct='true'></feedback>",
+    );
     assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /--helpful.*--not-helpful/);
+    assert.match(result.error.issues[0].message, /missing required "idx"/);
+  });
+
+  it('rejects missing relevant', () => {
+    const result = feedbackEntrySchema.safeParse(
+      "<feedback idx='rec-1' correct='true'></feedback>",
+    );
+    assert.strictEqual(result.success, false);
+    assert.match(result.error.issues[0].message, /"relevant" must be/);
+  });
+
+  it('rejects missing correct', () => {
+    const result = feedbackEntrySchema.safeParse(
+      "<feedback idx='rec-1' relevant='true'></feedback>",
+    );
+    assert.strictEqual(result.success, false);
+    assert.match(result.error.issues[0].message, /"correct" must be/);
+  });
+
+  it('rejects invalid relevant value', () => {
+    const result = feedbackEntrySchema.safeParse(
+      "<feedback idx='rec-1' relevant='yes' correct='true'></feedback>",
+    );
+    assert.strictEqual(result.success, false);
+    assert.match(result.error.issues[0].message, /"relevant" must be/);
+  });
+
+  it('rejects unknown attributes', () => {
+    const result = feedbackEntrySchema.safeParse(
+      "<feedback idx='rec-1' relevant='true' correct='true' extra='bad'></feedback>",
+    );
+    assert.strictEqual(result.success, false);
+    assert.match(result.error.issues[0].message, /unknown attribute "extra"/);
+  });
+
+  it('rejects invalid XML format', () => {
+    const result = feedbackEntrySchema.safeParse('not xml at all');
+    assert.strictEqual(result.success, false);
+    assert.match(result.error.issues[0].message, /Invalid feedback entry/);
   });
 });
 

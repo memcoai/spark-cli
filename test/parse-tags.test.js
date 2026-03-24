@@ -6,6 +6,7 @@ import {
   parseXmlTags,
   collectTags,
   parseSources,
+  parseFeedbackEntries,
 } from '../src/parse-tags.js';
 
 describe('parseTags', () => {
@@ -356,5 +357,44 @@ describe('parseSources', () => {
 
   it('filters empty strings from trailing commas', () => {
     assert.deepStrictEqual(parseSources('DOC-1,'), ['DOC-1']);
+  });
+});
+
+describe('parseFeedbackEntries', () => {
+  it('returns empty array for null/undefined', () => {
+    assert.deepStrictEqual(parseFeedbackEntries(null), []);
+    assert.deepStrictEqual(parseFeedbackEntries(undefined), []);
+  });
+
+  it('parses a single feedback entry', () => {
+    const result = parseFeedbackEntries(
+      "<feedback idx='rec-1' relevant='true' correct='true'>nice</feedback>",
+    );
+    assert.deepStrictEqual(result, [
+      "<feedback idx='rec-1' relevant='true' correct='true'>nice</feedback>",
+    ]);
+  });
+
+  it('parses multiple feedback entries', () => {
+    const result = parseFeedbackEntries([
+      "<feedback idx='rec-1' relevant='true' correct='true'></feedback>",
+      "<feedback idx='rec-2' relevant='false' correct='false'>wrong</feedback>",
+    ]);
+    assert.strictEqual(result.length, 2);
+  });
+
+  it('normalizes self-closing to expanded form', () => {
+    const result = parseFeedbackEntries("<feedback idx='rec-1' relevant='true' correct='false' />");
+    assert.deepStrictEqual(result, [
+      "<feedback idx='rec-1' relevant='true' correct='false'></feedback>",
+    ]);
+  });
+
+  it('throws on invalid feedback entry', () => {
+    assert.throws(() => parseFeedbackEntries('not xml'), /Invalid feedback entry/);
+  });
+
+  it('throws on non-string input', () => {
+    assert.throws(() => parseFeedbackEntries([123]), /expected a string/);
   });
 });

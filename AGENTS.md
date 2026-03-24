@@ -35,7 +35,7 @@ src/
     insights.js       Get detailed insights for a task
     share.js          Share an insight/solution
     share-task.js     Share task insights with knowledge network (share_task)
-    feedback.js       Provide feedback on recommendations
+    feedback.js       Provide feedback on recommendations (XML feedback entries with idx, relevant, correct)
     update.js         Self-update command (CLI + skills); exports updateSkills for IDE-aware skills updating
     uninstall.js      Self-uninstall command; cleans up all init targets (local, global, and registered projects) before npm uninstall
     init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings; exports runSetupFlow and shared helpers
@@ -114,7 +114,7 @@ test/
     share.test.js             Tag and XML tag validation, API call tag serialization
     share-task.test.js        Tag and XML tag validation, API call tag serialization
     insights.test.js          taskIndex validation
-    feedback.test.js          Flag validation (--helpful / --not-helpful)
+    feedback.test.js          XML feedback entry validation (--feedback flag)
     update.test.js            CLI self-update and skills update (IDE detection, version save, failure handling)
     uninstall.test.js         npm uninstall execution and error handling
     init.test.js              IDE selection, scope, command execution, init persistence
