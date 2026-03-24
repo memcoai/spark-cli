@@ -215,6 +215,24 @@ describe('feedbackEntrySchema', () => {
       valid: false,
       errorMatch: /Invalid feedback entry/,
     },
+    {
+      name: 'accepts double-quoted attributes with comment',
+      input: '<feedback idx="doc-1" relevant="true" correct="true">This was helpful</feedback>',
+      valid: true,
+      expected: "<feedback idx='doc-1' relevant='true' correct='true'>This was helpful</feedback>",
+    },
+    {
+      name: 'accepts double-quoted attributes self-closing',
+      input: '<feedback idx="doc-2" relevant="false" correct="true" />',
+      valid: true,
+      expected: "<feedback idx='doc-2' relevant='false' correct='true'></feedback>",
+    },
+    {
+      name: 'accepts mixed single and double-quoted attributes',
+      input: `<feedback idx='doc-3' relevant="true" correct='false'>mixed</feedback>`,
+      valid: true,
+      expected: "<feedback idx='doc-3' relevant='true' correct='false'>mixed</feedback>",
+    },
   ]);
 });
 

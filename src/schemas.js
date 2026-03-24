@@ -42,7 +42,7 @@ function parseXmlAttributes(attrStr, allowed, attrRegex) {
   let match;
   while ((match = attrRegex.exec(attrStr)) !== null) {
     const key = match[1];
-    const value = match[2];
+    const value = match[2] ?? match[3];
     if (!allowed.has(key)) return { error: `unknown attribute "${key}"` };
     if (Object.hasOwn(attrs, key)) return { error: `duplicate attribute "${key}"` };
     attrs[key] = value;
@@ -189,12 +189,13 @@ export const feedbackEntrySchema = z.string().transform((raw, ctx) => {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
 
-  // Match self-closing: <feedback ... />
-  const selfClosing = /^<feedback\s+((?:\w+='[^']*'(?:\s+|(?=\/>)))+)\/>$/s.exec(trimmed);
-  // Match open/close: <feedback ...>text</feedback>
-  const openClose = /^<feedback\s+((?:\w+='[^']*'(?:\s+|(?=>)))+)>([\s\S]*)<\/feedback>$/s.exec(
+  // Match self-closing: <feedback ... /> (single or double-quoted attributes)
+  const selfClosing = /^<feedback\s+((?:\w+=(?:'[^']*'|"[^"]*")(?:\s+|(?=\/>)))+)\/>$/s.exec(
     trimmed,
   );
+  // Match open/close: <feedback ...>text</feedback> (single or double-quoted attributes)
+  const openClose =
+    /^<feedback\s+((?:\w+=(?:'[^']*'|"[^"]*")(?:\s+|(?=>)))+)>(.*)<\/feedback>$/s.exec(trimmed);
 
   const attrStr = selfClosing?.[1] || openClose?.[1];
   if (!attrStr) {
@@ -208,7 +209,7 @@ export const feedbackEntrySchema = z.string().transform((raw, ctx) => {
   const comment = openClose ? openClose[2].trim() : '';
 
   const allowed = new Set(['idx', 'relevant', 'correct']);
-  const { attrs, error } = parseXmlAttributes(attrStr, allowed, /(\w+)='([^']*)'/g);
+  const { attrs, error } = parseXmlAttributes(attrStr, allowed, /(\w+)=(?:'([^']*)'|"([^"]*)")/g);
   if (error) {
     ctx.addIssue({ code: 'custom', message: `Invalid feedback entry "${trimmed}": ${error}` });
     return z.NEVER;
