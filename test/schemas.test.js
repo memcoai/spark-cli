@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { schemaValidationTests, missingAttrCases } from './helpers.js';
 import {
   normalizeVersion,
   tagSchema,
@@ -94,164 +95,127 @@ describe('tagSchema', () => {
 });
 
 describe('xmlTagSchema', () => {
-  it('parses valid XML tag with type and name', () => {
-    assert.strictEqual(
-      xmlTagSchema.parse('<tag type="language" name="python" />'),
-      '<tag type="language" name="python" />',
-    );
-  });
-
-  it('parses valid XML tag with version', () => {
-    assert.strictEqual(
-      xmlTagSchema.parse('<tag type="language" name="python" version="3.11" />'),
-      '<tag type="language" name="python" version="3.11" />',
-    );
-  });
-
-  it('normalizes attribute order', () => {
-    assert.strictEqual(
-      xmlTagSchema.parse('<tag name="python" type="language" />'),
-      '<tag type="language" name="python" />',
-    );
-  });
-
-  it('returns undefined for empty string', () => {
-    assert.strictEqual(xmlTagSchema.parse(''), undefined);
-  });
-
-  it('fails on missing type', () => {
-    const result = xmlTagSchema.safeParse('<tag name="python" />');
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /missing required "type"/);
-  });
-
-  it('fails on missing name', () => {
-    const result = xmlTagSchema.safeParse('<tag type="language" />');
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /missing required "name"/);
-  });
-
-  it('fails on unknown attribute', () => {
-    const result = xmlTagSchema.safeParse('<tag type="l" name="p" extra="x" />');
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /unknown attribute/);
-  });
-
-  it('fails on duplicate attribute', () => {
-    const result = xmlTagSchema.safeParse('<tag type="l" type="m" name="p" />');
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /duplicate attribute/);
-  });
-
-  it('fails on invalid format', () => {
-    const result = xmlTagSchema.safeParse('not xml');
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /Invalid XML tag/);
-  });
-
-  it('rejects __proto__ attribute (prototype pollution)', () => {
-    const result = xmlTagSchema.safeParse('<tag __proto__="polluted" type="l" name="p" />');
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /unknown attribute/);
-  });
-
-  it('rejects constructor attribute (prototype pollution)', () => {
-    const result = xmlTagSchema.safeParse('<tag constructor="polluted" type="l" name="p" />');
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /unknown attribute/);
-  });
+  schemaValidationTests(xmlTagSchema, [
+    {
+      name: 'parses valid XML tag with type and name',
+      input: '<tag type="language" name="python" />',
+      valid: true,
+      expected: '<tag type="language" name="python" />',
+    },
+    {
+      name: 'parses valid XML tag with version',
+      input: '<tag type="language" name="python" version="3.11" />',
+      valid: true,
+      expected: '<tag type="language" name="python" version="3.11" />',
+    },
+    {
+      name: 'normalizes attribute order',
+      input: '<tag name="python" type="language" />',
+      valid: true,
+      expected: '<tag type="language" name="python" />',
+    },
+    {
+      name: 'returns undefined for empty string',
+      input: '',
+      valid: true,
+      expected: undefined,
+    },
+    ...missingAttrCases(
+      'tag',
+      { type: 'language', name: 'python' },
+      { quoteChar: '"', selfClosing: true },
+    ),
+    {
+      name: 'fails on unknown attribute',
+      input: '<tag type="l" name="p" extra="x" />',
+      valid: false,
+      errorMatch: /unknown attribute/,
+    },
+    {
+      name: 'fails on duplicate attribute',
+      input: '<tag type="l" type="m" name="p" />',
+      valid: false,
+      errorMatch: /duplicate attribute/,
+    },
+    {
+      name: 'fails on invalid format',
+      input: 'not xml',
+      valid: false,
+      errorMatch: /Invalid XML tag/,
+    },
+    {
+      name: 'rejects __proto__ attribute (prototype pollution)',
+      input: '<tag __proto__="polluted" type="l" name="p" />',
+      valid: false,
+      errorMatch: /unknown attribute/,
+    },
+    {
+      name: 'rejects constructor attribute (prototype pollution)',
+      input: '<tag constructor="polluted" type="l" name="p" />',
+      valid: false,
+      errorMatch: /unknown attribute/,
+    },
+  ]);
 });
 
 describe('feedbackEntrySchema', () => {
-  it('accepts valid feedback with comment', () => {
-    const result = feedbackEntrySchema.safeParse(
-      "<feedback idx='rec-1' relevant='true' correct='true'>great match</feedback>",
-    );
-    assert.strictEqual(result.success, true);
-    assert.strictEqual(
-      result.data,
-      "<feedback idx='rec-1' relevant='true' correct='true'>great match</feedback>",
-    );
-  });
-
-  it('accepts valid feedback without comment', () => {
-    const result = feedbackEntrySchema.safeParse(
-      "<feedback idx='rec-2' relevant='false' correct='true'></feedback>",
-    );
-    assert.strictEqual(result.success, true);
-    assert.strictEqual(
-      result.data,
-      "<feedback idx='rec-2' relevant='false' correct='true'></feedback>",
-    );
-  });
-
-  it('normalizes self-closing to expanded form', () => {
-    const result = feedbackEntrySchema.safeParse(
-      "<feedback idx='rec-3' relevant='true' correct='false' />",
-    );
-    assert.strictEqual(result.success, true);
-    assert.strictEqual(
-      result.data,
-      "<feedback idx='rec-3' relevant='true' correct='false'></feedback>",
-    );
-  });
-
-  it('normalizes attribute order', () => {
-    const result = feedbackEntrySchema.safeParse(
-      "<feedback correct='true' idx='rec-4' relevant='false'>comment</feedback>",
-    );
-    assert.strictEqual(result.success, true);
-    assert.strictEqual(
-      result.data,
-      "<feedback idx='rec-4' relevant='false' correct='true'>comment</feedback>",
-    );
-  });
-
-  it('rejects missing idx', () => {
-    const result = feedbackEntrySchema.safeParse(
-      "<feedback relevant='true' correct='true'></feedback>",
-    );
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /missing required "idx"/);
-  });
-
-  it('rejects missing relevant', () => {
-    const result = feedbackEntrySchema.safeParse(
-      "<feedback idx='rec-1' correct='true'></feedback>",
-    );
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /"relevant" must be/);
-  });
-
-  it('rejects missing correct', () => {
-    const result = feedbackEntrySchema.safeParse(
-      "<feedback idx='rec-1' relevant='true'></feedback>",
-    );
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /"correct" must be/);
-  });
-
-  it('rejects invalid relevant value', () => {
-    const result = feedbackEntrySchema.safeParse(
-      "<feedback idx='rec-1' relevant='yes' correct='true'></feedback>",
-    );
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /"relevant" must be/);
-  });
-
-  it('rejects unknown attributes', () => {
-    const result = feedbackEntrySchema.safeParse(
-      "<feedback idx='rec-1' relevant='true' correct='true' extra='bad'></feedback>",
-    );
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /unknown attribute "extra"/);
-  });
-
-  it('rejects invalid XML format', () => {
-    const result = feedbackEntrySchema.safeParse('not xml at all');
-    assert.strictEqual(result.success, false);
-    assert.match(result.error.issues[0].message, /Invalid feedback entry/);
-  });
+  schemaValidationTests(feedbackEntrySchema, [
+    {
+      name: 'accepts valid feedback with comment',
+      input: "<feedback idx='rec-1' relevant='true' correct='true'>great match</feedback>",
+      valid: true,
+      expected: "<feedback idx='rec-1' relevant='true' correct='true'>great match</feedback>",
+    },
+    {
+      name: 'accepts valid feedback without comment',
+      input: "<feedback idx='rec-2' relevant='false' correct='true'></feedback>",
+      valid: true,
+      expected: "<feedback idx='rec-2' relevant='false' correct='true'></feedback>",
+    },
+    {
+      name: 'normalizes self-closing to expanded form',
+      input: "<feedback idx='rec-3' relevant='true' correct='false' />",
+      valid: true,
+      expected: "<feedback idx='rec-3' relevant='true' correct='false'></feedback>",
+    },
+    {
+      name: 'normalizes attribute order',
+      input: "<feedback correct='true' idx='rec-4' relevant='false'>comment</feedback>",
+      valid: true,
+      expected: "<feedback idx='rec-4' relevant='false' correct='true'>comment</feedback>",
+    },
+    ...missingAttrCases('feedback', { idx: 'rec-1', relevant: 'true', correct: 'true' }),
+    {
+      name: 'rejects invalid relevant value',
+      input: "<feedback idx='rec-1' relevant='yes' correct='true'></feedback>",
+      valid: false,
+      errorMatch: /"relevant" must be/,
+    },
+    {
+      name: 'rejects unknown attributes',
+      input: "<feedback idx='rec-1' relevant='true' correct='true' extra='bad'></feedback>",
+      valid: false,
+      errorMatch: /unknown attribute "extra"/,
+    },
+    {
+      name: 'accepts trailing whitespace before self-closing />',
+      input: "<feedback idx='rec-5' relevant='true' correct='false'   />",
+      valid: true,
+      expected: "<feedback idx='rec-5' relevant='true' correct='false'></feedback>",
+    },
+    {
+      name: 'accepts trailing whitespace before > in open/close form',
+      input: "<feedback idx='rec-6' relevant='false' correct='true'   >some comment</feedback>",
+      valid: true,
+      expected: "<feedback idx='rec-6' relevant='false' correct='true'>some comment</feedback>",
+    },
+    {
+      name: 'rejects invalid XML format',
+      input: 'not xml at all',
+      valid: false,
+      errorMatch: /Invalid feedback entry/,
+    },
+  ]);
 });
 
 describe('tokenResponseSchema', () => {

@@ -1,13 +1,4 @@
-import { tagSchema, xmlTagSchema, feedbackEntrySchema } from './schemas.js';
-
-function escapeXmlAttribute(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
-}
+import { tagSchema, xmlTagSchema, feedbackEntrySchema, escapeXmlAttribute } from './schemas.js';
 
 /**
  * Validate an array of strings against a Zod schema.
