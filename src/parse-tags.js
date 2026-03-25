@@ -1,13 +1,4 @@
-import { tagSchema, xmlTagSchema } from './schemas.js';
-
-function escapeXmlAttribute(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
-}
+import { tagSchema, xmlTagSchema, feedbackEntrySchema, escapeXmlAttribute } from './schemas.js';
 
 /**
  * Validate an array of strings against a Zod schema.
@@ -74,6 +65,14 @@ export function collectTags(options = {}) {
   const fromColon = tagsToXml(parseTags(options.tag));
   const fromXml = parseXmlTags(options.xmlTag);
   return [...fromColon, ...fromXml];
+}
+
+/**
+ * Parse feedback entries from an array of strings (from repeated --feedback flags).
+ * Each entry must be a valid XML feedback tag.
+ */
+export function parseFeedbackEntries(input) {
+  return validateArray(input, feedbackEntrySchema, 'feedback entry');
 }
 
 /**

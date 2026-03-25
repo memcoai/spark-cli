@@ -195,6 +195,60 @@ export function buildSetupDeps(overrides = {}) {
   };
 }
 
+/**
+ * Table-driven schema validation tests.
+ * Generates it() blocks for each case in the array.
+ * Each case: { name, input, valid: true, expected? } or { name, input, valid: false, errorMatch }
+ * Must be called inside a describe() block.
+ */
+export function schemaValidationTests(schema, cases) {
+  for (const c of cases) {
+    if (c.valid) {
+      it(c.name, () => {
+        const result = schema.safeParse(c.input);
+        assert.strictEqual(result.success, true, `Expected success for: ${c.input}`);
+        if (Object.hasOwn(c, 'expected')) {
+          assert.strictEqual(result.data, c.expected);
+        }
+      });
+    } else {
+      it(c.name, () => {
+        const result = schema.safeParse(c.input);
+        assert.strictEqual(result.success, false, `Expected failure for: ${c.input}`);
+        if (c.errorMatch) {
+          assert.match(result.error.issues[0].message, c.errorMatch);
+        }
+      });
+    }
+  }
+}
+
+/**
+ * Generates "rejects missing <attr>" test cases for XML-based schemas.
+ * @param {string} element - The XML element name (e.g. 'tag', 'feedback')
+ * @param {Record<string, string>} sampleAttrs - All required attrs with sample values
+ * @param {object} opts - Options: quoteChar (default "'"), selfClosing (default false)
+ */
+export function missingAttrCases(
+  element,
+  sampleAttrs,
+  { quoteChar = "'", selfClosing = false } = {},
+) {
+  return Object.keys(sampleAttrs).map((attr) => {
+    const remaining = Object.entries(sampleAttrs)
+      .filter(([k]) => k !== attr)
+      .map(([k, v]) => `${k}=${quoteChar}${v}${quoteChar}`)
+      .join(' ');
+    const closing = selfClosing ? ' />' : `></${element}>`;
+    return {
+      name: `rejects missing ${attr}`,
+      input: `<${element} ${remaining}${closing}`,
+      valid: false,
+      errorMatch: new RegExp(`missing required "${attr}"`),
+    };
+  });
+}
+
 export const npmExecErrorCases = [
   {
     name: 'shows npm-not-found message on ENOENT',

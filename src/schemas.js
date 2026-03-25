@@ -11,6 +11,59 @@ const nonEmptyString = z.string().min(1);
 // ──────────────────────────────────────────────
 
 /**
+ * Escape a string for safe use in XML attributes (single-quoted).
+ */
+export function escapeXmlAttribute(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+/**
+ * Escape a string for safe use in XML element content.
+ */
+function escapeXmlContent(value) {
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+/**
+ * Parse XML-like attributes from a string.
+ * Returns { attrs, error } where attrs is a null-prototype object keyed by attribute name,
+ * or error is a string describing the first validation failure.
+ * @param {string} attrStr - The raw attribute string (e.g. 'type="foo" name="bar"')
+ * @param {Set<string>} allowed - Set of allowed attribute names
+ * @param {RegExp} attrRegex - Regex to extract key/value pairs (must have two capture groups)
+ */
+function parseXmlAttributes(attrStr, allowed, attrRegex) {
+  const attrs = Object.create(null);
+  let match;
+  while ((match = attrRegex.exec(attrStr)) !== null) {
+    const key = match[1];
+    const value = match[2] ?? match[3];
+    if (!allowed.has(key)) return { error: `unknown attribute "${key}"` };
+    if (Object.hasOwn(attrs, key)) return { error: `duplicate attribute "${key}"` };
+    attrs[key] = value;
+  }
+  return { attrs };
+}
+
+/**
+ * Check that all required attributes are present.
+ * Returns the name of the first missing attribute, or null if all present.
+ */
+function findMissingAttr(attrs, required) {
+  for (const name of required) {
+    if (!Object.hasOwn(attrs, name) || (typeof attrs[name] === 'string' && !attrs[name])) {
+      return name;
+    }
+  }
+  return null;
+}
+
+/**
  * Normalize a version string.
  * Strips leading 'v'. Accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH.
  * Major and minor must be integers. Patch can have a pre-release suffix (e.g. 0-beta).
@@ -104,41 +157,18 @@ export const xmlTagSchema = z.string().transform((raw, ctx) => {
     return z.NEVER;
   }
 
-  const attrs = Object.create(null);
   const allowed = new Set(['type', 'name', 'version']);
-  const attrRegex = /(\w+)="([^"<&]*)"/g;
-  let match;
-  while ((match = attrRegex.exec(tagMatch[1])) !== null) {
-    const key = match[1];
-    const value = match[2];
-    if (!allowed.has(key)) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `Invalid XML tag "${trimmed}": unknown attribute "${key}"`,
-      });
-      return z.NEVER;
-    }
-    if (Object.hasOwn(attrs, key)) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `Invalid XML tag "${trimmed}": duplicate attribute "${key}"`,
-      });
-      return z.NEVER;
-    }
-    attrs[key] = value;
-  }
-
-  if (!attrs.type) {
-    ctx.addIssue({
-      code: 'custom',
-      message: `Invalid XML tag "${trimmed}": missing required "type" attribute`,
-    });
+  const { attrs, error } = parseXmlAttributes(tagMatch[1], allowed, /(\w+)="([^"<&]*)"/g);
+  if (error) {
+    ctx.addIssue({ code: 'custom', message: `Invalid XML tag "${trimmed}": ${error}` });
     return z.NEVER;
   }
-  if (!attrs.name) {
+
+  const missing = findMissingAttr(attrs, ['type', 'name']);
+  if (missing) {
     ctx.addIssue({
       code: 'custom',
-      message: `Invalid XML tag "${trimmed}": missing required "name" attribute`,
+      message: `Invalid XML tag "${trimmed}": missing required "${missing}" attribute`,
     });
     return z.NEVER;
   }
@@ -150,16 +180,69 @@ export const xmlTagSchema = z.string().transform((raw, ctx) => {
 });
 
 /**
- * Schema for feedback command options.
+ * Schema for a single XML feedback entry string.
+ * Accepts <feedback idx='...' relevant='true|false' correct='true|false'>optional comment</feedback>
+ * or self-closing <feedback ... /> (normalized to expanded form).
+ * Transforms to a canonical XML string with attribute order: idx, relevant, correct.
  */
-export const feedbackOptionsSchema = z
-  .object({
-    helpful: z.boolean().optional(),
-    notHelpful: z.boolean().optional(),
-  })
-  .refine((d) => d.helpful || d.notHelpful, {
-    message: 'Must specify either --helpful or --not-helpful',
-  });
+export const feedbackEntrySchema = z.string().transform((raw, ctx) => {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  // Attribute fragment shared by both self-closing and open/close patterns.
+  // Matches: key='value' or key="value", followed by whitespace or lookahead to closing delimiter.
+  const attr = String.raw`\w+=(?:'[^']*'|"[^"]*")`;
+
+  // Match self-closing: <feedback ... />
+  const selfClosing = new RegExp(
+    String.raw`^<feedback\s+((?:${attr}(?:\s+|(?=\/?>)))+)\/>$`,
+    's',
+  ).exec(trimmed);
+  // Match open/close: <feedback ...>text</feedback>
+  const openClose = new RegExp(
+    String.raw`^<feedback\s+((?:${attr}(?:\s+|(?=\/?>)))+)>(.*)<\/feedback>$`,
+    's',
+  ).exec(trimmed);
+
+  const attrStr = selfClosing?.[1] || openClose?.[1];
+  if (!attrStr) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Invalid feedback entry "${trimmed}": expected <feedback idx='...' relevant='true|false' correct='true|false'>optional comment</feedback> or <feedback idx='...' relevant='true|false' correct='true|false' />`,
+    });
+    return z.NEVER;
+  }
+
+  const comment = openClose ? openClose[2].trim() : '';
+
+  const allowed = new Set(['idx', 'relevant', 'correct']);
+  const { attrs, error } = parseXmlAttributes(attrStr, allowed, /(\w+)=(?:'([^']*)'|"([^"]*)")/g);
+  if (error) {
+    ctx.addIssue({ code: 'custom', message: `Invalid feedback entry "${trimmed}": ${error}` });
+    return z.NEVER;
+  }
+
+  const missing = findMissingAttr(attrs, ['idx', 'relevant', 'correct']);
+  if (missing) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `Invalid feedback entry "${trimmed}": missing required "${missing}" attribute`,
+    });
+    return z.NEVER;
+  }
+  const boolValues = new Set(['true', 'false']);
+  for (const field of ['relevant', 'correct']) {
+    if (!boolValues.has(attrs[field])) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `Invalid feedback entry "${trimmed}": "${field}" must be 'true' or 'false'`,
+      });
+      return z.NEVER;
+    }
+  }
+
+  return `<feedback idx='${escapeXmlAttribute(attrs.idx)}' relevant='${attrs.relevant}' correct='${attrs.correct}'>${escapeXmlContent(comment)}</feedback>`;
+});
 
 // ──────────────────────────────────────────────
 // Command Input Schemas
