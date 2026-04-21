@@ -211,13 +211,6 @@ export async function getRecommendation(query, tags = [], command = null) {
 }
 
 /**
- * Get detailed insights for a task
- */
-export async function getInsights(sessionId, taskIdx, command = null) {
-  return callTool('get_insights', { session_id: sessionId, task_idx: String(taskIdx) }, command);
-}
-
-/**
  * Share an insight/solution
  */
 export async function shareInsight(params, command = null) {

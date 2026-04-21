@@ -7,7 +7,6 @@ import {
   xmlTagSchema,
   feedbackEntrySchema,
   queryInputSchema,
-  insightsInputSchema,
   shareInputSchema,
   shareTaskInputSchema,
   tokenResponseSchema,
@@ -482,24 +481,6 @@ describe('queryInputSchema', () => {
 
   it('fails on missing query', () => {
     const result = queryInputSchema.safeParse({});
-    assert.strictEqual(result.success, false);
-  });
-});
-
-describe('insightsInputSchema', () => {
-  it('accepts string sessionId and string taskIndex', () => {
-    const result = insightsInputSchema.parse({ sessionId: 'sess-1', taskIndex: '2' });
-    assert.strictEqual(result.sessionId, 'sess-1');
-    assert.strictEqual(result.taskIndex, '2');
-  });
-
-  it('coerces numeric taskIndex to string', () => {
-    const result = insightsInputSchema.parse({ sessionId: 'sess-1', taskIndex: 3 });
-    assert.strictEqual(result.taskIndex, '3');
-  });
-
-  it('fails on empty sessionId', () => {
-    const result = insightsInputSchema.safeParse({ sessionId: '', taskIndex: '1' });
     assert.strictEqual(result.success, false);
   });
 });

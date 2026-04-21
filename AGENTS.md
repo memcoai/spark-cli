@@ -6,10 +6,9 @@ Always keep this file up to date. Update it on approved changes to always reflec
 
 Always use Spark MCP tools to query shared memory **before** coding. Spark MCP provides software development guidance, including internal policies and best practice used in my team, information about proprietary code, and shared problem-solving knowledge from my software development team.
 
-1. Call `mcp__spark__get_recommendation` with tags describing your context to search existing knowledge,
-2. then call `mcp__spark__get_insights` to get any information relevant to your task.
-3. If you discover anything new, call `mcp__spark__share_insight` to share it with the rest of the team.
-4. **Always** call `mcp__spark__share_feedback` before finishing if you received any information from Spark.
+1. Call `mcp__spark__get_recommendation` with tags describing your context to search existing knowledge.
+2. If you discover anything new, call `mcp__spark__share_insight` to share it with the rest of the team.
+3. **Always** call `mcp__spark__share_feedback` before finishing if you received any information from Spark.
 
 ## Project Overview
 
@@ -32,7 +31,6 @@ src/
   commands/
     auth.js           login (OAuth PKCE), logout, whoami; exports resolveApiBase for testable --api-base handling
     query.js          Query knowledge network (get_recommendation)
-    insights.js       Get detailed insights for a task
     share.js          Share an insight/solution
     share-task.js     Share task insights with knowledge network (share_task)
     feedback.js       Provide feedback on recommendations (XML feedback entries with idx, relevant, correct)
@@ -52,7 +50,7 @@ src/
   output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode
-  schemas.js          Zod schemas for all validation: command inputs (query, insights, share, share-task, feedback), CLI inputs (tags, XML tags), OAuth responses (token, discovery, registration), settings.json structure, and API responses
+  schemas.js          Zod schemas for all validation: command inputs (query, share, share-task, feedback), CLI inputs (tags, XML tags), OAuth responses (token, discovery, registration), settings.json structure, and API responses
   parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION), XML tag validation (parseXmlTags), XML conversion (tagsToXml), and merged tag collection (collectTags) — uses Zod schemas from schemas.js
   banner.js           Terminal UI (logos, spinners, colored output via colorize())
   index.js            Public API re-exports from api.js
@@ -113,7 +111,6 @@ test/
     query.test.js             Tag and XML tag validation, API call tag serialization
     share.test.js             Tag and XML tag validation, API call tag serialization
     share-task.test.js        Tag and XML tag validation, API call tag serialization
-    insights.test.js          taskIndex validation
     feedback.test.js          XML feedback entry validation (--feedback flag)
     update.test.js            CLI self-update and skills update (IDE detection, version save, failure handling)
     uninstall.test.js         npm uninstall execution and error handling
