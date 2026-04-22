@@ -256,14 +256,6 @@ export const queryInputSchema = z.object({
 });
 
 /**
- * Schema for insights command input.
- */
-export const insightsInputSchema = z.object({
-  sessionId: nonEmptyString,
-  taskIndex: z.union([z.string(), z.number()]).transform(String),
-});
-
-/**
  * Schema for share command input.
  */
 export const shareInputSchema = z.object({

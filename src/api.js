@@ -207,28 +207,21 @@ export async function callTool(toolName, params, command = null) {
  * Query for recommendations
  */
 export async function getRecommendation(query, tags = [], command = null) {
-  return callTool('get_recommendation', { query, tags }, command);
-}
-
-/**
- * Get detailed insights for a task
- */
-export async function getInsights(sessionId, taskIdx, command = null) {
-  return callTool('get_insights', { session_id: sessionId, task_idx: String(taskIdx) }, command);
+  return callTool('search', { query, tags }, command);
 }
 
 /**
  * Share an insight/solution
  */
 export async function shareInsight(params, command = null) {
-  return callTool('share_insight', params, command);
+  return callTool('enrich_memory', params, command);
 }
 
 /**
  * Share a task with insights
  */
 export async function shareTask(params, command = null) {
-  return callTool('share_task', params, command);
+  return callTool('create_memory', params, command);
 }
 
 /**

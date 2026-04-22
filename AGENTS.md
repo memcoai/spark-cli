@@ -6,10 +6,9 @@ Always keep this file up to date. Update it on approved changes to always reflec
 
 Always use Spark MCP tools to query shared memory **before** coding. Spark MCP provides software development guidance, including internal policies and best practice used in my team, information about proprietary code, and shared problem-solving knowledge from my software development team.
 
-1. Call `mcp__spark__get_recommendation` with tags describing your context to search existing knowledge,
-2. then call `mcp__spark__get_insights` to get any information relevant to your task.
-3. If you discover anything new, call `mcp__spark__share_insight` to share it with the rest of the team.
-4. **Always** call `mcp__spark__share_feedback` before finishing if you received any information from Spark.
+1. Call `mcp__spark__search` with tags describing your context to search existing knowledge.
+2. If you discover anything new, call `mcp__spark__enrich_memory` to share it with the rest of the team.
+3. **Always** call `mcp__spark__share_feedback` before finishing if you received any information from Spark.
 
 ## Project Overview
 
@@ -31,10 +30,9 @@ bin/spark.js          CLI entry point (commander.js), version check hooks
 src/
   commands/
     auth.js           login (OAuth PKCE), logout, whoami; exports resolveApiBase for testable --api-base handling
-    query.js          Query knowledge network (get_recommendation)
-    insights.js       Get detailed insights for a task
+    query.js          Query knowledge network (search)
     share.js          Share an insight/solution
-    share-task.js     Share task insights with knowledge network (share_task)
+    share-task.js     Share task insights with knowledge network (create_memory)
     feedback.js       Provide feedback on recommendations (XML feedback entries with idx, relevant, correct)
     update.js         Self-update command (CLI + skills); exports updateSkills for IDE-aware skills updating
     uninstall.js      Self-uninstall command; cleans up all init targets (local, global, and registered projects) before npm uninstall
@@ -52,7 +50,7 @@ src/
   output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode
-  schemas.js          Zod schemas for all validation: command inputs (query, insights, share, share-task, feedback), CLI inputs (tags, XML tags), OAuth responses (token, discovery, registration), settings.json structure, and API responses
+  schemas.js          Zod schemas for all validation: command inputs (query, share, share-task, feedback), CLI inputs (tags, XML tags), OAuth responses (token, discovery, registration), settings.json structure, and API responses
   parse-tags.js       Tag parsing/validation (TYPE:NAME or TYPE:NAME:VERSION), XML tag validation (parseXmlTags), XML conversion (tagsToXml), and merged tag collection (collectTags) — uses Zod schemas from schemas.js
   banner.js           Terminal UI (logos, spinners, colored output via colorize())
   index.js            Public API re-exports from api.js
@@ -70,7 +68,7 @@ src/
 - **Auth priority:** CLI `--api-key` flag > `SPARK_API_KEY` env var > OAuth access token > legacy API key in credentials file.
 - **Token refresh:** Two-layer strategy: (1) **proactive** — `getAuthToken()` checks `isTokenExpired()` (5-min buffer) and refreshes before each API call; (2) **reactive** — `apiRequest()` catches 401 responses for OAuth tokens, refreshes once, and retries. Both save the new token back to the same settings.json file the credentials were loaded from. API key auth (not OAuth) is never retried on 401.
 - **Post-login verification:** After saving credentials, `loginCommand` calls `getCurrentUser()` to verify the login succeeded (response < 400). Verification failure shows a warning but does not abort login.
-- **Tag format:** Two input formats, both repeatable. `--tag TYPE:NAME` or `--tag TYPE:NAME:VERSION` accepts colon-separated tags (e.g., `--tag language:python:3.11`). `--xml-tag` accepts pre-formed XML tags (e.g., `--xml-tag '<tag type="language" name="python" version="3.11" />'`). Both can be used together. Version in `--tag` accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH with optional pre-release suffix; `v` prefix is stripped. `--xml-tag` validates required `type` and `name` attributes, optional `version`, rejects unknown attributes, and normalizes to canonical attribute order. Command handlers use `collectTags(options)` from `parse-tags.js` to merge both sources into a single XML tags array. Sent as `tags` on all tool endpoints (get_recommendation, share_insight, share_task).
+- **Tag format:** Two input formats, both repeatable. `--tag TYPE:NAME` or `--tag TYPE:NAME:VERSION` accepts colon-separated tags (e.g., `--tag language:python:3.11`). `--xml-tag` accepts pre-formed XML tags (e.g., `--xml-tag '<tag type="language" name="python" version="3.11" />'`). Both can be used together. Version in `--tag` accepts MAJOR, MAJOR.MINOR, or MAJOR.MINOR.PATCH with optional pre-release suffix; `v` prefix is stripped. `--xml-tag` validates required `type` and `name` attributes, optional `version`, rejects unknown attributes, and normalizes to canonical attribute order. Command handlers use `collectTags(options)` from `parse-tags.js` to merge `--tag` and `--xml-tag` into a single XML tags array, sent as the `tags` parameter on tool endpoints that accept tags (search, enrich_memory, create_memory). Endpoints that do not accept tags (e.g., share_feedback) do not receive this parameter.
 - **Output:** Default output is compact JSON via `output()`. Use `--pretty` for human-readable output with markdown rendering and ANSI formatting. Auth commands (login, logout) always use styled terminal output via banner.js. Errors go through `outputError()` which calls `process.exit(1)`.
 - **OAuth client cache:** stored in `~/.spark/settings.json` under the `clients` key, keyed by API base URL.
 - **Version checking:** Three separate systems: (1) npm registry check for "update available" notifications — cached under `latestVersion` with 24-hour TTL; (2) backend compatibility check (`GET /api/cli/compatibility`) for blocking outdated CLIs and deprecation warnings — cached under `compatibility` with 4-hour TTL; (3) skills version check from GitHub raw content (`memcoai/spark-cli-skills/main/VERSION`) — cached under `skillsVersion` with 24-hour TTL. All fail open on network errors. Skills notifications include IDE-specific update commands based on stored init choices.
@@ -113,7 +111,6 @@ test/
     query.test.js             Tag and XML tag validation, API call tag serialization
     share.test.js             Tag and XML tag validation, API call tag serialization
     share-task.test.js        Tag and XML tag validation, API call tag serialization
-    insights.test.js          taskIndex validation
     feedback.test.js          XML feedback entry validation (--feedback flag)
     update.test.js            CLI self-update and skills update (IDE detection, version save, failure handling)
     uninstall.test.js         npm uninstall execution and error handling

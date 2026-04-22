@@ -2,7 +2,6 @@
 
 import { program } from 'commander';
 import { queryCommand } from '../src/commands/query.js';
-import { insightsCommand } from '../src/commands/insights.js';
 import { shareCommand } from '../src/commands/share.js';
 import { shareTaskCommand } from '../src/commands/share-task.js';
 import { feedbackCommand } from '../src/commands/feedback.js';
@@ -160,12 +159,6 @@ program
     (val, prev) => (prev ? [...prev, val] : [val]),
   )
   .action(queryCommand);
-
-// Insights command
-program
-  .command('insights <session-id> <task-index>')
-  .description('Get detailed insights for a task from a previous query session')
-  .action(insightsCommand);
 
 // Share command
 program
