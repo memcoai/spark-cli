@@ -412,7 +412,8 @@ export async function loginCommand(options, _command) {
       tokenSpinner.stop(`Credentials saved ${location}`);
     } catch (err) {
       tokenSpinner.fail('Failed to save credentials');
-      throw err;
+      reportLoginError(err, apiBase);
+      return;
     }
 
     // Verify login by calling getUser
@@ -430,11 +431,18 @@ export async function loginCommand(options, _command) {
     console.log('');
     console.log(`Run ${colorize('\x1b[33m', 'spark whoami')} to see your account info.`);
   } catch (err) {
-    printError(err.message);
-    console.log('');
-    printApiKeyFallback(apiBase);
+    reportLoginError(err, apiBase);
     process.exit(1);
   }
+}
+
+/**
+ * Report a login failure: the error message plus API-key fallback guidance.
+ */
+function reportLoginError(err, apiBase) {
+  printError(err.message);
+  console.log('');
+  printApiKeyFallback(apiBase);
 }
 
 function printApiKeyFallback(apiBase) {
