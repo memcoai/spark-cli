@@ -23,6 +23,12 @@ const defaultSkillsDeps = (overrides = {}) => ({
   ...overrides,
 });
 
+// Asserts a failed IDE update did not persist a new skills version (the allSucceeded gate).
+function assertSkillsVersionNotPersisted(deps) {
+  assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
+  assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+}
+
 describe('updateCommand', () => {
   const mocks = setupCommandMocks();
 
@@ -246,8 +252,7 @@ describe('updateSkills', () => {
 
     await updateSkills(deps);
 
-    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
-    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+    assertSkillsVersionNotPersisted(deps);
   });
 
   it('does not update stored skills version when Codex update fails', async () => {
@@ -262,8 +267,7 @@ describe('updateSkills', () => {
 
     await updateSkills(deps);
 
-    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
-    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+    assertSkillsVersionNotPersisted(deps);
     assert.ok(getLogOutput(mocks.logMock).includes('codex not found'));
   });
 
@@ -279,8 +283,7 @@ describe('updateSkills', () => {
 
     await updateSkills(deps);
 
-    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
-    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+    assertSkillsVersionNotPersisted(deps);
   });
 
   it('does not update stored skills version when any IDE update fails', async () => {
@@ -295,8 +298,7 @@ describe('updateSkills', () => {
 
     await updateSkills(deps);
 
-    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
-    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+    assertSkillsVersionNotPersisted(deps);
   });
 
   it('uses stored variant from init data when ensureVariant returns null', async () => {

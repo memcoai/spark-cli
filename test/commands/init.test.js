@@ -4,6 +4,20 @@ import { runInit, saveInitChoices } from '../../src/commands/init.js';
 import { VARIANTS, SETTINGS_PATH, LOCAL_SETTINGS_PATH } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput, getStdoutOutput, buildSetupDeps } from '../helpers.js';
 
+const MARKETPLACE_ADD = ['plugin', 'marketplace', 'add', 'memcoai/marketplace'];
+
+// An exec mock whose first call (marketplace add) fails as "already exists", then succeeds.
+const alreadyExistsThenSucceed = () => {
+  let callCount = 0;
+  return mock.fn(async () => {
+    callCount += 1;
+    if (callCount === 1) {
+      throw Object.assign(new Error('already exists'), { stderr: 'Marketplace already exists' });
+    }
+    return { stdout: '', stderr: '' };
+  });
+};
+
 describe('runInit', () => {
   const mocks = setupCommandMocks();
 
@@ -42,12 +56,7 @@ describe('runInit', () => {
 
     // First call: marketplace add
     assert.strictEqual(exec.mock.calls[0].arguments[0], 'claude');
-    assert.deepStrictEqual(exec.mock.calls[0].arguments[1], [
-      'plugin',
-      'marketplace',
-      'add',
-      'memcoai/marketplace',
-    ]);
+    assert.deepStrictEqual(exec.mock.calls[0].arguments[1], MARKETPLACE_ADD);
 
     // Second call: plugin install with project scope
     assert.strictEqual(exec.mock.calls[1].arguments[0], 'claude');
@@ -86,12 +95,7 @@ describe('runInit', () => {
 
     // First call: marketplace add
     assert.strictEqual(exec.mock.calls[0].arguments[0], 'codex');
-    assert.deepStrictEqual(exec.mock.calls[0].arguments[1], [
-      'plugin',
-      'marketplace',
-      'add',
-      'memcoai/marketplace',
-    ]);
+    assert.deepStrictEqual(exec.mock.calls[0].arguments[1], MARKETPLACE_ADD);
 
     // Second call: plugin add — Codex plugins are global, so no --scope flag
     assert.strictEqual(exec.mock.calls[1].arguments[0], 'codex');
@@ -139,16 +143,7 @@ describe('runInit', () => {
   });
 
   it('treats Codex marketplace already-exists error as success', async () => {
-    let callCount = 0;
-    const exec = mock.fn(async () => {
-      callCount++;
-      if (callCount === 1) {
-        throw Object.assign(new Error('already exists'), {
-          stderr: 'Marketplace already exists',
-        });
-      }
-      return { stdout: '', stderr: '' };
-    });
+    const exec = alreadyExistsThenSucceed();
 
     await runInit(defaultDeps({ exec, promptChecklist: mock.fn(async () => ['Codex']) }));
 
@@ -238,16 +233,7 @@ describe('runInit', () => {
   });
 
   it('treats marketplace already-exists error as success', async () => {
-    let callCount = 0;
-    const exec = mock.fn(async () => {
-      callCount++;
-      if (callCount === 1) {
-        throw Object.assign(new Error('already exists'), {
-          stderr: 'Marketplace already exists',
-        });
-      }
-      return { stdout: '', stderr: '' };
-    });
+    const exec = alreadyExistsThenSucceed();
 
     await runInit(defaultDeps({ exec }));
 

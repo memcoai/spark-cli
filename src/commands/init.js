@@ -159,17 +159,13 @@ export function promptChoice(question, options) {
 }
 
 /**
- * Set up Claude Code with Spark plugin.
+ * Add the Spark marketplace via the given IDE CLI (`claude` or `codex`).
+ * Treats an "already added" error as success.
  */
-export async function setupClaudeCode(
-  scope,
-  { exec = runCommand, variant = VARIANTS.public } = {},
-) {
-  const scopeFlag = scope === 'project' ? 'project' : 'user';
-
+async function addMarketplace(cli, exec) {
   const addSpinner = createSpinner('Adding Spark marketplace...');
   try {
-    await exec('claude', ['plugin', 'marketplace', 'add', 'memcoai/marketplace']);
+    await exec(cli, ['plugin', 'marketplace', 'add', 'memcoai/marketplace']);
     addSpinner.stop('Spark marketplace added');
   } catch (err) {
     const msg = (err.stderr?.trim() || err.message || '').toLowerCase();
@@ -178,9 +174,21 @@ export async function setupClaudeCode(
     } else {
       addSpinner.fail('Failed to add marketplace');
       printWarning(err.stderr?.trim() || err.message);
-      printInfo('You can add it manually: claude plugin marketplace add memcoai/marketplace');
+      printInfo(`You can add it manually: ${cli} plugin marketplace add memcoai/marketplace`);
     }
   }
+}
+
+/**
+ * Set up Claude Code with Spark plugin.
+ */
+export async function setupClaudeCode(
+  scope,
+  { exec = runCommand, variant = VARIANTS.public } = {},
+) {
+  const scopeFlag = scope === 'project' ? 'project' : 'user';
+
+  await addMarketplace('claude', exec);
 
   const installSpinner = createSpinner('Installing Spark plugin...');
   try {
@@ -200,20 +208,7 @@ export async function setupClaudeCode(
  * Codex plugins are global (no project/user scope), so scope is not used here.
  */
 export async function setupCodex({ exec = runCommand, variant = VARIANTS.public } = {}) {
-  const addSpinner = createSpinner('Adding Spark marketplace...');
-  try {
-    await exec('codex', ['plugin', 'marketplace', 'add', 'memcoai/marketplace']);
-    addSpinner.stop('Spark marketplace added');
-  } catch (err) {
-    const msg = (err.stderr?.trim() || err.message || '').toLowerCase();
-    if (msg.includes('already') || msg.includes('exists')) {
-      addSpinner.stop('Spark marketplace already configured');
-    } else {
-      addSpinner.fail('Failed to add marketplace');
-      printWarning(err.stderr?.trim() || err.message);
-      printInfo('You can add it manually: codex plugin marketplace add memcoai/marketplace');
-    }
-  }
+  await addMarketplace('codex', exec);
 
   const installSpinner = createSpinner('Installing Spark plugin...');
   try {

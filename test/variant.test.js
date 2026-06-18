@@ -213,6 +213,31 @@ describe('ensureCorrectVariant', () => {
     assert.strictEqual(globalWrite[2].variant, 'teams');
   });
 
+  it('syncs the matching global projects[] entry after a project-scope swap', async () => {
+    const cwd = process.cwd();
+    const deps = defaultDeps({
+      getUser: mock.fn(async () => ({
+        user: { organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e' },
+      })),
+      getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' })),
+      readKey: mock.fn((path, key) => {
+        if (key === 'init') return { ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' };
+        if (key === 'projects')
+          return [{ path: cwd, ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' }];
+        return null;
+      }),
+    });
+
+    await ensureCorrectVariant(deps);
+
+    const projectsWrite = deps.writeKey.mock.calls
+      .map((c) => c.arguments)
+      .find(([, key]) => key === 'projects');
+    assert.ok(projectsWrite, 'should rewrite the projects array');
+    const entry = projectsWrite[2].find((p) => p.path === cwd);
+    assert.strictEqual(entry.variant, 'teams');
+  });
+
   it('swaps from teams to public when mismatch detected', async () => {
     const deps = defaultDeps({
       getUser: mock.fn(async () => ({ user: { organization_id: SPARK_ORG_ID } })),

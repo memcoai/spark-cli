@@ -120,6 +120,17 @@ export async function ensureCorrectVariant({
           variant: detectedKey,
           skillsVersion,
         });
+
+        // Keep this project's entry in the global projects[] array in sync, otherwise a later
+        // `spark uninstall` run from another directory would act on the stale (old) variant.
+        const projects = readKey(SETTINGS_PATH, 'projects');
+        if (Array.isArray(projects)) {
+          const idx = projects.findIndex((p) => p.path === process.cwd());
+          if (idx >= 0) {
+            projects[idx] = { ...projects[idx], variant: detectedKey, skillsVersion };
+            writeKey(SETTINGS_PATH, 'projects', projects);
+          }
+        }
       }
       const globalInit = readKey(SETTINGS_PATH, 'globalInit');
       if (globalInit?.ides?.some((k) => GLOBAL_ONLY_IDES.includes(k))) {
