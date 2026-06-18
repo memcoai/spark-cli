@@ -135,6 +135,19 @@ describe('runStatus', () => {
     assert.ok(output.includes('Skills are up to date'));
   });
 
+  it('labels the Codex IDE in skills status', async () => {
+    await runStatus(
+      defaultDeps({
+        checkSkills: mock.fn(async () => ({ version: '1.0.0' })),
+        getSkillsNote: mock.fn(() => null),
+        getInit: mock.fn(() => ({ ides: ['codex'], skillsVersion: '1.0.0' })),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(output.includes('Skills configured for: Codex'));
+  });
+
   it('shows skills update notification when outdated', async () => {
     await runStatus(
       defaultDeps({

@@ -8,6 +8,7 @@ import {
   VARIANTS,
   SETTINGS_PATH,
   LOCAL_SETTINGS_PATH,
+  getMarketplaceName,
 } from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
 import { npmVersionResponseSchema, compatibilityDataSchema } from './schemas.js';
@@ -272,6 +273,9 @@ export function getSkillsNotification(latestInfo, initData, variant = VARIANTS.p
   const ides = initData.ides;
   if (ides.includes('claude')) {
     lines.push(`  Claude Code: claude plugin update ${variant.claudePlugin}`);
+  }
+  if (ides.includes('codex')) {
+    lines.push(`  Codex: codex plugin marketplace upgrade ${getMarketplaceName(variant)}`);
   }
   if (ides.includes('other')) {
     lines.push(`  Cursor/Windsurf: npx skills update ${variant.skillsRepo}`);

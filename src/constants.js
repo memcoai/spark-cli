@@ -20,17 +20,35 @@ export const SPARK_ORG_ID = '10000000-0000-0000-0000-000000000000';
 
 export const VARIANTS = {
   public: {
+    // Marketplace CLI plugin id — installed the same way by Claude Code and Codex.
     claudePlugin: 'spark-cli@MemCo',
     skillsRepo: 'memcoai/spark-cli-skills',
     skillsVersionUrl: 'https://raw.githubusercontent.com/memcoai/spark-cli-skills/main/VERSION',
   },
   teams: {
-    claudePlugin: 'spark-teams-cli@MemCo',
+    // Marketplace renamed the plugin to spark-team-cli; the skills repo keeps the older name.
+    claudePlugin: 'spark-team-cli@MemCo',
     skillsRepo: 'memcoai/spark-teams-cli-skills',
     skillsVersionUrl:
       'https://raw.githubusercontent.com/memcoai/spark-teams-cli-skills/main/VERSION',
   },
 };
+
+/**
+ * IDE keys whose plugins are inherently global (no project/user scope). These are always
+ * recorded in `globalInit` regardless of the chosen install scope, so a single global record
+ * governs install/removal and per-project teardown never touches the shared plugin.
+ */
+export const GLOBAL_ONLY_IDES = ['codex'];
+
+/**
+ * Get the marketplace name a variant's plugin is installed from — the part after '@'
+ * in the plugin id (e.g. 'spark-cli@MemCo' -> 'MemCo').
+ * Used for `codex plugin marketplace upgrade <name>`.
+ */
+export function getMarketplaceName(variant) {
+  return variant.claudePlugin.split('@')[1];
+}
 
 /**
  * Determine the variant (public or teams) from a user object.

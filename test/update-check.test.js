@@ -243,6 +243,15 @@ describe('getSkillsNotification', () => {
     assert.ok(result.message.includes('claude plugin update'));
   });
 
+  it('returns notification with Codex update command', () => {
+    const result = getSkillsNotification(
+      { version: '2.0.0' },
+      { ides: ['codex'], skillsVersion: '1.0.0' },
+    );
+    assert.ok(result);
+    assert.ok(result.message.includes('codex plugin marketplace upgrade MemCo'));
+  });
+
   it('returns notification with Cursor/Windsurf update command', () => {
     const result = getSkillsNotification(
       { version: '2.0.0' },

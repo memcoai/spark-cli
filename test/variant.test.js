@@ -141,6 +141,35 @@ describe('ensureCorrectVariant', () => {
     assert.ok(installCall);
   });
 
+  it('swaps Codex plugin when mismatch detected', async () => {
+    const deps = defaultDeps({
+      getUser: mock.fn(async () => ({
+        user: { organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e' },
+      })),
+      getInit: mock.fn(() => ({ ides: ['codex'], skillsVersion: '1.0.0', variant: 'public' })),
+    });
+
+    const result = await ensureCorrectVariant(deps);
+
+    assert.strictEqual(result, VARIANTS.teams);
+    const codexCalls = deps.exec.mock.calls.filter((c) => c.arguments[0] === 'codex');
+    // Remove old (public) plugin
+    assert.ok(
+      codexCalls.some(
+        (c) =>
+          c.arguments[1]?.includes('remove') &&
+          c.arguments[1]?.includes(VARIANTS.public.claudePlugin),
+      ),
+    );
+    // Add new (teams) plugin
+    assert.ok(
+      codexCalls.some(
+        (c) =>
+          c.arguments[1]?.includes('add') && c.arguments[1]?.includes(VARIANTS.teams.claudePlugin),
+      ),
+    );
+  });
+
   it('swaps from teams to public when mismatch detected', async () => {
     const deps = defaultDeps({
       getUser: mock.fn(async () => ({ user: { organization_id: SPARK_ORG_ID } })),

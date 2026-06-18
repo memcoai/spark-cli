@@ -10,7 +10,7 @@ import {
 import { printSuccess, printError, printInfo, printWarning, colorize } from '../banner.js';
 import { VARIANTS, getVariant, getVariantKey, resolveVariant } from '../constants.js';
 
-const IDE_LABELS = { claude: 'Claude Code', other: 'Cursor/Windsurf' };
+const IDE_LABELS = { claude: 'Claude Code', codex: 'Codex', other: 'Cursor/Windsurf' };
 
 function ideKeyToLabel(key) {
   return IDE_LABELS[key] || key;

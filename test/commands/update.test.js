@@ -151,6 +151,23 @@ describe('updateSkills', () => {
     ]);
   });
 
+  it('updates Codex plugin via marketplace upgrade when codex IDE is configured', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['codex'], skillsVersion: '1.0.0' })),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.exec.mock.calls.length, 1);
+    assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[0], 'codex');
+    assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[1], [
+      'plugin',
+      'marketplace',
+      'upgrade',
+      'MemCo',
+    ]);
+  });
+
   it('updates other IDE skills when other IDE is configured', async () => {
     const deps = defaultSkillsDeps({
       getInit: mock.fn(() => ({ ides: ['other'], skillsVersion: '1.0.0' })),
@@ -218,6 +235,23 @@ describe('updateSkills', () => {
 
     assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
     assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+  });
+
+  it('does not update stored skills version when Codex update fails', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['codex'], skillsVersion: '1.0.0' })),
+      exec: mock.fn(async () => {
+        throw new Error('codex not found');
+      }),
+      fetchVersion: mock.fn(async () => ({ version: '1.2.0' })),
+      readKey: mock.fn(() => ({ ides: ['codex'], skillsVersion: '1.0.0' })),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
+    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+    assert.ok(getLogOutput(mocks.logMock).includes('codex not found'));
   });
 
   it('does not update stored skills version when other IDE update fails', async () => {

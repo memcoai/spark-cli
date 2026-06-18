@@ -38,6 +38,8 @@ export async function runDisable({
 
   const scope = 'project';
 
+  // Codex is global-only (tracked in globalInit, never in per-project init), so a project-scoped
+  // disable never removes it — it is shared across projects and removed only by `spark uninstall`.
   if (initData.ides.includes('claude')) {
     await uninstallClaudePlugin(scope, { exec: execAsync, variant });
   }

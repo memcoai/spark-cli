@@ -9,8 +9,12 @@ import {
 import { getInitData, fetchSkillsVersion } from './update-check.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
 import { runCommand, runInteractiveCommand } from './exec.js';
-import { setupClaudeCode, setupOtherIDEs } from './commands/init.js';
-import { uninstallClaudePlugin, uninstallOtherIDEs } from './commands/uninstall.js';
+import { setupClaudeCode, setupCodex, setupOtherIDEs } from './commands/init.js';
+import {
+  uninstallClaudePlugin,
+  uninstallCodexPlugin,
+  uninstallOtherIDEs,
+} from './commands/uninstall.js';
 import { printInfo, printWarning } from './banner.js';
 
 /**
@@ -80,6 +84,9 @@ export async function ensureCorrectVariant({
   if (initData.ides.includes('claude')) {
     await uninstallClaudePlugin(scope, { exec, variant: oldVariant });
   }
+  if (initData.ides.includes('codex')) {
+    await uninstallCodexPlugin({ exec, variant: oldVariant });
+  }
   if (initData.ides.includes('other')) {
     await uninstallOtherIDEs(scope, { spawnInteractive, variant: oldVariant });
   }
@@ -87,6 +94,9 @@ export async function ensureCorrectVariant({
   // Install new variant
   if (initData.ides.includes('claude')) {
     await setupClaudeCode(scope, { exec, variant });
+  }
+  if (initData.ides.includes('codex')) {
+    await setupCodex({ exec, variant });
   }
   if (initData.ides.includes('other')) {
     await setupOtherIDEs(scope, { spawnInteractive, variant });
