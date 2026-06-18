@@ -382,7 +382,10 @@ describe('saveInitChoices — Codex is tracked globally only', () => {
     const globalWrite = writesOf(deps).find(
       ([path, key]) => path === SETTINGS_PATH && key === 'globalInit',
     );
-    assert.deepStrictEqual([...globalWrite[2].ides].sort(), ['claude', 'codex']);
+    assert.deepStrictEqual(
+      [...globalWrite[2].ides].sort((a, b) => a.localeCompare(b)),
+      ['claude', 'codex'],
+    );
   });
 
   it('writes everything to globalInit under global scope', async () => {

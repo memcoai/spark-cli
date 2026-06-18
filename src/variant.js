@@ -3,6 +3,7 @@ import {
   VARIANTS,
   getVariant,
   getVariantKey,
+  GLOBAL_ONLY_IDES,
   SETTINGS_PATH,
   LOCAL_SETTINGS_PATH,
 } from './constants.js';
@@ -102,16 +103,34 @@ export async function ensureCorrectVariant({
     await setupOtherIDEs(scope, { spawnInteractive, variant });
   }
 
-  // Update init data with new variant and version
+  // Persist the new variant. `initData` may be the merged view from getInitData() (project IDEs
+  // plus global-only Codex from globalInit), so write each record's own IDEs back to its own
+  // location: never persist global-only IDEs into the local record, and update globalInit's
+  // variant separately so a swapped Codex isn't re-detected as a mismatch next run.
   try {
-    const versionInfo = await fetchVersion(getVariantKey(variant));
+    const versionInfo = await fetchVersion(detectedKey);
     const skillsVersion = versionInfo?.version || initData.skillsVersion || '0.0.0';
-    const updatedInit = { ...initData, variant: detectedKey, skillsVersion };
 
     if (scope === 'project') {
-      writeKey(LOCAL_SETTINGS_PATH, 'init', updatedInit);
+      const localIdes = initData.ides.filter((k) => !GLOBAL_ONLY_IDES.includes(k));
+      if (localIdes.length) {
+        writeKey(LOCAL_SETTINGS_PATH, 'init', {
+          ...initData,
+          ides: localIdes,
+          variant: detectedKey,
+          skillsVersion,
+        });
+      }
+      const globalInit = readKey(SETTINGS_PATH, 'globalInit');
+      if (globalInit?.ides?.some((k) => GLOBAL_ONLY_IDES.includes(k))) {
+        writeKey(SETTINGS_PATH, 'globalInit', {
+          ...globalInit,
+          variant: detectedKey,
+          skillsVersion: versionInfo?.version || globalInit.skillsVersion || '0.0.0',
+        });
+      }
     } else {
-      writeKey(SETTINGS_PATH, 'globalInit', updatedInit);
+      writeKey(SETTINGS_PATH, 'globalInit', { ...initData, variant: detectedKey, skillsVersion });
     }
   } catch {
     // Non-critical — variant will be corrected on next run

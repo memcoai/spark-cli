@@ -170,6 +170,49 @@ describe('ensureCorrectVariant', () => {
     );
   });
 
+  it('swaps Codex from globalInit and writes it back to globalInit in a project context', async () => {
+    // Project has local Claude (project scope); Codex is tracked globally. getInitData() merges
+    // Codex into the returned record, so the swap must reach Codex AND must not leak it into the
+    // local init on write-back — Codex's variant belongs in globalInit.
+    const deps = defaultDeps({
+      getUser: mock.fn(async () => ({
+        user: { organization_id: 'a904dd51-9fe7-4047-83fd-272fb4c6c65e' },
+      })),
+      getInit: mock.fn(() => ({
+        ides: ['claude', 'codex'],
+        skillsVersion: '1.0.0',
+        variant: 'public',
+      })),
+      readKey: mock.fn((path, key) => {
+        if (key === 'init') return { ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' };
+        if (key === 'globalInit')
+          return { ides: ['codex'], skillsVersion: '1.0.0', variant: 'public' };
+        return null;
+      }),
+    });
+
+    const result = await ensureCorrectVariant(deps);
+
+    assert.strictEqual(result, VARIANTS.teams);
+
+    // Codex was actually swapped
+    const codexCalls = deps.exec.mock.calls.filter((c) => c.arguments[0] === 'codex');
+    assert.ok(codexCalls.some((c) => c.arguments[1]?.includes('remove')));
+    assert.ok(codexCalls.some((c) => c.arguments[1]?.includes('add')));
+
+    const writes = deps.writeKey.mock.calls.map((c) => c.arguments);
+    // Local init keeps only project IDEs — Codex must NOT be written into it
+    const localWrite = writes.find(([, key]) => key === 'init');
+    assert.ok(localWrite, 'should write local init');
+    assert.deepStrictEqual(localWrite[2].ides, ['claude']);
+    assert.strictEqual(localWrite[2].variant, 'teams');
+    // globalInit (where Codex lives) gets its variant updated to teams
+    const globalWrite = writes.find(([, key]) => key === 'globalInit');
+    assert.ok(globalWrite, 'should update globalInit variant');
+    assert.deepStrictEqual(globalWrite[2].ides, ['codex']);
+    assert.strictEqual(globalWrite[2].variant, 'teams');
+  });
+
   it('swaps from teams to public when mismatch detected', async () => {
     const deps = defaultDeps({
       getUser: mock.fn(async () => ({ user: { organization_id: SPARK_ORG_ID } })),

@@ -195,6 +195,19 @@ describe('updateSkills', () => {
     assert.strictEqual(deps.spawnInteractive.mock.calls.length, 1);
   });
 
+  it('updates both Claude Code and Codex when getInitData merges them', async () => {
+    // getInitData() folds global-only Codex into a project-local record, so both must update.
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['claude', 'codex'], skillsVersion: '1.0.0' })),
+    });
+
+    await updateSkills(deps);
+
+    const calls = deps.exec.mock.calls.map((c) => [c.arguments[0], c.arguments[1]?.[1]]);
+    assert.ok(calls.some(([cmd, sub]) => cmd === 'claude' && sub === 'update'));
+    assert.ok(calls.some(([cmd, sub]) => cmd === 'codex' && sub === 'marketplace'));
+  });
+
   it('continues when Claude Code update fails', async () => {
     const deps = defaultSkillsDeps({
       exec: mock.fn(async () => {

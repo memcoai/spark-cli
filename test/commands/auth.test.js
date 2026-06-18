@@ -1,7 +1,14 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import net from 'node:net';
 import { setupCommandMocks, getLogOutput } from '../helpers.js';
-import { checkExistingAuth, resolveApiBase } from '../../src/commands/auth.js';
+import {
+  checkExistingAuth,
+  resolveApiBase,
+  redirect,
+  closeCallbackServer,
+} from '../../src/commands/auth.js';
 import { SETTINGS_PATH, LOCAL_SETTINGS_PATH } from '../../src/constants.js';
 
 describe('checkExistingAuth', () => {
@@ -279,4 +286,79 @@ describe('resolveApiBase', () => {
     assert.strictEqual(writeKey.mock.calls[0].arguments[0], LOCAL_SETTINGS_PATH);
     assert.strictEqual(readKey.mock.calls.length, 0);
   });
+});
+
+describe('redirect', () => {
+  it('sends Connection: close so the loopback socket does not keep the CLI alive', () => {
+    const headers = {};
+    const res = {
+      writeHead: (status, h) => {
+        res.status = status;
+        Object.assign(headers, h);
+      },
+      end: mock.fn(),
+    };
+
+    redirect(res, 'https://spark.memco.ai/cli/auth_success');
+
+    assert.strictEqual(res.status, 302);
+    assert.strictEqual(headers.Location, 'https://spark.memco.ai/cli/auth_success');
+    assert.strictEqual(headers.Connection, 'close');
+    assert.strictEqual(res.end.mock.calls.length, 1);
+  });
+});
+
+describe('closeCallbackServer', () => {
+  it('calls close() and closeAllConnections() to drop lingering sockets', () => {
+    const server = { close: mock.fn(), closeAllConnections: mock.fn() };
+
+    closeCallbackServer(server);
+
+    assert.strictEqual(server.close.mock.calls.length, 1);
+    assert.strictEqual(server.closeAllConnections.mock.calls.length, 1);
+  });
+
+  it('does not throw when closeAllConnections is unavailable (older Node)', () => {
+    const server = { close: mock.fn() };
+    assert.doesNotThrow(() => closeCallbackServer(server));
+    assert.strictEqual(server.close.mock.calls.length, 1);
+  });
+
+  it('swallows errors thrown during shutdown', () => {
+    const server = {
+      close: () => {
+        throw new Error('already closed');
+      },
+    };
+    assert.doesNotThrow(() => closeCallbackServer(server));
+  });
+
+  it(
+    'releases a real server with a lingering keep-alive connection',
+    { timeout: 5000 },
+    async () => {
+      // A browser keeps its callback socket alive; with only server.close() the idle socket would
+      // keep the event loop open and the CLI would hang. This proves closeCallbackServer releases it.
+      const server = createServer((req, res) => {
+        res.writeHead(200, { Connection: 'keep-alive', 'Content-Length': '2' });
+        res.end('ok');
+      });
+      await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const { port } = server.address();
+
+      const socket = net.connect(port, '127.0.0.1');
+      await new Promise((resolve, reject) => {
+        socket.once('connect', resolve);
+        socket.once('error', reject);
+      });
+      socket.write('GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n');
+      await new Promise((resolve) => socket.once('data', resolve));
+
+      const closed = new Promise((resolve) => server.once('close', resolve));
+      closeCallbackServer(server);
+      await closed; // would hang past the timeout if the keep-alive socket were not dropped
+
+      socket.destroy();
+    },
+  );
 });

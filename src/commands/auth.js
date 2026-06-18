@@ -59,7 +59,7 @@ function generateState() {
  * Start local server to receive OAuth callback.
  * Returns { server, port } — request handling is done by the caller.
  */
-function startCallbackServer() {
+export function startCallbackServer() {
   return new Promise((resolve, reject) => {
     const server = createServer();
 
@@ -82,11 +82,28 @@ function startCallbackServer() {
 }
 
 /**
- * Redirect the browser to a URL
+ * Redirect the browser to a URL.
+ * Sends `Connection: close` so the loopback socket is not kept alive — otherwise an idle
+ * keep-alive connection lingers and keeps the CLI process from exiting after login.
  */
-function redirect(res, url) {
-  res.writeHead(302, { Location: url });
+export function redirect(res, url) {
+  res.writeHead(302, { Location: url, Connection: 'close' });
   res.end();
+}
+
+/**
+ * Shut down the callback server, dropping any lingering keep-alive connections so the CLI
+ * process can exit. The browser's callback request may use HTTP keep-alive, which would
+ * otherwise leave an idle socket holding the event loop open after login completes.
+ * (closeAllConnections is available on Node >= 18.2.)
+ */
+export function closeCallbackServer(server) {
+  try {
+    server.close();
+    server.closeAllConnections?.();
+  } catch {
+    // Best-effort shutdown; ignore errors.
+  }
 }
 
 /**
@@ -310,11 +327,7 @@ async function runOAuthFlow(apiBase) {
       throw err;
     }
   } finally {
-    try {
-      server.close();
-    } catch {
-      // Best-effort server close; ignore errors during shutdown
-    }
+    closeCallbackServer(server);
   }
 }
 
@@ -420,6 +433,7 @@ export async function loginCommand(options, _command) {
     printError(err.message);
     console.log('');
     printApiKeyFallback(apiBase);
+    process.exit(1);
   }
 }
 

@@ -1,6 +1,6 @@
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateCompatibility, getSkillsNotification } from '../src/update-check.js';
+import { evaluateCompatibility, getSkillsNotification, getInitData } from '../src/update-check.js';
 
 const makeCompat = (overrides = {}) => ({
   latest_version: '2.0.0',
@@ -182,6 +182,60 @@ describe('evaluateCompatibility', () => {
       assert.ok(result.messages.some((m) => m.includes('Deprecated')));
       assert.ok(result.messages.some((m) => m.includes('Announcement')));
     });
+  });
+});
+
+describe('getInitData', () => {
+  const makeReadKey = (local, global) =>
+    mock.fn((path, key) => {
+      if (key === 'init') return local;
+      if (key === 'globalInit') return global;
+      return null;
+    });
+
+  it('returns local init unchanged when globalInit has no global-only IDEs', () => {
+    const readKey = makeReadKey(
+      { ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' },
+      null,
+    );
+    assert.deepStrictEqual(getInitData(readKey).ides, ['claude']);
+  });
+
+  it('merges global-only Codex from globalInit into a project-local init', () => {
+    const readKey = makeReadKey(
+      { ides: ['claude'], skillsVersion: '1.0.0', variant: 'public' },
+      { ides: ['codex'], skillsVersion: '1.0.0', variant: 'public' },
+    );
+    assert.deepStrictEqual(getInitData(readKey).ides, ['claude', 'codex']);
+  });
+
+  it('does not duplicate Codex when it is already in the local ides', () => {
+    const readKey = makeReadKey(
+      { ides: ['claude', 'codex'], skillsVersion: '1.0.0' },
+      { ides: ['codex'], skillsVersion: '1.0.0' },
+    );
+    assert.deepStrictEqual(getInitData(readKey).ides, ['claude', 'codex']);
+  });
+
+  it('does not merge non-global-only IDEs (e.g. global Claude/Other) into the local record', () => {
+    const readKey = makeReadKey(
+      { ides: ['claude'], skillsVersion: '1.0.0' },
+      { ides: ['other'], skillsVersion: '1.0.0' },
+    );
+    assert.deepStrictEqual(getInitData(readKey).ides, ['claude']);
+  });
+
+  it('falls back to globalInit (with Codex) when there is no local init', () => {
+    const readKey = makeReadKey(null, {
+      ides: ['codex'],
+      skillsVersion: '1.0.0',
+      variant: 'teams',
+    });
+    assert.deepStrictEqual(getInitData(readKey).ides, ['codex']);
+  });
+
+  it('returns null when neither record is valid', () => {
+    assert.strictEqual(getInitData(makeReadKey(null, null)), null);
   });
 });
 
