@@ -12,7 +12,7 @@ Always use Spark MCP tools to query shared memory **before** coding. Spark MCP p
 
 ## Project Overview
 
-Node.js CLI tool (`@memco/spark`) that provides a command-line interface to the Spark knowledge network — a collective memory system for AI coding agents. ES modules throughout (`"type": "module"`), requires Node >= 18.
+Node.js CLI tool (`@memco/spark`) that provides a command-line interface to the Spark knowledge network — a collective memory system for AI coding agents. ES modules throughout (`"type": "module"`), requires Node >= 20.17.
 
 ## Getting Started
 
@@ -88,7 +88,7 @@ npm run format        # eslint --fix src/
 - Test helpers: `test/helpers.js` provides `setupCommandMocks()` and `getErrorOutput()`
 - Coverage: `c8`
 - Linting: ESLint 9 flat config (`eslint.config.js`)
-- CI: GitHub Actions on main/dev, matrix Node [18, 20, 22], lint on Node 22 only
+- CI: GitHub Actions on main/dev, matrix Node [20, 22, 24], lint on Node 24 only. CI/publish jobs upgrade to npm >= 11.11 so the `.npmrc` `min-release-age` setting is respected
 - **Always run `npm run format` after making changes** to ensure consistent code style
 
 ## Test Structure
