@@ -20,6 +20,9 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
+      # npm >= 11.11 is required for the .npmrc min-release-age setting to be respected
+      - run: npm install -g npm@^11.11
+
       - run: npm ci
 
       - name: Verify version matches tag
