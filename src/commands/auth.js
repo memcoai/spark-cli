@@ -412,7 +412,7 @@ export async function loginCommand(options, _command) {
       tokenSpinner.stop(`Credentials saved ${location}`);
     } catch (err) {
       tokenSpinner.fail('Failed to save credentials');
-      reportLoginError(err, apiBase);
+      exitWithLoginError(err, apiBase);
       return;
     }
 
@@ -431,18 +431,20 @@ export async function loginCommand(options, _command) {
     console.log('');
     console.log(`Run ${colorize('\x1b[33m', 'spark whoami')} to see your account info.`);
   } catch (err) {
-    reportLoginError(err, apiBase);
-    process.exit(1);
+    exitWithLoginError(err, apiBase);
   }
 }
 
 /**
- * Report a login failure: the error message plus API-key fallback guidance.
+ * Abort login with an informative failure: tell the user what went wrong (the error message plus
+ * the API-key fallback) and flag a non-zero exit code. Uses `process.exitCode` rather than an
+ * abrupt `process.exit(1)` so buffered output and any pending work still flush before exit.
  */
-function reportLoginError(err, apiBase) {
-  printError(err.message);
+function exitWithLoginError(err, apiBase) {
+  printError(`Login failed: ${err.message}`);
   console.log('');
   printApiKeyFallback(apiBase);
+  process.exitCode = 1;
 }
 
 function printApiKeyFallback(apiBase) {
