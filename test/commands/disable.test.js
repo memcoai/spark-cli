@@ -56,6 +56,17 @@ describe('runDisable', () => {
     ]);
   });
 
+  it('never removes Codex (global-only) even if present in local init', async () => {
+    const deps = makeDeps({ readKey: initReadKey({ ides: ['claude', 'codex'] }) });
+    await runDisable(deps);
+
+    // Only the project-scoped claude plugin is torn down; the global Codex plugin is left alone.
+    assert.strictEqual(deps.execAsync.mock.calls.length, 1);
+    assert.strictEqual(deps.execAsync.mock.calls[0].arguments[0], 'claude');
+    const codexCalls = deps.execAsync.mock.calls.filter((c) => c.arguments[0] === 'codex');
+    assert.strictEqual(codexCalls.length, 0);
+  });
+
   it('removes skills when init has other', async () => {
     const deps = makeDeps({ readKey: initReadKey({ ides: ['other'] }) });
     await runDisable(deps);

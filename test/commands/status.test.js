@@ -18,6 +18,14 @@ describe('runStatus', () => {
     ...overrides,
   });
 
+  // Deps for a "skills installed and current" status, parameterized by the configured IDE keys.
+  const skillsDeps = (ides) =>
+    defaultDeps({
+      checkSkills: mock.fn(async () => ({ version: '1.0.0' })),
+      getSkillsNote: mock.fn(() => null),
+      getInit: mock.fn(() => ({ ides, skillsVersion: '1.0.0' })),
+    });
+
   it('shows up-to-date version and authenticated user', async () => {
     await runStatus(
       defaultDeps({
@@ -122,17 +130,17 @@ describe('runStatus', () => {
   });
 
   it('shows skills up to date when configured and current', async () => {
-    await runStatus(
-      defaultDeps({
-        checkSkills: mock.fn(async () => ({ version: '1.0.0' })),
-        getSkillsNote: mock.fn(() => null),
-        getInit: mock.fn(() => ({ ides: ['claude'], skillsVersion: '1.0.0' })),
-      }),
-    );
+    await runStatus(skillsDeps(['claude']));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Skills configured for: Claude Code'));
     assert.ok(output.includes('Skills are up to date'));
+  });
+
+  it('labels the Codex IDE in skills status', async () => {
+    await runStatus(skillsDeps(['codex']));
+
+    assert.ok(getLogOutput(mocks.logMock).includes('Skills configured for: Codex'));
   });
 
   it('shows skills update notification when outdated', async () => {

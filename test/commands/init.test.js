@@ -1,8 +1,22 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { runInit } from '../../src/commands/init.js';
-import { VARIANTS } from '../../src/constants.js';
+import { runInit, saveInitChoices } from '../../src/commands/init.js';
+import { VARIANTS, SETTINGS_PATH, LOCAL_SETTINGS_PATH } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput, getStdoutOutput, buildSetupDeps } from '../helpers.js';
+
+const MARKETPLACE_ADD = ['plugin', 'marketplace', 'add', 'memcoai/marketplace'];
+
+// An exec mock whose first call (marketplace add) fails as "already exists", then succeeds.
+const alreadyExistsThenSucceed = () => {
+  let callCount = 0;
+  return mock.fn(async () => {
+    callCount += 1;
+    if (callCount === 1) {
+      throw Object.assign(new Error('already exists'), { stderr: 'Marketplace already exists' });
+    }
+    return { stdout: '', stderr: '' };
+  });
+};
 
 describe('runInit', () => {
   const mocks = setupCommandMocks();
@@ -42,12 +56,7 @@ describe('runInit', () => {
 
     // First call: marketplace add
     assert.strictEqual(exec.mock.calls[0].arguments[0], 'claude');
-    assert.deepStrictEqual(exec.mock.calls[0].arguments[1], [
-      'plugin',
-      'marketplace',
-      'add',
-      'memcoai/marketplace',
-    ]);
+    assert.deepStrictEqual(exec.mock.calls[0].arguments[1], MARKETPLACE_ADD);
 
     // Second call: plugin install with project scope
     assert.strictEqual(exec.mock.calls[1].arguments[0], 'claude');
@@ -76,6 +85,89 @@ describe('runInit', () => {
       '--scope',
       'user',
     ]);
+  });
+
+  it('runs Codex setup (marketplace add + plugin add, no scope)', async () => {
+    const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
+    await runInit(defaultDeps({ exec, promptChecklist: mock.fn(async () => ['Codex']) }));
+
+    assert.strictEqual(exec.mock.calls.length, 2);
+
+    // First call: marketplace add
+    assert.strictEqual(exec.mock.calls[0].arguments[0], 'codex');
+    assert.deepStrictEqual(exec.mock.calls[0].arguments[1], MARKETPLACE_ADD);
+
+    // Second call: plugin add — Codex plugins are global, so no --scope flag
+    assert.strictEqual(exec.mock.calls[1].arguments[0], 'codex');
+    assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
+      'plugin',
+      'add',
+      VARIANTS.public.claudePlugin,
+    ]);
+  });
+
+  it('installs teams plugin for Codex when variant is teams', async () => {
+    const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
+    await runInit(
+      defaultDeps({
+        exec,
+        promptChecklist: mock.fn(async () => ['Codex']),
+        detect: mock.fn(async () => VARIANTS.teams),
+      }),
+    );
+
+    assert.deepStrictEqual(exec.mock.calls[1].arguments[1], [
+      'plugin',
+      'add',
+      VARIANTS.teams.claudePlugin,
+    ]);
+  });
+
+  it('notes Codex is global-only when project scope is chosen', async () => {
+    await runInit(defaultDeps({ promptChecklist: mock.fn(async () => ['Codex']) }));
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(output.includes('Codex plugins are installed globally'));
+  });
+
+  it('does not print the Codex global-only note for global scope', async () => {
+    await runInit(
+      defaultDeps({
+        promptChecklist: mock.fn(async () => ['Codex']),
+        promptChoice: mock.fn(async () => 'Global (all projects)'),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(!output.includes('the project scope does not apply'));
+  });
+
+  it('treats Codex marketplace already-exists error as success', async () => {
+    const exec = alreadyExistsThenSucceed();
+
+    await runInit(defaultDeps({ exec, promptChecklist: mock.fn(async () => ['Codex']) }));
+
+    const output = getStdoutOutput(mocks.stdoutMock);
+    assert.ok(output.includes('already configured'));
+    // Should still proceed to install the plugin
+    assert.strictEqual(exec.mock.calls.length, 2);
+  });
+
+  it('shows manual Codex fallback commands when setup fails', async () => {
+    await runInit(
+      defaultDeps({
+        promptChecklist: mock.fn(async () => ['Codex']),
+        exec: mock.fn(async () => {
+          throw Object.assign(new Error('command not found'), { stderr: 'codex: not found' });
+        }),
+      }),
+    );
+
+    const output = getLogOutput(mocks.logMock);
+    assert.ok(output.includes('codex plugin marketplace add memcoai/marketplace'));
+    assert.ok(output.includes('codex plugin add'));
+    // Should still show auth instructions even after failures
+    assert.ok(output.includes('Next: Authenticate with Spark'));
   });
 
   it('runs Other IDEs setup with project scope via interactive spawn', async () => {
@@ -141,16 +233,7 @@ describe('runInit', () => {
   });
 
   it('treats marketplace already-exists error as success', async () => {
-    let callCount = 0;
-    const exec = mock.fn(async () => {
-      callCount++;
-      if (callCount === 1) {
-        throw Object.assign(new Error('already exists'), {
-          stderr: 'Marketplace already exists',
-        });
-      }
-      return { stdout: '', stderr: '' };
-    });
+    const exec = alreadyExistsThenSucceed();
 
     await runInit(defaultDeps({ exec }));
 
@@ -226,5 +309,80 @@ describe('runInit', () => {
       'add',
       VARIANTS.teams.skillsRepo,
     ]);
+  });
+});
+
+describe('saveInitChoices — Codex is tracked globally only', () => {
+  const baseDeps = (overrides = {}) => ({
+    fetchVersion: mock.fn(async () => ({ version: '1.0.0' })),
+    writeKey: mock.fn(),
+    readKey: mock.fn(() => null),
+    variant: VARIANTS.public,
+    ...overrides,
+  });
+
+  const writesOf = (deps) => deps.writeKey.mock.calls.map((c) => c.arguments);
+
+  it('records Codex in globalInit (not local init) under project scope', async () => {
+    const deps = baseDeps();
+    await saveInitChoices(['Codex'], 'project', deps);
+
+    const writes = writesOf(deps);
+    // Codex-only project install writes nothing project-scoped (no local init, no projects entry)
+    assert.ok(!writes.some(([path]) => path === LOCAL_SETTINGS_PATH));
+    assert.ok(!writes.some(([path, key]) => path === SETTINGS_PATH && key === 'projects'));
+    const globalWrite = writes.find(
+      ([path, key]) => path === SETTINGS_PATH && key === 'globalInit',
+    );
+    assert.ok(globalWrite, 'should write globalInit');
+    assert.deepStrictEqual(globalWrite[2].ides, ['codex']);
+  });
+
+  it('splits Codex (global) from Claude (project) under project scope', async () => {
+    const deps = baseDeps();
+    await saveInitChoices(['Claude Code', 'Codex'], 'project', deps);
+
+    const writes = writesOf(deps);
+    const localWrite = writes.find(([path, key]) => path === LOCAL_SETTINGS_PATH && key === 'init');
+    assert.deepStrictEqual(localWrite[2].ides, ['claude']);
+    const projectsWrite = writes.find(
+      ([path, key]) => path === SETTINGS_PATH && key === 'projects',
+    );
+    assert.deepStrictEqual(projectsWrite[2][0].ides, ['claude']);
+    const globalWrite = writes.find(
+      ([path, key]) => path === SETTINGS_PATH && key === 'globalInit',
+    );
+    assert.deepStrictEqual(globalWrite[2].ides, ['codex']);
+  });
+
+  it('merges Codex into an existing globalInit record', async () => {
+    const deps = baseDeps({
+      readKey: mock.fn((path, key) =>
+        key === 'globalInit'
+          ? { ides: ['claude'], skillsVersion: '0.9.0', variant: 'public' }
+          : null,
+      ),
+    });
+    await saveInitChoices(['Codex'], 'project', deps);
+
+    const globalWrite = writesOf(deps).find(
+      ([path, key]) => path === SETTINGS_PATH && key === 'globalInit',
+    );
+    assert.deepStrictEqual(
+      [...globalWrite[2].ides].sort((a, b) => a.localeCompare(b)),
+      ['claude', 'codex'],
+    );
+  });
+
+  it('writes everything to globalInit under global scope', async () => {
+    const deps = baseDeps();
+    await saveInitChoices(['Claude Code', 'Codex'], 'global', deps);
+
+    const writes = writesOf(deps);
+    assert.ok(!writes.some(([path]) => path === LOCAL_SETTINGS_PATH));
+    const globalWrite = writes.find(
+      ([path, key]) => path === SETTINGS_PATH && key === 'globalInit',
+    );
+    assert.deepStrictEqual(globalWrite[2].ides, ['claude', 'codex']);
   });
 });

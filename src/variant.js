@@ -3,14 +3,19 @@ import {
   VARIANTS,
   getVariant,
   getVariantKey,
+  GLOBAL_ONLY_IDES,
   SETTINGS_PATH,
   LOCAL_SETTINGS_PATH,
 } from './constants.js';
 import { getInitData, fetchSkillsVersion } from './update-check.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
 import { runCommand, runInteractiveCommand } from './exec.js';
-import { setupClaudeCode, setupOtherIDEs } from './commands/init.js';
-import { uninstallClaudePlugin, uninstallOtherIDEs } from './commands/uninstall.js';
+import { setupClaudeCode, setupCodex, setupOtherIDEs } from './commands/init.js';
+import {
+  uninstallClaudePlugin,
+  uninstallCodexPlugin,
+  uninstallOtherIDEs,
+} from './commands/uninstall.js';
 import { printInfo, printWarning } from './banner.js';
 
 /**
@@ -80,6 +85,9 @@ export async function ensureCorrectVariant({
   if (initData.ides.includes('claude')) {
     await uninstallClaudePlugin(scope, { exec, variant: oldVariant });
   }
+  if (initData.ides.includes('codex')) {
+    await uninstallCodexPlugin({ exec, variant: oldVariant });
+  }
   if (initData.ides.includes('other')) {
     await uninstallOtherIDEs(scope, { spawnInteractive, variant: oldVariant });
   }
@@ -88,20 +96,52 @@ export async function ensureCorrectVariant({
   if (initData.ides.includes('claude')) {
     await setupClaudeCode(scope, { exec, variant });
   }
+  if (initData.ides.includes('codex')) {
+    await setupCodex({ exec, variant });
+  }
   if (initData.ides.includes('other')) {
     await setupOtherIDEs(scope, { spawnInteractive, variant });
   }
 
-  // Update init data with new variant and version
+  // Persist the new variant. `initData` may be the merged view from getInitData() (project IDEs
+  // plus global-only Codex from globalInit), so write each record's own IDEs back to its own
+  // location: never persist global-only IDEs into the local record, and update globalInit's
+  // variant separately so a swapped Codex isn't re-detected as a mismatch next run.
   try {
-    const versionInfo = await fetchVersion(getVariantKey(variant));
+    const versionInfo = await fetchVersion(detectedKey);
     const skillsVersion = versionInfo?.version || initData.skillsVersion || '0.0.0';
-    const updatedInit = { ...initData, variant: detectedKey, skillsVersion };
 
     if (scope === 'project') {
-      writeKey(LOCAL_SETTINGS_PATH, 'init', updatedInit);
+      const localIdes = initData.ides.filter((k) => !GLOBAL_ONLY_IDES.includes(k));
+      if (localIdes.length) {
+        writeKey(LOCAL_SETTINGS_PATH, 'init', {
+          ...initData,
+          ides: localIdes,
+          variant: detectedKey,
+          skillsVersion,
+        });
+
+        // Keep this project's entry in the global projects[] array in sync, otherwise a later
+        // `spark uninstall` run from another directory would act on the stale (old) variant.
+        const projects = readKey(SETTINGS_PATH, 'projects');
+        if (Array.isArray(projects)) {
+          const idx = projects.findIndex((p) => p.path === process.cwd());
+          if (idx >= 0) {
+            projects[idx] = { ...projects[idx], variant: detectedKey, skillsVersion };
+            writeKey(SETTINGS_PATH, 'projects', projects);
+          }
+        }
+      }
+      const globalInit = readKey(SETTINGS_PATH, 'globalInit');
+      if (globalInit?.ides?.some((k) => GLOBAL_ONLY_IDES.includes(k))) {
+        writeKey(SETTINGS_PATH, 'globalInit', {
+          ...globalInit,
+          variant: detectedKey,
+          skillsVersion: versionInfo?.version || globalInit.skillsVersion || '0.0.0',
+        });
+      }
     } else {
-      writeKey(SETTINGS_PATH, 'globalInit', updatedInit);
+      writeKey(SETTINGS_PATH, 'globalInit', { ...initData, variant: detectedKey, skillsVersion });
     }
   } catch {
     // Non-critical — variant will be corrected on next run

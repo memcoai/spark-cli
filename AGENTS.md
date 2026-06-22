@@ -16,10 +16,14 @@ Node.js CLI tool (`@memco/spark`) that provides a command-line interface to the 
 
 ## Getting Started
 
-1. **Install:** `npm install -g @memco/spark`
+Spark installs as a plugin from the MemCo marketplace (`memcoai/marketplace`) for Claude Code, Codex, and Cursor, backed by the `spark` CLI.
+
+1. **Install the CLI:** `npm install -g @memco/spark`
 2. **Login:** `spark login` (opens browser for OAuth authentication)
-3. **Init:** `spark init` (interactive IDE setup wizard — installs skills for Claude Code, Cursor, Windsurf, etc.)
+3. **Init:** `spark init` (interactive IDE setup wizard — adds the marketplace, detects the variant (public/teams), and installs the matching plugin + skills for Claude Code, Cursor, Windsurf, etc.)
 4. **Verify:** `spark status` (checks version, auth, and skills status)
+
+**Manual plugin install:** Claude Code — `/plugin marketplace add memcoai/marketplace` then `/plugin install spark-cli@MemCo` (teams: `spark-team-cli@MemCo`). Codex — `codex plugin marketplace add memcoai/marketplace` then `codex plugin add spark-cli@MemCo`. Cursor — Dashboard → Settings → Plugins → Add Marketplace → Import from Repo → `memcoai/marketplace`. The marketplace also hosts the MCP variants `spark-mcp` / `spark-team-mcp`.
 
 **Updating:** `spark update` updates both the CLI and skills for all configured IDEs.
 
@@ -36,9 +40,9 @@ src/
     feedback.js       Provide feedback on recommendations (XML feedback entries with idx, relevant, correct)
     update.js         Self-update command (CLI + skills); exports updateSkills for IDE-aware skills updating
     uninstall.js      Self-uninstall command; cleans up all init targets (local, global, and registered projects) before npm uninstall
-    init.js           Interactive IDE setup wizard (Claude Code, Cursor/Windsurf); persists choices to settings; exports runSetupFlow and shared helpers
+    init.js           Interactive IDE setup wizard (Claude Code, Codex, Cursor/Windsurf); persists choices to settings; exports runSetupFlow and shared helpers (setupClaudeCode, setupCodex, setupOtherIDEs)
     enable.js         Enable Spark for the current project; delegates to runSetupFlow from init.js with scope='project'
-    disable.js        Disable Spark for the current project (reverse of enable); reuses uninstall helpers
+    disable.js        Disable Spark for the current project (reverse of enable); reuses uninstall helpers (Codex is global-only, so disable never removes it)
     status.js         Status check — version freshness, auth verification, and skills version
   exec.js             Shared child process helpers (runCommand, runInteractiveCommand)
   api.js              HTTP client — getAuthToken, apiRequest (with 401 retry via token refresh), callTool, and API wrappers
@@ -46,7 +50,7 @@ src/
   credentials.js      Load/save/remove credentials via settings.json
   settings.js         Low-level settings.json read/write helpers
   update-check.js     Version checking (npm update notifications), backend compatibility (block/deprecation), and skills version checking
-  constants.js        Shared constants (DEFAULT_API_BASE, getApiBase(), VERSION_CHECK_URL, SKILLS_VERSION_URL, paths, port, auth redirect URLs)
+  constants.js        Shared constants (DEFAULT_API_BASE, getApiBase(), VARIANTS, getMarketplaceName(), VERSION_CHECK_URL, SKILLS_VERSION_URL, paths, port, auth redirect URLs)
   output.js           Output helpers (getParentOptions, output, outputError, outputSuccess, version notification)
   format-markdown.js  Lightweight markdown-to-ANSI terminal renderer
   pretty-print.js     Human-readable object renderer for --pretty mode
@@ -73,6 +77,7 @@ src/
 - **OAuth client cache:** stored in `~/.spark/settings.json` under the `clients` key, keyed by API base URL.
 - **Version checking:** Three separate systems: (1) npm registry check for "update available" notifications — cached under `latestVersion` with 24-hour TTL; (2) backend compatibility check (`GET /api/cli/compatibility`) for blocking outdated CLIs and deprecation warnings — cached under `compatibility` with 4-hour TTL; (3) skills version check from GitHub raw content (`memcoai/spark-cli-skills/main/VERSION`) — cached under `skillsVersion` with 24-hour TTL. All fail open on network errors. Skills notifications include IDE-specific update commands based on stored init choices.
 - **Init persistence:** `spark init` saves IDE choices and installed skills version. Project scope writes `init` to local `.spark/settings.json` AND upserts into global `projects` array. Global scope writes `globalInit` to `~/.spark/settings.json`. Version checks read local `init` first, then fall back to `globalInit`.
+- **Global-only IDEs (Codex):** IDE keys in `GLOBAL_ONLY_IDES` (`constants.js`, currently `['codex']`) install plugins that have no project/user scope. They are ALWAYS recorded in `globalInit` (merged with any existing entry) regardless of the chosen install scope — never in local `init` or the `projects` array — so a single global record governs install/removal. Consequently a project-scoped `spark disable` never tears down Codex; it is shared across projects and removed only by `spark uninstall`. `setupCodex`/`uninstallCodexPlugin` take no scope; `spark init` prints a note when Codex is selected with project scope. To keep these IDEs visible everywhere despite living only in `globalInit`, `getInitData()` merges `GLOBAL_ONLY_IDES` from `globalInit` into the local record it returns, so `spark status`/`spark update`/variant-swap all see Codex even when a project has its own local `init`. `ensureCorrectVariant` honors this by writing a swapped Codex's variant back to `globalInit` and stripping global-only IDEs from the local `init` write (so the merged view never leaks Codex into the local record).
 
 ## Development
 

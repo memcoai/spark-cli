@@ -23,6 +23,12 @@ const defaultSkillsDeps = (overrides = {}) => ({
   ...overrides,
 });
 
+// Asserts a failed IDE update did not persist a new skills version (the allSucceeded gate).
+function assertSkillsVersionNotPersisted(deps) {
+  assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
+  assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+}
+
 describe('updateCommand', () => {
   const mocks = setupCommandMocks();
 
@@ -151,6 +157,23 @@ describe('updateSkills', () => {
     ]);
   });
 
+  it('updates Codex plugin via marketplace upgrade when codex IDE is configured', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['codex'], skillsVersion: '1.0.0' })),
+    });
+
+    await updateSkills(deps);
+
+    assert.strictEqual(deps.exec.mock.calls.length, 1);
+    assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[0], 'codex');
+    assert.deepStrictEqual(deps.exec.mock.calls[0].arguments[1], [
+      'plugin',
+      'marketplace',
+      'upgrade',
+      'MemCo',
+    ]);
+  });
+
   it('updates other IDE skills when other IDE is configured', async () => {
     const deps = defaultSkillsDeps({
       getInit: mock.fn(() => ({ ides: ['other'], skillsVersion: '1.0.0' })),
@@ -176,6 +199,19 @@ describe('updateSkills', () => {
 
     assert.strictEqual(deps.exec.mock.calls.length, 1);
     assert.strictEqual(deps.spawnInteractive.mock.calls.length, 1);
+  });
+
+  it('updates both Claude Code and Codex when getInitData merges them', async () => {
+    // getInitData() folds global-only Codex into a project-local record, so both must update.
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['claude', 'codex'], skillsVersion: '1.0.0' })),
+    });
+
+    await updateSkills(deps);
+
+    const calls = deps.exec.mock.calls.map((c) => [c.arguments[0], c.arguments[1]?.[1]]);
+    assert.ok(calls.some(([cmd, sub]) => cmd === 'claude' && sub === 'update'));
+    assert.ok(calls.some(([cmd, sub]) => cmd === 'codex' && sub === 'marketplace'));
   });
 
   it('continues when Claude Code update fails', async () => {
@@ -216,8 +252,23 @@ describe('updateSkills', () => {
 
     await updateSkills(deps);
 
-    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
-    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+    assertSkillsVersionNotPersisted(deps);
+  });
+
+  it('does not update stored skills version when Codex update fails', async () => {
+    const deps = defaultSkillsDeps({
+      getInit: mock.fn(() => ({ ides: ['codex'], skillsVersion: '1.0.0' })),
+      exec: mock.fn(async () => {
+        throw new Error('codex not found');
+      }),
+      fetchVersion: mock.fn(async () => ({ version: '1.2.0' })),
+      readKey: mock.fn(() => ({ ides: ['codex'], skillsVersion: '1.0.0' })),
+    });
+
+    await updateSkills(deps);
+
+    assertSkillsVersionNotPersisted(deps);
+    assert.ok(getLogOutput(mocks.logMock).includes('codex not found'));
   });
 
   it('does not update stored skills version when other IDE update fails', async () => {
@@ -232,8 +283,7 @@ describe('updateSkills', () => {
 
     await updateSkills(deps);
 
-    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
-    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+    assertSkillsVersionNotPersisted(deps);
   });
 
   it('does not update stored skills version when any IDE update fails', async () => {
@@ -248,8 +298,7 @@ describe('updateSkills', () => {
 
     await updateSkills(deps);
 
-    assert.strictEqual(deps.fetchVersion.mock.calls.length, 0);
-    assert.strictEqual(deps.writeKey.mock.calls.length, 0);
+    assertSkillsVersionNotPersisted(deps);
   });
 
   it('uses stored variant from init data when ensureVariant returns null', async () => {

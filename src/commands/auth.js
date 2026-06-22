@@ -59,7 +59,7 @@ function generateState() {
  * Start local server to receive OAuth callback.
  * Returns { server, port } — request handling is done by the caller.
  */
-function startCallbackServer() {
+export function startCallbackServer() {
   return new Promise((resolve, reject) => {
     const server = createServer();
 
@@ -82,11 +82,28 @@ function startCallbackServer() {
 }
 
 /**
- * Redirect the browser to a URL
+ * Redirect the browser to a URL.
+ * Sends `Connection: close` so the loopback socket is not kept alive — otherwise an idle
+ * keep-alive connection lingers and keeps the CLI process from exiting after login.
  */
-function redirect(res, url) {
-  res.writeHead(302, { Location: url });
+export function redirect(res, url) {
+  res.writeHead(302, { Location: url, Connection: 'close' });
   res.end();
+}
+
+/**
+ * Shut down the callback server, dropping any lingering keep-alive connections so the CLI
+ * process can exit. The browser's callback request may use HTTP keep-alive, which would
+ * otherwise leave an idle socket holding the event loop open after login completes.
+ * (closeAllConnections is available on Node >= 18.2.)
+ */
+export function closeCallbackServer(server) {
+  try {
+    server.close();
+    server.closeAllConnections?.();
+  } catch {
+    // Best-effort shutdown; ignore errors.
+  }
 }
 
 /**
@@ -310,11 +327,7 @@ async function runOAuthFlow(apiBase) {
       throw err;
     }
   } finally {
-    try {
-      server.close();
-    } catch {
-      // Best-effort server close; ignore errors during shutdown
-    }
+    closeCallbackServer(server);
   }
 }
 
@@ -399,7 +412,8 @@ export async function loginCommand(options, _command) {
       tokenSpinner.stop(`Credentials saved ${location}`);
     } catch (err) {
       tokenSpinner.fail('Failed to save credentials');
-      throw err;
+      exitWithLoginError(err, apiBase);
+      return;
     }
 
     // Verify login by calling getUser
@@ -417,10 +431,20 @@ export async function loginCommand(options, _command) {
     console.log('');
     console.log(`Run ${colorize('\x1b[33m', 'spark whoami')} to see your account info.`);
   } catch (err) {
-    printError(err.message);
-    console.log('');
-    printApiKeyFallback(apiBase);
+    exitWithLoginError(err, apiBase);
   }
+}
+
+/**
+ * Abort login with an informative failure: tell the user what went wrong (the error message plus
+ * the API-key fallback) and flag a non-zero exit code. Uses `process.exitCode` rather than an
+ * abrupt `process.exit(1)` so buffered output and any pending work still flush before exit.
+ */
+function exitWithLoginError(err, apiBase) {
+  printError(`Login failed: ${err.message}`);
+  console.log('');
+  printApiKeyFallback(apiBase);
+  process.exitCode = 1;
 }
 
 function printApiKeyFallback(apiBase) {

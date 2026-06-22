@@ -197,6 +197,46 @@ describe('runUninstall — Claude Code plugin removal', () => {
   });
 });
 
+describe('runUninstall — Codex plugin removal', () => {
+  const mocks = setupCommandMocks();
+
+  it('removes codex plugin (global, no scope) when globalInit has codex', async () => {
+    const deps = makeDeps({ readKey: initReadKey(null, { ides: ['codex'] }) });
+    await runUninstall(deps);
+
+    // Tries both variants (public + teams) for full cleanup
+    assert.strictEqual(deps.execAsync.mock.calls.length, 2);
+    const [cmd0, args0] = deps.execAsync.mock.calls[0].arguments;
+    assert.strictEqual(cmd0, 'codex');
+    assert.deepStrictEqual(args0, ['plugin', 'remove', VARIANTS.public.claudePlugin]);
+    const [cmd1, args1] = deps.execAsync.mock.calls[1].arguments;
+    assert.strictEqual(cmd1, 'codex');
+    assert.deepStrictEqual(args1, ['plugin', 'remove', VARIANTS.teams.claudePlugin]);
+  });
+
+  it('does not call codex remove when ides does not include codex', async () => {
+    const deps = makeDeps({ readKey: initReadKey({ ides: ['other'] }) });
+    await runUninstall(deps);
+
+    const codexCalls = deps.execAsync.mock.calls.filter((c) => c.arguments[0] === 'codex');
+    assert.strictEqual(codexCalls.length, 0);
+  });
+
+  it('continues with npm uninstall when codex plugin removal fails', async () => {
+    const deps = makeDeps({
+      execAsync: mock.fn(async () => {
+        throw new Error('codex not found');
+      }),
+      readKey: initReadKey(null, { ides: ['codex'] }),
+    });
+    await runUninstall(deps);
+
+    const output = getLogOutput(mocks.logMock) + getStdoutOutput(mocks.stdoutMock);
+    assert.ok(output.includes('Failed to remove Codex plugin'));
+    assert.strictEqual(deps.exec.mock.calls[0].arguments[0], 'npm uninstall -g @memco/spark');
+  });
+});
+
 describe('runUninstall — Other IDEs skills removal', () => {
   const mocks = setupCommandMocks();
 

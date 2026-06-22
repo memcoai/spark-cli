@@ -8,6 +8,8 @@ import {
   VARIANTS,
   SETTINGS_PATH,
   LOCAL_SETTINGS_PATH,
+  GLOBAL_ONLY_IDES,
+  getMarketplaceName,
 } from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
 import { npmVersionResponseSchema, compatibilityDataSchema } from './schemas.js';
@@ -243,12 +245,22 @@ export async function checkSkillsVersion(variantKey = 'public') {
  * Read init data for the current project/global scope.
  * Checks local .spark/settings.json first, then global globalInit.
  * Returns { ides, skillsVersion } or null.
+ *
+ * Global-only IDEs (Codex) are recorded in globalInit even when a project-local init exists, so
+ * they are merged into the local record's `ides` — otherwise status/update/variant logic, which
+ * all read through here, would never see Codex when a project has its own local init.
  */
-export function getInitData() {
-  const local = readSettingsKey(LOCAL_SETTINGS_PATH, 'init');
-  if (local?.ides?.length && local.skillsVersion) return local;
+export function getInitData(readKey = readSettingsKey) {
+  const local = readKey(LOCAL_SETTINGS_PATH, 'init');
+  const global = readKey(SETTINGS_PATH, 'globalInit');
 
-  const global = readSettingsKey(SETTINGS_PATH, 'globalInit');
+  if (local?.ides?.length && local.skillsVersion) {
+    const globalOnly = (global?.ides || []).filter(
+      (k) => GLOBAL_ONLY_IDES.includes(k) && !local.ides.includes(k),
+    );
+    return globalOnly.length ? { ...local, ides: [...local.ides, ...globalOnly] } : local;
+  }
+
   if (global?.ides?.length && global.skillsVersion) return global;
 
   return null;
@@ -272,6 +284,9 @@ export function getSkillsNotification(latestInfo, initData, variant = VARIANTS.p
   const ides = initData.ides;
   if (ides.includes('claude')) {
     lines.push(`  Claude Code: claude plugin update ${variant.claudePlugin}`);
+  }
+  if (ides.includes('codex')) {
+    lines.push(`  Codex: codex plugin marketplace upgrade ${getMarketplaceName(variant)}`);
   }
   if (ides.includes('other')) {
     lines.push(`  Cursor/Windsurf: npx skills update ${variant.skillsRepo}`);

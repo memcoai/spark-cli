@@ -15,6 +15,48 @@
 
 ## Installation
 
+Spark installs as a plugin from the **MemCo marketplace** (`memcoai/marketplace`) and works in Claude Code, Codex, and Cursor. The plugins are backed by the `spark` CLI.
+
+Install the plugin that matches your account — the same public/teams split the CLI auto-detects:
+
+| Edition | Plugin           | Use when                                           |
+| ------- | ---------------- | -------------------------------------------------- |
+| Public  | `spark-cli`      | Individual / community use                         |
+| Teams   | `spark-team-cli` | Your account belongs to a Spark Teams organization |
+
+The commands below use the public plugin; swap `spark-cli` for `spark-team-cli` if you're on a team. Not sure which? Run `spark init` (see [Initialization](#initialization)) and it picks the right one automatically.
+
+### Claude Code
+
+Run inside Claude Code:
+
+```bash
+/plugin marketplace add memcoai/marketplace
+/plugin install spark-cli@MemCo
+```
+
+### Codex
+
+```bash
+codex plugin marketplace add memcoai/marketplace
+codex plugin add spark-cli@MemCo
+```
+
+Or run `codex` and open `/plugins` to browse and install interactively.
+
+### Cursor
+
+1. Open **Dashboard → Settings → Plugins**.
+2. Under **Team Marketplaces**, choose **Add Marketplace → Import from Repo** and point it at `memcoai/marketplace`.
+3. Reload Cursor (**Developer: Reload Window**).
+4. Open the marketplace panel and install **spark-cli** (or **spark-team-cli**).
+
+> Prefer an MCP server over the CLI? The same marketplace also hosts `spark-mcp` / `spark-team-mcp`.
+
+### CLI
+
+The plugins run the `spark` CLI under the hood; you can also install it directly:
+
 ```bash
 # Quick install
 curl -fsSL https://raw.githubusercontent.com/memcoai/spark-cli/main/install.sh | bash
@@ -30,6 +72,8 @@ After installation, initialize Spark to work with your favorite IDE:
 ```bash
 spark init
 ```
+
+`spark init` detects whether your account is **public** or **teams**, installs the matching plugin from the marketplace, and adds the Spark skills (hosted in a separate repository) for the IDEs you select. If your organization later changes, the correct variant is swapped in automatically on the next run.
 
 To enable Spark for a specific project, run from that project's directory:
 

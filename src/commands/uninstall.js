@@ -122,6 +122,28 @@ export async function uninstallClaudePlugin(
 }
 
 /**
+ * Uninstall the Codex plugin if it was installed via spark init.
+ * Codex plugins are global, so scope is not used.
+ */
+export async function uninstallCodexPlugin({
+  exec = runCommand,
+  cwd,
+  variant = VARIANTS.public,
+} = {}) {
+  const suffix = cwd ? ` (${cwd})` : '';
+
+  const spinner = createSpinner(`Removing Spark plugin from Codex${suffix}...`);
+  try {
+    await exec('codex', ['plugin', 'remove', variant.claudePlugin], cwd ? { cwd } : {});
+    spinner.stop(`Spark plugin removed from Codex${suffix}`);
+  } catch (err) {
+    spinner.fail(`Failed to remove Codex plugin${suffix}`);
+    printWarning(err.stderr?.trim() || err.message);
+    printInfo(`You can remove it manually: codex plugin remove ${variant.claudePlugin}`);
+  }
+}
+
+/**
  * Uninstall skills for other IDEs (Cursor, Windsurf, etc.) via skills CLI.
  */
 export async function uninstallOtherIDEs(
@@ -166,6 +188,12 @@ async function uninstallTarget(target, { execAsync, spawnInteractive, writeKey }
   if (initData.ides.includes('claude')) {
     for (const variant of variants) {
       await uninstallClaudePlugin(scope, { exec: execAsync, cwd: targetCwd, variant });
+    }
+  }
+
+  if (initData.ides.includes('codex')) {
+    for (const variant of variants) {
+      await uninstallCodexPlugin({ exec: execAsync, cwd: targetCwd, variant });
     }
   }
 

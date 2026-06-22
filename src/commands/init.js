@@ -12,6 +12,7 @@ import {
   SETTINGS_PATH,
   LOCAL_SETTINGS_PATH,
   VARIANTS,
+  GLOBAL_ONLY_IDES,
   getApiBase,
   getVariantKey,
 } from '../constants.js';
@@ -158,17 +159,13 @@ export function promptChoice(question, options) {
 }
 
 /**
- * Set up Claude Code with Spark plugin.
+ * Add the Spark marketplace via the given IDE CLI (`claude` or `codex`).
+ * Treats an "already added" error as success.
  */
-export async function setupClaudeCode(
-  scope,
-  { exec = runCommand, variant = VARIANTS.public } = {},
-) {
-  const scopeFlag = scope === 'project' ? 'project' : 'user';
-
+async function addMarketplace(cli, exec) {
   const addSpinner = createSpinner('Adding Spark marketplace...');
   try {
-    await exec('claude', ['plugin', 'marketplace', 'add', 'memcoai/marketplace']);
+    await exec(cli, ['plugin', 'marketplace', 'add', 'memcoai/marketplace']);
     addSpinner.stop('Spark marketplace added');
   } catch (err) {
     const msg = (err.stderr?.trim() || err.message || '').toLowerCase();
@@ -177,9 +174,21 @@ export async function setupClaudeCode(
     } else {
       addSpinner.fail('Failed to add marketplace');
       printWarning(err.stderr?.trim() || err.message);
-      printInfo('You can add it manually: claude plugin marketplace add memcoai/marketplace');
+      printInfo(`You can add it manually: ${cli} plugin marketplace add memcoai/marketplace`);
     }
   }
+}
+
+/**
+ * Set up Claude Code with Spark plugin.
+ */
+export async function setupClaudeCode(
+  scope,
+  { exec = runCommand, variant = VARIANTS.public } = {},
+) {
+  const scopeFlag = scope === 'project' ? 'project' : 'user';
+
+  await addMarketplace('claude', exec);
 
   const installSpinner = createSpinner('Installing Spark plugin...');
   try {
@@ -191,6 +200,24 @@ export async function setupClaudeCode(
     printInfo(
       `You can install it manually: claude plugin install ${variant.claudePlugin} --scope ${scopeFlag}`,
     );
+  }
+}
+
+/**
+ * Set up Codex with the Spark plugin.
+ * Codex plugins are global (no project/user scope), so scope is not used here.
+ */
+export async function setupCodex({ exec = runCommand, variant = VARIANTS.public } = {}) {
+  await addMarketplace('codex', exec);
+
+  const installSpinner = createSpinner('Installing Spark plugin...');
+  try {
+    await exec('codex', ['plugin', 'add', variant.claudePlugin]);
+    installSpinner.stop('Spark plugin installed for Codex');
+  } catch (err) {
+    installSpinner.fail('Failed to install plugin');
+    printWarning(err.stderr?.trim() || err.message);
+    printInfo(`You can install it manually: codex plugin add ${variant.claudePlugin}`);
   }
 }
 
@@ -226,13 +253,16 @@ export async function setupOtherIDEs(
  */
 export const IDE_KEY_MAP = {
   'Claude Code': 'claude',
+  Codex: 'codex',
   'Other (Cursor, Windsurf, etc.)': 'other',
 };
 
 /**
  * Save init choices to settings.
- * Project scope: writes to local + upserts in global projects array.
- * Global scope: writes to globalInit in global settings.
+ * Global scope: writes everything to globalInit in global settings.
+ * Project scope: writes genuinely project-scoped IDEs to local + the global projects array;
+ *   global-only IDEs (Codex) are always recorded in globalInit instead, so a single global
+ *   record governs their install/removal and per-project teardown never removes them.
  */
 export async function saveInitChoices(
   ides,
@@ -251,12 +281,18 @@ export async function saveInitChoices(
   const skillsVersion = versionInfo?.version || '0.0.0';
 
   const variantKey = getVariantKey(variant);
-  const initData = { ides: ideKeys, skillsVersion, variant: variantKey };
 
   if (scope === 'global') {
-    writeKey(SETTINGS_PATH, 'globalInit', initData);
-  } else {
-    // Write to local settings
+    writeKey(SETTINGS_PATH, 'globalInit', { ides: ideKeys, skillsVersion, variant: variantKey });
+    return;
+  }
+
+  // Project scope: separate global-only IDEs (Codex) from genuinely project-scoped ones.
+  const scopedKeys = ideKeys.filter((k) => !GLOBAL_ONLY_IDES.includes(k));
+  const globalKeys = ideKeys.filter((k) => GLOBAL_ONLY_IDES.includes(k));
+
+  if (scopedKeys.length) {
+    const initData = { ides: scopedKeys, skillsVersion, variant: variantKey };
     writeKey(LOCAL_SETTINGS_PATH, 'init', initData);
 
     // Upsert in global projects array
@@ -270,6 +306,20 @@ export async function saveInitChoices(
       projects.push(entry);
     }
     writeKey(SETTINGS_PATH, 'projects', projects);
+  }
+
+  if (globalKeys.length) {
+    // Codex is global-only: record it in globalInit (merging with anything already installed
+    // globally) regardless of the chosen scope.
+    const existing = readKey(SETTINGS_PATH, 'globalInit') || {};
+    const existingIdes = Array.isArray(existing.ides) ? existing.ides : [];
+    const mergedIdes = Array.from(new Set([...existingIdes, ...globalKeys]));
+    writeKey(SETTINGS_PATH, 'globalInit', {
+      ...existing,
+      ides: mergedIdes,
+      skillsVersion,
+      variant: variantKey,
+    });
   }
 }
 
@@ -318,6 +368,13 @@ async function executeSetup(selectedIDEs, scope, { exec, spawnInteractive, varia
   for (const ide of selectedIDEs) {
     if (ide === 'Claude Code') {
       await setupClaudeCode(scope, { exec, variant });
+    } else if (ide === 'Codex') {
+      if (scope === 'project') {
+        printInfo(
+          'Codex plugins are installed globally; the project scope does not apply to Codex.',
+        );
+      }
+      await setupCodex({ exec, variant });
     } else {
       await setupOtherIDEs(scope, { spawnInteractive, variant });
     }
@@ -358,6 +415,7 @@ export async function runSetupFlow({
   // Step 1: IDE selection
   const selectedIDEs = await promptWithCancel(promptChecklistFn, 'Select your IDE(s):', [
     'Claude Code',
+    'Codex',
     'Other (Cursor, Windsurf, etc.)',
   ]);
   if (!selectedIDEs) return;

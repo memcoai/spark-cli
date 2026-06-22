@@ -1,7 +1,13 @@
 import { execSync } from 'node:child_process';
 import { getLocalVersion, getInitData, fetchSkillsVersion } from '../update-check.js';
 import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
-import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, getVariantKey, resolveVariant } from '../constants.js';
+import {
+  SETTINGS_PATH,
+  LOCAL_SETTINGS_PATH,
+  getVariantKey,
+  resolveVariant,
+  getMarketplaceName,
+} from '../constants.js';
 import { writeSettingsKey, readSettingsKey } from '../settings.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 import { detectVariant, ensureCorrectVariant } from '../variant.js';
@@ -84,6 +90,18 @@ export async function updateSkills({
     } catch (err) {
       allSucceeded = false;
       spinner.fail('Failed to update Spark plugin for Claude Code');
+      printWarning(err.stderr?.trim() || err.message);
+    }
+  }
+
+  if (ides.includes('codex')) {
+    const spinner = createSpinner('Updating Spark plugin for Codex...');
+    try {
+      await exec('codex', ['plugin', 'marketplace', 'upgrade', getMarketplaceName(variant)]);
+      spinner.stop('Spark plugin updated for Codex');
+    } catch (err) {
+      allSucceeded = false;
+      spinner.fail('Failed to update Spark plugin for Codex');
       printWarning(err.stderr?.trim() || err.message);
     }
   }

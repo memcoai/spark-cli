@@ -8,6 +8,7 @@ import {
   getAuthErrorUrl,
   VARIANTS,
   resolveVariant,
+  getMarketplaceName,
 } from '../src/constants.js';
 
 describe('getApiBase', () => {
@@ -104,6 +105,26 @@ describe('resolveVariant', () => {
 
   it('returns null for undefined', () => {
     assert.strictEqual(resolveVariant(undefined), null);
+  });
+});
+
+describe('VARIANTS', () => {
+  it('uses the renamed teams marketplace plugin id (spark-team-cli)', () => {
+    assert.strictEqual(VARIANTS.teams.claudePlugin, 'spark-team-cli@MemCo');
+  });
+
+  it('keeps the public marketplace plugin id', () => {
+    assert.strictEqual(VARIANTS.public.claudePlugin, 'spark-cli@MemCo');
+  });
+});
+
+describe('getMarketplaceName', () => {
+  it('extracts the marketplace name from the public plugin id', () => {
+    assert.strictEqual(getMarketplaceName(VARIANTS.public), 'MemCo');
+  });
+
+  it('extracts the marketplace name from the teams plugin id', () => {
+    assert.strictEqual(getMarketplaceName(VARIANTS.teams), 'MemCo');
   });
 });
 
