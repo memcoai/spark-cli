@@ -181,28 +181,30 @@ export async function runUpdate({
     if (newVersion === currentVersion) {
       // npm may keep the current version even when a newer one is published — an install-window
       // setting (min-release-age / before) holds back recent releases. Distinguish that from
-      // genuinely being up to date so the message isn't misleading.
+      // genuinely being up to date so the message isn't misleading. Caches are intentionally left
+      // intact here: the version is unchanged (so compatibility still applies) and getHeldBackVersion
+      // has just refreshed the latestVersion cache.
       const heldBackVersion = await getHeldBackVersion(newVersion, fetchLatest);
       if (heldBackVersion) {
         spinner.fail(
           `npm kept v${currentVersion} — v${heldBackVersion} is available but was not installed`,
         );
         printWarning(
-          'npm is configured to hold back recently published releases (min-release-age / before),\n' +
-            'so the newer version was skipped as too recent. It will install normally once it ages\n' +
-            'past the window. To install it now:\n' +
-            '  npm install -g @memco/spark@latest --min-release-age=0',
+          'npm is configured to hold back recently published releases, so the newer version was\n' +
+            'skipped as too recent. It will install normally once it ages past the window. To install\n' +
+            'it now, override the install window:\n' +
+            '  npm install -g @memco/spark@latest --min-release-age=0\n' +
+            'If you instead pin installs to a date with `before`, raise or remove that setting.',
         );
       } else {
         spinner.stop(`Already on the latest version (v${currentVersion})`);
       }
     } else {
       spinner.stop(`Updated @memco/spark: v${currentVersion} → v${newVersion}`);
+      // Clear cached compatibility and version data so the next run re-checks against the new version.
+      writeSettingsKey(SETTINGS_PATH, 'compatibility', null);
+      writeSettingsKey(SETTINGS_PATH, 'latestVersion', null);
     }
-
-    // Clear cached compatibility and version data so the next run gets a fresh check
-    writeSettingsKey(SETTINGS_PATH, 'compatibility', null);
-    writeSettingsKey(SETTINGS_PATH, 'latestVersion', null);
   } catch (err) {
     spinner.fail('Update failed');
 
