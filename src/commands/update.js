@@ -1,5 +1,11 @@
 import { execSync } from 'node:child_process';
-import { getLocalVersion, getInitData, fetchSkillsVersion } from '../update-check.js';
+import semver from 'semver';
+import {
+  getLocalVersion,
+  getInitData,
+  fetchSkillsVersion,
+  fetchLatestVersion,
+} from '../update-check.js';
 import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
 import {
   SETTINGS_PATH,
@@ -125,12 +131,38 @@ export async function updateSkills({
 }
 
 /**
+ * Detect when npm declined to upgrade even though a newer version is published.
+ *
+ * `npm install` silently keeps the current version when an install-window setting
+ * (min-release-age / before) holds back recently published releases. The npm registry
+ * `latest` tag is unaffected by those client-side settings, so comparing it against the
+ * installed version reveals an upgrade that npm chose not to apply.
+ *
+ * Returns the newer version string, or null if none is available or the check fails
+ * (fail open — the caller falls back to the standard "already latest" message).
+ */
+async function getHeldBackVersion(installedVersion, fetchLatest) {
+  try {
+    const latestInfo = await fetchLatest();
+    const latest = semver.valid(semver.coerce(latestInfo?.version));
+    const installed = semver.valid(semver.coerce(installedVersion));
+    if (latest && installed && semver.gt(latest, installed)) {
+      return latestInfo.version;
+    }
+  } catch {
+    // Network/parse failure — treat as "no newer version known".
+  }
+  return null;
+}
+
+/**
  * Core update logic, accepts dependencies for testability.
  */
 export async function runUpdate({
   exec = execSync,
   getVersion = getLocalVersion,
   skills = updateSkills,
+  fetchLatest = fetchLatestVersion,
 } = {}) {
   const currentVersion = getVersion();
   printInfo(`Current version: v${currentVersion}`);
@@ -146,15 +178,31 @@ export async function runUpdate({
 
     const newVersion = getVersion();
 
-    // Clear cached compatibility and version data so the next run gets a fresh check
-    writeSettingsKey(SETTINGS_PATH, 'compatibility', null);
-    writeSettingsKey(SETTINGS_PATH, 'latestVersion', null);
-
     if (newVersion === currentVersion) {
-      spinner.stop(`Already on the latest version (v${currentVersion})`);
+      // npm may keep the current version even when a newer one is published — an install-window
+      // setting (min-release-age / before) holds back recent releases. Distinguish that from
+      // genuinely being up to date so the message isn't misleading.
+      const heldBackVersion = await getHeldBackVersion(newVersion, fetchLatest);
+      if (heldBackVersion) {
+        spinner.fail(
+          `npm kept v${currentVersion} — v${heldBackVersion} is available but was not installed`,
+        );
+        printWarning(
+          'npm is configured to hold back recently published releases (min-release-age / before),\n' +
+            'so the newer version was skipped as too recent. It will install normally once it ages\n' +
+            'past the window. To install it now:\n' +
+            '  npm install -g @memco/spark@latest --min-release-age=0',
+        );
+      } else {
+        spinner.stop(`Already on the latest version (v${currentVersion})`);
+      }
     } else {
       spinner.stop(`Updated @memco/spark: v${currentVersion} → v${newVersion}`);
     }
+
+    // Clear cached compatibility and version data so the next run gets a fresh check
+    writeSettingsKey(SETTINGS_PATH, 'compatibility', null);
+    writeSettingsKey(SETTINGS_PATH, 'latestVersion', null);
   } catch (err) {
     spinner.fail('Update failed');
 
