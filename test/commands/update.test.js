@@ -8,6 +8,7 @@ const defaultRunDeps = (overrides = {}) => ({
   exec: mock.fn(() => ''),
   getVersion: mock.fn(() => '1.0.0'),
   skills: mock.fn(async () => {}),
+  fetchLatest: mock.fn(async () => ({ version: '1.0.0' })),
   ...overrides,
 });
 
@@ -32,11 +33,52 @@ function assertSkillsVersionNotPersisted(deps) {
 describe('updateCommand', () => {
   const mocks = setupCommandMocks();
 
-  it('shows already on latest when version is unchanged', async () => {
+  it('shows already on latest when version is unchanged and registry matches', async () => {
     await runUpdate(defaultRunDeps());
 
     const output = getStdoutOutput(mocks.stdoutMock);
     assert.ok(output.includes('Already on the latest version (v1.0.0)'));
+  });
+
+  it('warns when npm held back a newer published version', async () => {
+    const deps = defaultRunDeps({
+      fetchLatest: mock.fn(async () => ({ version: '1.1.0' })),
+    });
+
+    await runUpdate(deps);
+
+    const output = getStdoutOutput(mocks.stdoutMock) + getLogOutput(mocks.logMock);
+    assert.ok(output.includes('v1.1.0 is available but was not installed'));
+    assert.ok(output.includes('min-release-age'));
+    assert.ok(output.includes('npm install -g @memco/spark@latest --min-release-age=0'));
+    assert.ok(!output.includes('Already on the latest version'));
+  });
+
+  it('shows already on latest when registry check fails', async () => {
+    const deps = defaultRunDeps({
+      fetchLatest: mock.fn(async () => {
+        throw new Error('network down');
+      }),
+    });
+
+    await runUpdate(deps);
+
+    const output = getStdoutOutput(mocks.stdoutMock);
+    assert.ok(output.includes('Already on the latest version (v1.0.0)'));
+  });
+
+  it('does not check the registry when the update actually changed versions', async () => {
+    let callCount = 0;
+    const deps = defaultRunDeps({
+      getVersion: mock.fn(() => {
+        callCount++;
+        return callCount === 1 ? '1.0.0' : '1.1.0';
+      }),
+    });
+
+    await runUpdate(deps);
+
+    assert.strictEqual(deps.fetchLatest.mock.calls.length, 0);
   });
 
   it('shows updated message when version changes', async () => {
