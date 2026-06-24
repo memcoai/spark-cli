@@ -24,7 +24,7 @@ const FEEDBACK_DESCRIPTION =
 
 /** Convert a snake_case schema property name to a kebab-case CLI flag name. */
 function toFlagName(property) {
-  return property.replace(/_/g, '-');
+  return property.replaceAll('_', '-');
 }
 
 /**
@@ -55,7 +55,7 @@ function summarize(description) {
  * stored value back, hence BOTH `-` and `_` before a lowercase letter are folded.
  */
 function toOptionKey(property) {
-  return property.replace(/[-_]([a-z])/g, (_, c) => c.toUpperCase());
+  return property.replaceAll(/[-_]([a-z])/g, (_, c) => c.toUpperCase());
 }
 
 /** Repeatable collector (matches the existing --tag/--xml-tag pattern). */
@@ -78,6 +78,19 @@ function buildOptionDescription(spec, { required } = {}) {
 }
 
 /**
+ * Register a single `--flag <value>` option on `cmd` (required or optional), with an
+ * optional repeatable collector. Centralizes the requiredOption/option branching
+ * shared by the string / number / enum / array-of-string flag shapes.
+ */
+function addValueFlag(cmd, flagName, spec, required, collector) {
+  const flag = `--${flagName} <value>`;
+  const desc = buildOptionDescription(spec, { required });
+  const optionArgs = collector ? [flag, desc, collector] : [flag, desc];
+  if (required) cmd.requiredOption(...optionArgs);
+  else cmd.option(...optionArgs);
+}
+
+/**
  * Derive commander flags for a single non-special schema property. Returns nothing
  * (mutates `cmd`); throws a clear error on an unsupported nested/array shape.
  */
@@ -85,20 +98,10 @@ function addPropertyFlag(cmd, toolName, property, spec, required) {
   const flagName = toFlagName(property);
   const type = spec?.type;
 
-  // enum is treated as a single-value string flag (ajv enforces membership).
-  if (Array.isArray(spec?.enum)) {
-    const flag = `--${flagName} <value>`;
-    const desc = buildOptionDescription(spec, { required });
-    if (required) cmd.requiredOption(flag, desc);
-    else cmd.option(flag, desc);
-    return;
-  }
-
-  if (type === 'string' || type === 'number' || type === 'integer') {
-    const flag = `--${flagName} <value>`;
-    const desc = buildOptionDescription(spec, { required });
-    if (required) cmd.requiredOption(flag, desc);
-    else cmd.option(flag, desc);
+  // enum + scalar types all register as a single `--flag <value>` (ajv enforces enum
+  // membership / numeric type; numbers are coerced in buildArgs).
+  if (Array.isArray(spec?.enum) || type === 'string' || type === 'number' || type === 'integer') {
+    addValueFlag(cmd, flagName, spec, required);
     return;
   }
 
@@ -107,15 +110,12 @@ function addPropertyFlag(cmd, toolName, property, spec, required) {
     return;
   }
 
+  if (type === 'array' && spec?.items?.type === 'string') {
+    addValueFlag(cmd, flagName, spec, required, appendValue);
+    return;
+  }
+
   if (type === 'array') {
-    const itemType = spec?.items?.type;
-    if (itemType === 'string') {
-      const flag = `--${flagName} <value>`;
-      const desc = buildOptionDescription(spec, { required });
-      if (required) cmd.requiredOption(flag, desc, appendValue);
-      else cmd.option(flag, desc, appendValue);
-      return;
-    }
     throw new Error(
       `Unsupported inputSchema for tool "${toolName}": property "${property}" is an array of non-string items`,
     );
@@ -165,13 +165,59 @@ export function deriveFlags(inputSchema, cmd, toolName = cmd?.name?.() ?? '') {
 }
 
 /**
+ * Coerce a scalar flag value to the type its schema declares. number/integer flags
+ * are converted with `Number()` and reject non-numeric input — ajv treats `NaN` as a
+ * valid JSON-Schema `number` (serialized as `null` over the wire), so without this
+ * guard it would slip past the validation gate and reach `tools/call`.
+ */
+function coerceScalar(spec, value, property) {
+  if (spec?.type !== 'number' && spec?.type !== 'integer') return value;
+  const coerced = Number(value);
+  if (Number.isNaN(coerced)) {
+    throw new TypeError(`Invalid value for --${toFlagName(property)}: expected a number`);
+  }
+  return coerced;
+}
+
+/**
+ * Resolve the `tools/call` argument value for one schema property from the parsed
+ * commander options, applying the tags/sources/feedback special-case parsers.
+ * Returns `undefined` when the property should be omitted from the args object.
+ * Throws (caught by `makeToolAction`) on invalid input — e.g. a non-numeric number
+ * or a missing required `feedback` entry — so it never reaches `tools/call`.
+ */
+function buildArgValue(property, spec, options, required) {
+  if (property === 'tags') {
+    const tags = collectTags(options);
+    return tags.length > 0 ? tags : undefined;
+  }
+  if (property === 'sources') {
+    if (!options.sources) return undefined;
+    const sources = parseSources(options.sources);
+    return sources.length > 0 ? sources : undefined;
+  }
+  if (property === 'feedback') {
+    const feedback = parseFeedbackEntries(options.feedback);
+    if (feedback.length > 0) return feedback;
+    // Only hard-fail when the server schema marks feedback required; otherwise omit
+    // the key and let ajv/server decide (server stays authoritative).
+    if (required.has('feedback')) {
+      throw new Error('At least one --feedback entry is required');
+    }
+    return undefined;
+  }
+
+  const value = options[toOptionKey(property)];
+  if (value === undefined) return undefined;
+  return coerceScalar(spec, value, property);
+}
+
+/**
  * Build the `arguments` object for `tools/call` purely from the parsed commander
- * options, applying the same special-case helpers the hand-written commands used:
- * `collectTags` for `tags`, `parseSources` for `sources`, `parseFeedbackEntries`
- * for `feedback`. Every other property is read from `options` (by its camelCase
- * option key) and written back under its verbatim schema property name. Number/
- * integer flags are coerced to Number; non-numeric input throws a client-side
- * validation error (never sent as NaN/null).
+ * options. Each property is resolved via `buildArgValue` (which applies the
+ * tags/sources/feedback special-case parsers and numeric coercion) and written back
+ * under its verbatim schema property name; properties that resolve to `undefined`
+ * are omitted.
  *
  * @param {object} tool - manifest tool entry ({ serverName, inputSchema, ... })
  * @param {object} options - commander options object
@@ -184,49 +230,8 @@ export function buildArgs(tool, options = {}) {
   const args = {};
 
   for (const [property, spec] of Object.entries(properties)) {
-    if (property === 'tags') {
-      const tags = collectTags(options);
-      if (tags.length > 0) args.tags = tags;
-      continue;
-    }
-    if (property === 'sources') {
-      if (options.sources) {
-        const sources = parseSources(options.sources);
-        if (sources.length > 0) args.sources = sources;
-      }
-      continue;
-    }
-    if (property === 'feedback') {
-      const feedback = parseFeedbackEntries(options.feedback);
-      if (feedback.length === 0) {
-        // Only hard-fail when the server schema marks feedback required; otherwise
-        // omit the key and let ajv/server decide (server stays authoritative).
-        if (required.has('feedback')) {
-          throw new Error('At least one --feedback entry is required');
-        }
-        continue;
-      }
-      args.feedback = feedback;
-      continue;
-    }
-
-    const optionKey = toOptionKey(property);
-    const value = options[optionKey];
-    if (value === undefined) continue;
-
-    if (spec?.type === 'number' || spec?.type === 'integer') {
-      const coerced = Number(value);
-      // Reject non-numeric input client-side. ajv accepts NaN as a valid JSON-Schema
-      // `number` (serialized as null over the wire), so it would otherwise slip past
-      // the validation gate and reach tools/call. Throwing here is caught by
-      // makeToolAction and routed through outputError (exit 1) before any network call.
-      if (Number.isNaN(coerced)) {
-        throw new Error(`Invalid value for --${toFlagName(property)}: expected a number`);
-      }
-      args[property] = coerced;
-    } else {
-      args[property] = value;
-    }
+    const value = buildArgValue(property, spec, options, required);
+    if (value !== undefined) args[property] = value;
   }
 
   return args;
@@ -269,8 +274,8 @@ export function makeToolAction(tool, deps = {}) {
 
   return async function toolAction(...handlerArgs) {
     // commander passes: (options, command) — no positional arguments.
-    const command = handlerArgs[handlerArgs.length - 1];
-    const options = handlerArgs[handlerArgs.length - 2] ?? {};
+    const command = handlerArgs.at(-1);
+    const options = handlerArgs.at(-2) ?? {};
 
     try {
       const apiBase = d.getBase();
@@ -278,11 +283,12 @@ export function makeToolAction(tool, deps = {}) {
 
       // Validate against the cached schema captured at registration. The server
       // stays authoritative; this gate only produces friendly client-side errors.
+      // On failure, surface a friendly message and exit 1 BEFORE any network call —
+      // tools/call is never reached (AC13).
       const { valid, errors } = d.validate(tool.inputSchema, argsObject);
       if (!valid) {
-        // Client-side validation error — surface a friendly message and exit 1
-        // BEFORE any network call. tools/call is never reached.
-        throw new Error(errors[0] ?? 'Invalid arguments');
+        outputError(new Error(errors[0] ?? 'Invalid arguments'), command);
+        return;
       }
 
       const result = await d.callTool(apiBase, tool.serverName, argsObject, command);
@@ -290,7 +296,8 @@ export function makeToolAction(tool, deps = {}) {
       // The SDK signals tool-level failures as { isError: true } over HTTP 200
       // (it does NOT throw), so route those through outputError for exit 1.
       if (result?.isError === true) {
-        throw new Error(toolErrorMessage(result));
+        outputError(new Error(toolErrorMessage(result)), command);
+        return;
       }
 
       output(result, command);

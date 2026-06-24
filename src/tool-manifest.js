@@ -67,7 +67,9 @@ export function getCachedToolManifest(deps = {}) {
     const raw = d.readKey(path, 'toolManifest');
     if (!raw) continue;
     const parsed = toolManifestCacheSchema.safeParse(raw);
-    if (parsed.success) return parsed.data;
+    if (parsed.success) {
+      return /** @type {{ tools: Array, checkedAt: number, apiBase: string }} */ (parsed.data);
+    }
   }
   return null;
 }
@@ -103,8 +105,12 @@ export async function fetchToolManifest(apiBase, { local } = {}, deps = {}) {
       return entry;
     });
     const result = { tools, checkedAt: Date.now(), apiBase: base };
-    const path =
-      local === undefined ? getActiveSettingsPath(d) : local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
+    let path;
+    if (local === undefined) {
+      path = getActiveSettingsPath(d);
+    } else {
+      path = local ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
+    }
     d.writeKey(path, 'toolManifest', result);
     return result;
   } catch {

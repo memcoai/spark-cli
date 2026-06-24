@@ -116,7 +116,7 @@ export function getAuthMode(apiBase, options = {}, deps = {}) {
  * @param {object} [deps] - DI overrides: { getAuth, getMode, doFetch, runAuth,
  *   makeProvider, schema }.
  */
-export async function getCurrentUser(apiBase, options = {}, deps = {}) {
+export async function getCurrentUser(apiBase = getApiBase(), options = {}, deps = {}) {
   const {
     getAuth = getAuthToken,
     getMode = getAuthMode,

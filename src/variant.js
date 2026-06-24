@@ -63,6 +63,96 @@ function getInitScope(readKey = readSettingsKey) {
 }
 
 /**
+ * Run the per-IDE plugin/skills swap: uninstall the old variant from every configured
+ * IDE, then install the new variant. Routed through SWAP_BY_KEY so the per-IDE command
+ * + scope rules stay in one place.
+ */
+async function swapVariant(initData, scope, { exec, spawnInteractive, oldVariant, variant }) {
+  for (const ide of IDES) {
+    if (!initData.ides.includes(ide.key)) continue;
+    await SWAP_BY_KEY[ide.key].uninstall(scope, { exec, spawnInteractive, variant: oldVariant });
+  }
+  for (const ide of IDES) {
+    if (!initData.ides.includes(ide.key)) continue;
+    await SWAP_BY_KEY[ide.key].install(scope, { exec, spawnInteractive, variant });
+  }
+}
+
+/**
+ * Keep this project's entry in the global `projects[]` array in sync after a swap,
+ * otherwise a later `spark uninstall` from another directory would act on the stale
+ * (old) variant.
+ */
+function syncProjectsArray({ detectedKey, skillsVersion, readKey, writeKey }) {
+  const projects = readKey(SETTINGS_PATH, 'projects');
+  if (!Array.isArray(projects)) return;
+  const idx = projects.findIndex((p) => p.path === process.cwd());
+  if (idx < 0) return;
+  projects[idx] = { ...projects[idx], variant: detectedKey, skillsVersion };
+  writeKey(SETTINGS_PATH, 'projects', projects);
+}
+
+/**
+ * Persist the swapped variant into the LOCAL project init record (never persisting
+ * global-only IDEs there) and sync the global projects[] entry.
+ */
+function persistProjectVariant({ initData, detectedKey, skillsVersion, readKey, writeKey }) {
+  const localIdes = initData.ides.filter((k) => !GLOBAL_ONLY_IDES.includes(k));
+  if (!localIdes.length) return;
+  writeKey(LOCAL_SETTINGS_PATH, 'init', {
+    ...initData,
+    ides: localIdes,
+    variant: detectedKey,
+    skillsVersion,
+  });
+  syncProjectsArray({ detectedKey, skillsVersion, readKey, writeKey });
+}
+
+/**
+ * Update globalInit's variant separately so a swapped global-only IDE (Codex) isn't
+ * re-detected as a mismatch next run. Uses globalInit's own skills version as the
+ * fallback (distinct from the project record's).
+ */
+function persistGlobalOnlyVariant({ detectedKey, versionInfo, readKey, writeKey }) {
+  const globalInit = readKey(SETTINGS_PATH, 'globalInit');
+  if (!globalInit?.ides?.some((k) => GLOBAL_ONLY_IDES.includes(k))) return;
+  writeKey(SETTINGS_PATH, 'globalInit', {
+    ...globalInit,
+    variant: detectedKey,
+    skillsVersion: versionInfo?.version || globalInit.skillsVersion || '0.0.0',
+  });
+}
+
+/**
+ * Persist the new variant after a swap. `initData` may be the merged view from
+ * getInitData() (project IDEs plus global-only Codex from globalInit), so each record's
+ * own IDEs are written back to its own location. Non-critical: a failure here just means
+ * the variant is corrected on the next run.
+ */
+async function persistSwappedVariant({
+  scope,
+  initData,
+  detectedKey,
+  readKey,
+  writeKey,
+  fetchVersion,
+}) {
+  try {
+    const versionInfo = await fetchVersion(detectedKey);
+    const skillsVersion = versionInfo?.version || initData.skillsVersion || '0.0.0';
+
+    if (scope === 'project') {
+      persistProjectVariant({ initData, detectedKey, skillsVersion, readKey, writeKey });
+      persistGlobalOnlyVariant({ detectedKey, versionInfo, readKey, writeKey });
+    } else {
+      writeKey(SETTINGS_PATH, 'globalInit', { ...initData, variant: detectedKey, skillsVersion });
+    }
+  } catch {
+    // Non-critical — variant will be corrected on next run
+  }
+}
+
+/**
  * Ensure the installed variant matches the user's organization.
  * If a mismatch is detected, uninstalls the old variant and installs the correct one.
  * Called early in commands that work with plugins/skills.
@@ -79,8 +169,7 @@ export async function ensureCorrectVariant({
   let variant;
   try {
     const data = await getUser();
-    const user = data.user || data;
-    variant = getVariant(user);
+    variant = getVariant(data.user || data);
   } catch {
     // Not authenticated — can't detect, skip
     return null;
@@ -91,10 +180,9 @@ export async function ensureCorrectVariant({
 
   const detectedKey = getVariantKey(variant);
   const storedKey = initData.variant || 'public';
-
   if (detectedKey === storedKey) return variant;
 
-  // Mismatch detected — swap to correct variant
+  // Mismatch detected — swap to the correct variant.
   const oldVariant = storedKey === 'teams' ? VARIANTS.teams : VARIANTS.public;
   const scope = getInitScope(readKey);
 
@@ -104,61 +192,8 @@ export async function ensureCorrectVariant({
   printInfo(`Swapping to ${detectedKey} variant...`);
   console.log('');
 
-  // Uninstall old variant
-  for (const ide of IDES) {
-    if (!initData.ides.includes(ide.key)) continue;
-    await SWAP_BY_KEY[ide.key].uninstall(scope, { exec, spawnInteractive, variant: oldVariant });
-  }
-
-  // Install new variant
-  for (const ide of IDES) {
-    if (!initData.ides.includes(ide.key)) continue;
-    await SWAP_BY_KEY[ide.key].install(scope, { exec, spawnInteractive, variant });
-  }
-
-  // Persist the new variant. `initData` may be the merged view from getInitData() (project IDEs
-  // plus global-only Codex from globalInit), so write each record's own IDEs back to its own
-  // location: never persist global-only IDEs into the local record, and update globalInit's
-  // variant separately so a swapped Codex isn't re-detected as a mismatch next run.
-  try {
-    const versionInfo = await fetchVersion(detectedKey);
-    const skillsVersion = versionInfo?.version || initData.skillsVersion || '0.0.0';
-
-    if (scope === 'project') {
-      const localIdes = initData.ides.filter((k) => !GLOBAL_ONLY_IDES.includes(k));
-      if (localIdes.length) {
-        writeKey(LOCAL_SETTINGS_PATH, 'init', {
-          ...initData,
-          ides: localIdes,
-          variant: detectedKey,
-          skillsVersion,
-        });
-
-        // Keep this project's entry in the global projects[] array in sync, otherwise a later
-        // `spark uninstall` run from another directory would act on the stale (old) variant.
-        const projects = readKey(SETTINGS_PATH, 'projects');
-        if (Array.isArray(projects)) {
-          const idx = projects.findIndex((p) => p.path === process.cwd());
-          if (idx >= 0) {
-            projects[idx] = { ...projects[idx], variant: detectedKey, skillsVersion };
-            writeKey(SETTINGS_PATH, 'projects', projects);
-          }
-        }
-      }
-      const globalInit = readKey(SETTINGS_PATH, 'globalInit');
-      if (globalInit?.ides?.some((k) => GLOBAL_ONLY_IDES.includes(k))) {
-        writeKey(SETTINGS_PATH, 'globalInit', {
-          ...globalInit,
-          variant: detectedKey,
-          skillsVersion: versionInfo?.version || globalInit.skillsVersion || '0.0.0',
-        });
-      }
-    } else {
-      writeKey(SETTINGS_PATH, 'globalInit', { ...initData, variant: detectedKey, skillsVersion });
-    }
-  } catch {
-    // Non-critical — variant will be corrected on next run
-  }
+  await swapVariant(initData, scope, { exec, spawnInteractive, oldVariant, variant });
+  await persistSwappedVariant({ scope, initData, detectedKey, readKey, writeKey, fetchVersion });
 
   printInfo('Variant swap complete.');
   console.log('');
