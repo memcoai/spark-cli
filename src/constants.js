@@ -79,12 +79,29 @@ export function resolveVariant(key) {
 }
 
 /**
+ * Strip trailing slash(es) from an API base URL string. Behavior-preserving
+ * canonical home for the `replace(/\/+$/, '')` normalization that was duplicated
+ * across api.js, credentials.js, oauth.js, mcp-client.js, and validateApiBase.
+ *
+ * This does NOT validate or trim — it is distinct from `validateApiBase` (which
+ * trims, validates protocol/URL shape, and returns `undefined` for malformed
+ * input). Returns the input unchanged (sans trailing slashes) for strings, or
+ * `null` for non-strings.
+ *
+ * @param {*} base
+ * @returns {string|null}
+ */
+export function normalizeApiBase(base) {
+  return typeof base === 'string' ? base.replace(/\/+$/, '') : null;
+}
+
+/**
  * Validate and normalize an API base URL string.
  * Returns the trimmed, trailing-slash-stripped string, or undefined if invalid/empty.
  */
 export function validateApiBase(value) {
   if (typeof value !== 'string') return undefined;
-  const normalized = value.trim().replace(/\/+$/, '');
+  const normalized = normalizeApiBase(value.trim());
   if (!normalized) return undefined;
   try {
     const url = new URL(normalized);

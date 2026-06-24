@@ -6,15 +6,9 @@ import {
   tagSchema,
   xmlTagSchema,
   feedbackEntrySchema,
-  queryInputSchema,
-  shareInputSchema,
-  shareTaskInputSchema,
-  tokenResponseSchema,
-  protectedResourceSchema,
-  authorizationServerSchema,
-  clientRegistrationResponseSchema,
   credentialSchema,
   settingsSchema,
+  toolManifestCacheSchema,
   toolResponseSchema,
   npmVersionResponseSchema,
   compatibilityDataSchema,
@@ -247,125 +241,6 @@ describe('feedbackEntrySchema', () => {
   ]);
 });
 
-describe('tokenResponseSchema', () => {
-  it('normalizes snake_case fields', () => {
-    const result = tokenResponseSchema.parse({
-      access_token: 'tok123',
-      refresh_token: 'ref456',
-      expires_in: 3600,
-    });
-    assert.strictEqual(result.accessToken, 'tok123');
-    assert.strictEqual(result.refreshToken, 'ref456');
-    assert.strictEqual(result.expiresIn, 3600);
-    assert.strictEqual(result.tokenType, 'Bearer');
-  });
-
-  it('accepts camelCase fields', () => {
-    const result = tokenResponseSchema.parse({
-      accessToken: 'tok123',
-      refreshToken: 'ref456',
-      expiresIn: 3600,
-      tokenType: 'Bearer',
-    });
-    assert.strictEqual(result.accessToken, 'tok123');
-  });
-
-  it('prefers camelCase over snake_case', () => {
-    const result = tokenResponseSchema.parse({
-      accessToken: 'camel',
-      access_token: 'snake',
-    });
-    assert.strictEqual(result.accessToken, 'camel');
-  });
-
-  it('defaults tokenType to Bearer', () => {
-    const result = tokenResponseSchema.parse({ access_token: 'tok' });
-    assert.strictEqual(result.tokenType, 'Bearer');
-  });
-
-  it('fails when accessToken is missing', () => {
-    const result = tokenResponseSchema.safeParse({});
-    assert.strictEqual(result.success, false);
-  });
-});
-
-describe('protectedResourceSchema', () => {
-  it('accepts valid metadata', () => {
-    const result = protectedResourceSchema.parse({
-      authorization_servers: ['https://auth.example.com'],
-      bearer_methods_supported: ['header'],
-    });
-    assert.deepStrictEqual(result.authorization_servers, ['https://auth.example.com']);
-  });
-
-  it('accepts empty object', () => {
-    const result = protectedResourceSchema.parse({});
-    assert.strictEqual(result.authorization_servers, undefined);
-  });
-
-  it('preserves extra fields', () => {
-    const result = protectedResourceSchema.parse({ extra: 'field' });
-    assert.strictEqual(result.extra, 'field');
-  });
-});
-
-describe('authorizationServerSchema', () => {
-  it('normalizes snake_case to camelCase', () => {
-    const result = authorizationServerSchema.parse({
-      authorization_endpoint: 'https://auth.example.com/authorize',
-      token_endpoint: 'https://auth.example.com/token',
-      registration_endpoint: 'https://auth.example.com/register',
-      bearer_methods_supported: ['header'],
-    });
-    assert.strictEqual(result.authorizationEndpoint, 'https://auth.example.com/authorize');
-    assert.strictEqual(result.tokenEndpoint, 'https://auth.example.com/token');
-    assert.strictEqual(result.registrationEndpoint, 'https://auth.example.com/register');
-    assert.deepStrictEqual(result.bearerMethodsSupported, ['header']);
-  });
-
-  it('accepts camelCase endpoints', () => {
-    const result = authorizationServerSchema.parse({
-      authorizationEndpoint: 'https://auth.example.com/authorize',
-      tokenEndpoint: 'https://auth.example.com/token',
-    });
-    assert.strictEqual(result.authorizationEndpoint, 'https://auth.example.com/authorize');
-  });
-
-  it('fails when authorization_endpoint is missing', () => {
-    const result = authorizationServerSchema.safeParse({
-      token_endpoint: 'https://auth.example.com/token',
-    });
-    assert.strictEqual(result.success, false);
-  });
-
-  it('fails when token_endpoint is missing', () => {
-    const result = authorizationServerSchema.safeParse({
-      authorization_endpoint: 'https://auth.example.com/authorize',
-    });
-    assert.strictEqual(result.success, false);
-  });
-});
-
-describe('clientRegistrationResponseSchema', () => {
-  it('accepts valid response', () => {
-    const result = clientRegistrationResponseSchema.parse({ client_id: 'abc123' });
-    assert.strictEqual(result.client_id, 'abc123');
-  });
-
-  it('preserves extra fields', () => {
-    const result = clientRegistrationResponseSchema.parse({
-      client_id: 'abc',
-      client_secret: 'secret',
-    });
-    assert.strictEqual(result.client_secret, 'secret');
-  });
-
-  it('fails when client_id is missing', () => {
-    const result = clientRegistrationResponseSchema.safeParse({});
-    assert.strictEqual(result.success, false);
-  });
-});
-
 describe('credentialSchema', () => {
   it('accepts OAuth credentials', () => {
     const result = credentialSchema.parse({
@@ -420,6 +295,145 @@ describe('settingsSchema', () => {
     });
     assert.strictEqual(result.success, true);
   });
+
+  it('accepts a valid toolManifest', () => {
+    const result = settingsSchema.safeParse({
+      toolManifest: {
+        tools: [{ serverName: 'search' }],
+        checkedAt: 123,
+        apiBase: 'https://spark.memco.ai',
+      },
+    });
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.data.toolManifest.tools[0].serverName, 'search');
+  });
+
+  it('accepts settings with toolManifest absent', () => {
+    const result = settingsSchema.safeParse({
+      credentials: { 'https://spark.memco.ai': { accessToken: 'tok' } },
+    });
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.data.toolManifest, undefined);
+  });
+
+  it('accepts settings with toolManifest null', () => {
+    const result = settingsSchema.safeParse({ toolManifest: null });
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.data.toolManifest, null);
+  });
+
+  it('fails open on a corrupt toolManifest without poisoning the rest', () => {
+    // A tool entry missing `serverName` is rejected by toolManifestCacheSchema
+    // itself, but `.catch(null)` on the settings key must coerce the corrupt
+    // value to null so credentials and other keys still parse.
+    const result = settingsSchema.safeParse({
+      credentials: { 'https://spark.memco.ai': { accessToken: 'tok' } },
+      toolManifest: {
+        tools: [{ description: 'no serverName' }],
+        checkedAt: 123,
+        apiBase: 'https://spark.memco.ai',
+      },
+    });
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.data.toolManifest, null);
+    // Unrelated keys are preserved — a bad manifest does not poison the parse.
+    assert.strictEqual(result.data.credentials['https://spark.memco.ai'].accessToken, 'tok');
+  });
+
+  it('fails open when toolManifest is the wrong type entirely', () => {
+    const result = settingsSchema.safeParse({
+      credentials: { 'https://spark.memco.ai': { accessToken: 'tok' } },
+      toolManifest: 'not an object',
+    });
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.data.toolManifest, null);
+    assert.strictEqual(result.data.credentials['https://spark.memco.ai'].accessToken, 'tok');
+  });
+});
+
+describe('toolManifestCacheSchema', () => {
+  it('accepts a valid manifest with a verbatim serverName (no name field)', () => {
+    const result = toolManifestCacheSchema.safeParse({
+      tools: [{ serverName: 'search' }],
+      checkedAt: 1700000000000,
+      apiBase: 'https://spark.memco.ai',
+    });
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.data.tools[0].serverName, 'search');
+    assert.ok(!('name' in result.data.tools[0]), 'no name field is required or retained');
+  });
+
+  it('accepts optional description, inputSchema, and outputSchema', () => {
+    const result = toolManifestCacheSchema.safeParse({
+      tools: [
+        {
+          serverName: 'search',
+          description: 'Search the knowledge network',
+          inputSchema: { type: 'object', properties: { q: { type: 'string' } } },
+          outputSchema: { type: 'object' },
+        },
+      ],
+      checkedAt: 1700000000000,
+      apiBase: 'https://spark.memco.ai',
+    });
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.data.tools[0].description, 'Search the knowledge network');
+    assert.strictEqual(result.data.tools[0].inputSchema.type, 'object');
+  });
+
+  it('accepts an empty tools array', () => {
+    const result = toolManifestCacheSchema.safeParse({
+      tools: [],
+      checkedAt: 1700000000000,
+      apiBase: 'https://spark.memco.ai',
+    });
+    assert.strictEqual(result.success, true);
+  });
+
+  it('tolerates extra fields via looseObject', () => {
+    const result = toolManifestCacheSchema.parse({
+      tools: [{ serverName: 'search', extraTool: 'x' }],
+      checkedAt: 1700000000000,
+      apiBase: 'https://spark.memco.ai',
+      extraTop: 'y',
+    });
+    assert.strictEqual(result.extraTop, 'y');
+    assert.strictEqual(result.tools[0].extraTool, 'x');
+  });
+
+  it('rejects a tool missing serverName', () => {
+    const result = toolManifestCacheSchema.safeParse({
+      tools: [{ description: 'x' }],
+      checkedAt: 1700000000000,
+      apiBase: 'https://spark.memco.ai',
+    });
+    assert.strictEqual(result.success, false);
+  });
+
+  it('rejects a tool with empty serverName', () => {
+    const result = toolManifestCacheSchema.safeParse({
+      tools: [{ serverName: '' }],
+      checkedAt: 1700000000000,
+      apiBase: 'https://spark.memco.ai',
+    });
+    assert.strictEqual(result.success, false);
+  });
+
+  it('rejects a manifest missing checkedAt', () => {
+    const result = toolManifestCacheSchema.safeParse({
+      tools: [{ serverName: 'search' }],
+      apiBase: 'https://spark.memco.ai',
+    });
+    assert.strictEqual(result.success, false);
+  });
+
+  it('rejects a manifest missing apiBase', () => {
+    const result = toolManifestCacheSchema.safeParse({
+      tools: [{ serverName: 'search' }],
+      checkedAt: 1700000000000,
+    });
+    assert.strictEqual(result.success, false);
+  });
 });
 
 describe('toolResponseSchema', () => {
@@ -465,101 +479,5 @@ describe('compatibilityDataSchema', () => {
   it('preserves extra fields', () => {
     const result = compatibilityDataSchema.parse({ extra: 'data' });
     assert.strictEqual(result.extra, 'data');
-  });
-});
-
-describe('queryInputSchema', () => {
-  it('accepts a non-empty query', () => {
-    const result = queryInputSchema.parse({ query: 'how to fix bug' });
-    assert.strictEqual(result.query, 'how to fix bug');
-  });
-
-  it('fails on empty query', () => {
-    const result = queryInputSchema.safeParse({ query: '' });
-    assert.strictEqual(result.success, false);
-  });
-
-  it('fails on missing query', () => {
-    const result = queryInputSchema.safeParse({});
-    assert.strictEqual(result.success, false);
-  });
-});
-
-describe('shareInputSchema', () => {
-  it('accepts valid share input', () => {
-    const result = shareInputSchema.parse({
-      sessionId: 'sess-1',
-      title: 'My Title',
-      content: 'My Content',
-      taskIndex: '0',
-    });
-    assert.strictEqual(result.sessionId, 'sess-1');
-    assert.strictEqual(result.title, 'My Title');
-    assert.strictEqual(result.content, 'My Content');
-    assert.strictEqual(result.taskIndex, '0');
-    assert.strictEqual(result.sources, undefined);
-  });
-
-  it('accepts taskIndex and sources', () => {
-    const result = shareInputSchema.parse({
-      sessionId: 'sess-1',
-      title: 'T',
-      content: 'C',
-      taskIndex: 'new',
-      sources: 'a,b,c',
-    });
-    assert.strictEqual(result.taskIndex, 'new');
-    assert.strictEqual(result.sources, 'a,b,c');
-  });
-
-  it('fails on missing taskIndex', () => {
-    const result = shareInputSchema.safeParse({
-      sessionId: 'sess-1',
-      title: 'T',
-      content: 'C',
-    });
-    assert.strictEqual(result.success, false);
-  });
-
-  it('fails on empty title', () => {
-    const result = shareInputSchema.safeParse({
-      sessionId: 'sess-1',
-      title: '',
-      content: 'C',
-    });
-    assert.strictEqual(result.success, false);
-  });
-
-  it('fails on empty content', () => {
-    const result = shareInputSchema.safeParse({
-      sessionId: 'sess-1',
-      title: 'T',
-      content: '',
-    });
-    assert.strictEqual(result.success, false);
-  });
-});
-
-describe('shareTaskInputSchema', () => {
-  it('accepts query with title and content', () => {
-    const result = shareTaskInputSchema.parse({ query: 'q', title: 'T', content: 'C' });
-    assert.strictEqual(result.query, 'q');
-    assert.strictEqual(result.title, 'T');
-    assert.strictEqual(result.content, 'C');
-  });
-
-  it('fails on empty query', () => {
-    const result = shareTaskInputSchema.safeParse({ query: '', title: 'T', content: 'C' });
-    assert.strictEqual(result.success, false);
-  });
-
-  it('fails on empty title', () => {
-    const result = shareTaskInputSchema.safeParse({ query: 'q', title: '', content: 'C' });
-    assert.strictEqual(result.success, false);
-  });
-
-  it('fails on empty content', () => {
-    const result = shareTaskInputSchema.safeParse({ query: 'q', title: 'T', content: '' });
-    assert.strictEqual(result.success, false);
   });
 });

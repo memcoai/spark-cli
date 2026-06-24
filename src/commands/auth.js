@@ -1,11 +1,10 @@
 import { createServer } from 'node:http';
-import { randomBytes, createHash } from 'node:crypto';
 import { URL } from 'node:url';
 import open from 'open';
-import { getCurrentUser, refreshToken } from '../api.js';
-import { getClientId, getOAuthEndpoints } from '../oauth.js';
-import { output } from '../output.js';
-import { tokenResponseSchema } from '../schemas.js';
+import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
+import { getCurrentUser, getAuthMode } from '../api.js';
+import { SparkOAuthProvider } from '../oauth-provider.js';
+import { output, getParentOptions } from '../output.js';
 import {
   printBanner,
   printSuccess,
@@ -25,35 +24,13 @@ import {
   LOCAL_SETTINGS_PATH,
 } from '../constants.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
+import { fetchToolManifest } from '../tool-manifest.js';
 import {
   loadCredentials,
   loadLocalCredentials,
-  saveCredentials,
-  credentialsExist,
   removeCredentials,
   isTokenExpired,
 } from '../credentials.js';
-
-/**
- * Generate PKCE code verifier (random string)
- */
-function generateCodeVerifier() {
-  return randomBytes(32).toString('base64url');
-}
-
-/**
- * Generate PKCE code challenge from verifier
- */
-function generateCodeChallenge(verifier) {
-  return createHash('sha256').update(verifier).digest('base64url');
-}
-
-/**
- * Generate random state for CSRF protection
- */
-function generateState() {
-  return randomBytes(16).toString('hex');
-}
 
 /**
  * Start local server to receive OAuth callback.
@@ -108,9 +85,10 @@ export function closeCallbackServer(server) {
 
 /**
  * Wait for the OAuth callback on the server.
- * Returns { code, codeVerifier } on success.
+ * Returns { code } on success. The PKCE verifier lives on the provider, so it is
+ * no longer threaded through here.
  */
-function waitForCallback(server, expectedState, codeVerifier, apiBase) {
+function waitForCallback(server, expectedState, apiBase) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
       () => {
@@ -168,45 +146,9 @@ function waitForCallback(server, expectedState, codeVerifier, apiBase) {
 
       redirect(res, getAuthSuccessUrl(apiBase));
       server.close();
-      resolve({ code, codeVerifier });
+      resolve({ code });
     });
   });
-}
-
-/**
- * Exchange authorization code for tokens
- */
-async function exchangeCodeForTokens(code, codeVerifier, redirectUri, apiBase) {
-  const { tokenEndpoint } = await getOAuthEndpoints(apiBase);
-  const clientId = await getClientId(redirectUri, apiBase);
-  const response = await fetch(tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      grant_type: 'authorization_code',
-      client_id: clientId,
-      code,
-      code_verifier: codeVerifier,
-      ...(redirectUri ? { redirect_uri: redirectUri } : {}),
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Token exchange failed: ${error}`);
-  }
-
-  const data = await response.json();
-  const parsed = tokenResponseSchema.parse(data);
-
-  return {
-    access_token: parsed.accessToken,
-    refresh_token: parsed.refreshToken,
-    expires_in: parsed.expiresIn,
-    token_type: parsed.tokenType,
-  };
 }
 
 /**
@@ -218,7 +160,11 @@ export async function checkExistingAuth(options, apiBase, deps = {}) {
     loadCreds = loadCredentials,
     loadLocalCreds = loadLocalCredentials,
     isExpired = isTokenExpired,
-    refresh = refreshToken,
+    runAuth = auth,
+    // Silent refresh-check: a dead refresh token must NOT pop a browser here
+    // (we fall through to the interactive login flow instead), so build the
+    // provider non-interactive.
+    makeProvider = (base, opts) => new SparkOAuthProvider(base, { ...opts, interactive: false }),
     removeCreds = removeCredentials,
     getUser = getCurrentUser,
   } = deps;
@@ -238,8 +184,10 @@ export async function checkExistingAuth(options, apiBase, deps = {}) {
   }
 
   if (existing.accessToken && isExpired(existing)) {
+    // A valid refresh token lets the SDK's auth() refresh-and-save without a browser.
+    const provider = makeProvider(apiBase, { local: isLocal });
     try {
-      await refresh(existing, apiBase, isLocal);
+      await runAuth(provider, { serverUrl: `${apiBase}/mcp` });
     } catch {
       removeCreds(apiBase);
       return 'continue';
@@ -263,13 +211,38 @@ export async function checkExistingAuth(options, apiBase, deps = {}) {
 }
 
 /**
- * Run the OAuth PKCE browser flow: start server, open browser, exchange tokens.
- * Returns the tokens on success, or null if the callback server failed to start.
+ * Run the OAuth browser flow via the SDK's `auth()` orchestrator.
+ *
+ * Two `auth()` calls drive the flow against a `SparkOAuthProvider`:
+ *   1. `auth(provider, { serverUrl })` runs discovery + DCR + PKCE, builds the
+ *      authorize URL, and hands it to the provider's `redirectToAuthorization`
+ *      (which appends `provider=authkit` and opens the browser), returning
+ *      `'REDIRECT'`. (If a still-valid refresh token exists it returns
+ *      `'AUTHORIZED'` instead — tokens are already saved, nothing more to do.)
+ *   2. After the loopback server captures the `?code=`, `auth(provider, {
+ *      serverUrl, authorizationCode })` exchanges it for tokens and calls the
+ *      provider's `saveTokens`, returning `'AUTHORIZED'`.
+ *
+ * The localhost loopback redirect server (port, redirect URLs, keep-alive
+ * cleanup, 5-min timeout, `state` validation against the provider) is kept; the
+ * PKCE verifier now lives on the provider, not on the callback result.
+ *
+ * Returns `{ authorized: true, tokenSpinner? }` on success, or `null` if the
+ * callback server failed to start.
  */
-async function runOAuthFlow(apiBase) {
+export async function runOAuthFlow(apiBase, options = {}, deps = {}) {
+  const {
+    runAuth = auth,
+    // Interactive login flow: a redirect SHOULD open the browser (and print the
+    // manual-login fallback URL), so build the provider interactive.
+    makeProvider = (base, opts) => new SparkOAuthProvider(base, { ...opts, interactive: true }),
+    startServer = startCallbackServer,
+    waitCb = waitForCallback,
+  } = deps;
+
   let serverInfo;
   try {
-    serverInfo = await startCallbackServer();
+    serverInfo = await startServer();
   } catch (err) {
     printError(`Failed to start callback server: ${err.message}`);
     console.log('');
@@ -278,35 +251,25 @@ async function runOAuthFlow(apiBase) {
   }
 
   const { server } = serverInfo;
-  const redirectUri = `http://localhost:${CALLBACK_PORT}/callback`;
+  const provider = makeProvider(apiBase, { local: options.local });
+  const serverUrl = `${apiBase}/mcp`;
 
   try {
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = generateCodeChallenge(codeVerifier);
-    const state = generateState();
-
-    const { authorizationEndpoint } = await getOAuthEndpoints(apiBase);
-    const authUrl = new URL(authorizationEndpoint);
-    authUrl.searchParams.set('provider', 'authkit');
-    const clientId = await getClientId(redirectUri, apiBase);
-    authUrl.searchParams.set('client_id', clientId);
-    authUrl.searchParams.set('redirect_uri', redirectUri);
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('code_challenge', codeChallenge);
-    authUrl.searchParams.set('code_challenge_method', 'S256');
-    authUrl.searchParams.set('state', state);
-
     console.log('Opening browser for authentication...');
     console.log('');
-    console.log(`If the browser doesn't open, visit:\n${colorize('\x1b[36m', authUrl.toString())}`);
-    console.log('');
 
-    await open(authUrl.toString());
+    // First auth() call: discovery + DCR + PKCE + open the browser via the
+    // provider's redirectToAuthorization (which appends provider=authkit).
+    const result = await runAuth(provider, { serverUrl });
+    if (result !== 'REDIRECT') {
+      // A still-valid refresh token let auth() refresh in-place; tokens are saved.
+      return { authorized: true };
+    }
 
     const spinner = createSpinner('Waiting for authentication...');
-    let result;
+    let cb;
     try {
-      result = await waitForCallback(server, state, codeVerifier, apiBase);
+      cb = await waitCb(server, provider.state(), apiBase);
       spinner.stop('Browser authentication complete');
     } catch (err) {
       spinner.fail('Authentication failed');
@@ -315,13 +278,9 @@ async function runOAuthFlow(apiBase) {
 
     const tokenSpinner = createSpinner('Exchanging code for tokens...');
     try {
-      const tokens = await exchangeCodeForTokens(
-        result.code,
-        result.codeVerifier,
-        redirectUri,
-        apiBase,
-      );
-      return { tokens, tokenSpinner };
+      // Second auth() call: exchange code -> tokens; provider.saveTokens persists.
+      await runAuth(provider, { serverUrl, authorizationCode: cb.code });
+      return { authorized: true, tokenSpinner };
     } catch (err) {
       tokenSpinner.fail('Token exchange failed');
       throw err;
@@ -370,9 +329,32 @@ export function resolveApiBase(options, deps = {}) {
 }
 
 /**
- * Login command handler - OAuth PKCE flow
+ * Populate the tool manifest cache after a successful login (best-effort, fail-open).
+ * A manifest-fetch failure must never abort a successful login — it only warns.
+ * The `local` flag mirrors `login --local` so the manifest lands next to the credentials.
  */
-export async function loginCommand(options, _command) {
+export async function populateToolManifest(apiBase, local, deps = {}) {
+  const { fetchManifest = fetchToolManifest } = deps;
+  try {
+    await fetchManifest(apiBase, { local });
+  } catch (error) {
+    printWarning(`Could not load tool manifest: ${error.message}`);
+  }
+}
+
+/**
+ * Login command handler — drives the SDK OAuth flow via `runOAuthFlow`.
+ *
+ * The provider (inside `runOAuthFlow`) now persists credentials via its
+ * `saveTokens` during the second `auth()` call, so there is no manual
+ * `saveCredentials` block here — login only verifies and reports.
+ */
+export async function loginCommand(options, _command, deps = {}) {
+  const {
+    fetchManifest = fetchToolManifest,
+    runFlow = runOAuthFlow,
+    getUser = getCurrentUser,
+  } = deps;
   const apiBase = resolveApiBase(options);
   if (!apiBase) return;
   try {
@@ -387,44 +369,33 @@ export async function loginCommand(options, _command) {
       return;
     }
 
-    const authCheck = await checkExistingAuth(options, apiBase);
+    const authCheck = await checkExistingAuth(options, apiBase, deps.checkAuthDeps);
     if (authCheck === 'skip') return;
 
     console.log(colorize('\x1b[1m', 'Spark CLI Authentication'));
     console.log('');
 
-    const flowResult = await runOAuthFlow(apiBase);
+    const flowResult = await runFlow(apiBase, options, deps.flowDeps);
     if (!flowResult) return;
 
-    const { tokens, tokenSpinner } = flowResult;
+    // Tokens were already saved by the provider's saveTokens (inside auth()).
+    const { tokenSpinner } = flowResult;
     const local = options.local || false;
-    try {
-      saveCredentials(
-        {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
-          tokenType: tokens.token_type || 'Bearer',
-        },
-        { local, apiBase },
-      );
-      const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
-      tokenSpinner.stop(`Credentials saved ${location}`);
-    } catch (err) {
-      tokenSpinner.fail('Failed to save credentials');
-      exitWithLoginError(err, apiBase);
-      return;
-    }
+    const location = local ? 'locally (.spark/)' : 'globally (~/.spark/)';
+    tokenSpinner?.stop(`Credentials saved ${location}`);
 
     // Verify login by calling getUser
     const verifySpinner = createSpinner('Verifying login...');
     try {
-      await getCurrentUser(apiBase);
+      await getUser(apiBase);
       verifySpinner.stop('Login verified');
     } catch (error) {
       verifySpinner.fail('Login verification failed');
       printWarning(`Could not verify login: ${error.message}`);
     }
+
+    // Populate the tool manifest cache so offline --help is fresh (best-effort, fail-open).
+    await populateToolManifest(apiBase, local, { fetchManifest });
 
     console.log('');
     printSuccess('Successfully logged in to Spark!');
@@ -447,6 +418,28 @@ function exitWithLoginError(err, apiBase) {
   process.exitCode = 1;
 }
 
+/**
+ * Validate a server-supplied logout redirect URL before opening it in a browser.
+ * Accepts only http(s) URLs whose origin matches the configured api base — this
+ * prevents a compromised/spoofed server response from opening an arbitrary
+ * (e.g. `file:`, `javascript:`, or off-origin phishing) URL on the user's machine.
+ *
+ * @param {string} redirectUrl - the `Location` header value from the server.
+ * @param {string} apiBase - the configured api base URL.
+ * @returns {boolean}
+ */
+export function isSafeLogoutRedirect(redirectUrl, apiBase) {
+  try {
+    const target = new URL(redirectUrl);
+    if (target.protocol !== 'http:' && target.protocol !== 'https:') {
+      return false;
+    }
+    return target.origin === new URL(apiBase).origin;
+  } catch {
+    return false;
+  }
+}
+
 function printApiKeyFallback(apiBase) {
   const base = apiBase || getApiBase();
   console.log(`${colorize('\x1b[33m', 'Alternative:')} Use an API key instead:`);
@@ -460,19 +453,25 @@ function printApiKeyFallback(apiBase) {
  */
 export async function logoutCommand() {
   try {
-    // Server-side logout (best-effort)
+    const apiBase = getApiBase();
+    // Server-side logout (best-effort). Only OAuth sessions have a server-side
+    // session to revoke; api-key sessions (legacy stored key or env var) have no
+    // server logout endpoint, so we skip it gracefully and just clear local state.
     const credentials = loadCredentials();
-    if (credentials?.accessToken) {
+    if (credentials?.accessToken && !credentials?.apiKey && !credentials?.token) {
       printInfo('Logging out of Spark server...');
       try {
-        const response = await fetch(`${getApiBase()}/auth/logout-all`, {
+        const response = await fetch(`${apiBase}/auth/logout-all`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${credentials.accessToken}` },
           redirect: 'manual',
         });
 
         const redirectUrl = response.headers.get('location');
-        if (redirectUrl) {
+        // Validate the server-controlled redirect before opening a browser: it
+        // must be http/https AND share the api-base origin. Otherwise skip it
+        // (never open an attacker-controlled or off-origin/non-web URL).
+        if (redirectUrl && isSafeLogoutRedirect(redirectUrl, apiBase)) {
           await open(redirectUrl);
         }
       } catch (err) {
@@ -496,6 +495,23 @@ export async function logoutCommand() {
 }
 
 /**
+ * Detect a network/connectivity failure (as opposed to an auth failure).
+ *
+ * `getCurrentUser` propagates the raw `fetch` rejection on connectivity
+ * failures — it only wraps non-2xx HTTP responses as `API error (status)` — so
+ * `cause.code` detection is reliable here.
+ */
+function isNetworkError(err) {
+  const code = err?.cause?.code ?? err?.code;
+  if (typeof code === 'string') {
+    return /^(ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|EHOSTUNREACH|ENETUNREACH|EPIPE|UND_ERR)/.test(
+      code,
+    );
+  }
+  return /fetch failed|network|getaddrinfo|socket hang up|dns/i.test(err?.message ?? '');
+}
+
+/**
  * Whoami command handler
  */
 export async function whoamiCommand(_options, command) {
@@ -503,23 +519,29 @@ export async function whoamiCommand(_options, command) {
     const user = await getCurrentUser(undefined, command);
     output(user, command);
   } catch (err) {
-    const apiKey = process.env.SPARK_API_KEY;
-    if (apiKey) {
+    // Connectivity failure: surface it on its own branch, distinct from auth.
+    // Do NOT emit an `authenticated` verdict — we never reached the server.
+    if (isNetworkError(err)) {
       output(
         {
-          authenticated: true,
-          method: 'environment_variable',
-          message: 'Authenticated via SPARK_API_KEY, but could not fetch user info',
+          reachable: false,
+          message: 'Could not reach Spark — check your network connection.',
           error: err.message,
         },
         command,
       );
-    } else if (credentialsExist()) {
+      return;
+    }
+
+    // Server was reachable: derive the configured auth mode. This covers the
+    // global `--api-key` flag, SPARK_API_KEY, a stored key, and OAuth.
+    const mode = getAuthMode(getApiBase(), { apiKey: getParentOptions(command).apiKey });
+    if (mode) {
       output(
         {
           authenticated: true,
-          method: 'oauth',
-          message: 'Credentials file exists, but could not fetch user info',
+          method: mode,
+          message: 'Authenticated, but could not fetch user info',
           error: err.message,
         },
         command,

@@ -5,7 +5,7 @@ import { VARIANTS } from '../../src/constants.js';
 import { setupCommandMocks, buildSetupDeps } from '../helpers.js';
 
 // Shared setup flow behavior (IDE selection, cancel handling, error resilience,
-// auth instructions) is tested via runInit in init.test.js since both use runSetupFlow.
+// auth instructions) is tested via runSetupFlow in init.test.js since both use runSetupFlow.
 // These tests verify only what's unique to enable: scope is always 'project'.
 
 describe('runEnable', () => {

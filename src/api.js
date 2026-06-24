@@ -2,177 +2,187 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { getApiBase, CALLBACK_PORT } from './constants.js';
-import { loadCredentials, saveCredentials, isTokenExpired } from './credentials.js';
-import { getOAuthEndpoints, getBearerMethods, getClientId } from './oauth.js';
+import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
+
+import { getApiBase, normalizeApiBase } from './constants.js';
+import { loadCredentials } from './credentials.js';
+import { SparkOAuthProvider, SESSION_EXPIRED_MESSAGE } from './oauth-provider.js';
 import { getParentOptions } from './output.js';
-import { tokenResponseSchema, toolResponseSchema } from './schemas.js';
+import { toolResponseSchema } from './schemas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
 
 /**
- * Refresh the access token using the refresh token
+ * Single internal resolver for both `getAuthToken` and `getAuthMode`.
+ *
+ * Walks the auth precedence ladder once and returns `{ token, mode }`:
+ *   - CLI flag (`options.apiKey`)        -> { token: flag,  mode: 'apikey' }
+ *   - `SPARK_API_KEY` env var            -> { token: env,   mode: 'apikey' }
+ *   - stored api key (`apiKey`/`token`)  -> { token: key,   mode: 'apikey' }
+ *   - stored OAuth `accessToken`         -> { token: access,mode: 'oauth'  }
+ *   - nothing available                  -> { token: null,  mode: null     }
+ *
+ * `getAuthToken` projects `.token`; `getAuthMode` projects `.mode`. The flag/env
+ * branches short-circuit before `loadCreds` is consulted, matching the original
+ * behavior of both functions. Performs NO refresh and never throws on missing
+ * credentials.
+ *
+ * @param {string} apiBase
+ * @param {object} options
+ * @param {string} [options.apiKey] - CLI `--api-key` flag value.
+ * @param {object} deps - DI override: { loadCreds }.
+ * @returns {{ token: string|null, mode: 'apikey'|'oauth'|null }}
  */
-export async function refreshToken(credentials, apiBase, local) {
-  if (!credentials?.refreshToken) {
-    throw new Error('No refresh token available');
-  }
+function resolveAuth(apiBase, options, deps) {
+  const { loadCreds = loadCredentials } = deps;
 
-  const { tokenEndpoint } = await getOAuthEndpoints(apiBase);
-  const clientId = await getClientId(`http://localhost:${CALLBACK_PORT}/callback`, apiBase);
-  const response = await fetch(tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      grant_type: 'refresh_token',
-      client_id: clientId,
-      refresh_token: credentials.refreshToken,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Token refresh failed: ${error}`);
-  }
-
-  const data = await response.json();
-  const parsed = tokenResponseSchema.parse(data);
-
-  const newCredentials = {
-    ...credentials,
-    accessToken: parsed.accessToken,
-    refreshToken: parsed.refreshToken || credentials.refreshToken,
-    expiresAt: parsed.expiresIn ? Date.now() + parsed.expiresIn * 1000 : null,
-    tokenType: 'Bearer',
-  };
-
-  saveCredentials(newCredentials, { local, apiBase });
-  return newCredentials;
-}
-
-/**
- * Get the auth token.
- * Priority: CLI flag > env var > OAuth token > credentials file (legacy apiKey)
- */
-export async function getAuthToken(apiBase, options = {}) {
   if (options.apiKey) {
-    return { type: 'apiKey', token: options.apiKey };
+    return { token: options.apiKey, mode: 'apikey' };
   }
 
   if (process.env.SPARK_API_KEY) {
-    return { type: 'apiKey', token: process.env.SPARK_API_KEY };
+    return { token: process.env.SPARK_API_KEY, mode: 'apikey' };
   }
 
-  const loaded = loadCredentials(apiBase, { withSource: true });
-  if (loaded.credentials) {
-    let { credentials } = loaded;
-    if (credentials.accessToken) {
-      if (isTokenExpired(credentials)) {
-        try {
-          credentials = await refreshToken(credentials, apiBase, loaded.local);
-        } catch (err) {
-          throw new Error(`Session expired. Please run 'spark login' again. (${err.message})`);
-        }
-      }
-      return { type: 'oauth', token: credentials.accessToken };
-    }
-
+  const credentials = loadCreds(apiBase);
+  if (credentials) {
     if (credentials.apiKey || credentials.token) {
-      return { type: 'apiKey', token: credentials.apiKey || credentials.token };
+      return { token: credentials.apiKey || credentials.token, mode: 'apikey' };
+    }
+    if (credentials.accessToken) {
+      return { token: credentials.accessToken, mode: 'oauth' };
     }
   }
 
-  return null;
+  return { token: null, mode: null };
 }
 
 /**
- * Apply auth to request headers/endpoint.
- * Returns the (possibly modified) endpoint.
+ * Resolve the auth token to use for a request.
+ *
+ * Priority: CLI flag (`options.apiKey`) > `SPARK_API_KEY` env var > stored api key
+ * (legacy `apiKey`/`token` in credentials) > stored OAuth access token.
+ *
+ * This is now a pure resolver: it performs NO proactive refresh. Refresh is
+ * reactive (driven by the SDK transport for MCP and by `getCurrentUser`'s one-shot
+ * `auth()` on 401 for REST). Returns the token string, or `null` when no auth is
+ * available. Never throws on missing credentials.
+ *
+ * @param {string} apiBase
+ * @param {object} [options]
+ * @param {string} [options.apiKey] - CLI `--api-key` flag value.
+ * @param {object} [deps] - DI override: { loadCreds }.
+ * @returns {Promise<string|null>}
  */
-export async function applyAuth(auth, headers, base, endpoint, deps = {}) {
-  const { bearerMethods: getBM = getBearerMethods } = deps;
+export async function getAuthToken(apiBase, options = {}, deps = {}) {
+  return resolveAuth(apiBase, options, deps).token;
+}
 
-  if (!auth) return endpoint;
+/**
+ * Determine the auth mode for a request without resolving/refreshing tokens.
+ *
+ * Returns `'apikey'` when an api key is present (CLI flag, `SPARK_API_KEY`, or a
+ * stored legacy api key), `'oauth'` when OAuth credentials exist for `apiBase`,
+ * otherwise `null`.
+ *
+ * Consumers (e.g. mcp-client.js) use this to decide whether to attach the OAuth
+ * provider to the transport (oauth) or send a static Bearer header (apikey).
+ *
+ * @param {string} apiBase
+ * @param {object} [options]
+ * @param {string} [options.apiKey] - CLI `--api-key` flag value.
+ * @param {object} [deps] - DI override: { loadCreds }.
+ * @returns {'apikey'|'oauth'|null}
+ */
+export function getAuthMode(apiBase, options = {}, deps = {}) {
+  return resolveAuth(apiBase, options, deps).mode;
+}
 
-  if (auth.type === 'oauth') {
-    const methods = await getBM(base);
-    const supported = new Set(methods || ['header', 'authorization_header']);
+/**
+ * Get current user info.
+ *
+ * Thin REST call: `GET ${apiBase}/api/internal/v1/user` with a Bearer token from
+ * `getAuthToken`. On a 401 in OAuth mode, refreshes ONCE via the SDK `auth()`
+ * orchestrator (using the stored refresh token) and retries the GET once. In
+ * api-key mode a 401 is never retried. Throws on a non-2xx response after the
+ * single retry, preserving the error/exit behavior callers rely on.
+ *
+ * @param {string} apiBase
+ * @param {object} [options] - resolution options. Accepts `{ apiKey }`, or a
+ *   commander `command` object (back-compat: `apiKey` is then read from the
+ *   parent command options).
+ * @param {object} [deps] - DI overrides: { getAuth, getMode, doFetch, runAuth,
+ *   makeProvider, schema }.
+ */
+export async function getCurrentUser(apiBase = getApiBase(), options = {}, deps = {}) {
+  const {
+    getAuth = getAuthToken,
+    getMode = getAuthMode,
+    doFetch = fetch,
+    runAuth = auth,
+    // Non-interactive provider (no browser pop on refresh failure). `{ local }`
+    // is threaded by the caller below from where the credentials were loaded.
+    makeProvider = (base, opts) => new SparkOAuthProvider(base, { ...opts, interactive: false }),
+    loadCreds = loadCredentials,
+    schema = toolResponseSchema,
+  } = deps;
 
-    if (supported.has('header') || supported.has('authorization_header')) {
-      headers['Authorization'] = `Bearer ${auth.token}`;
-    } else if (supported.has('query')) {
-      const requestUrl = new URL(`${base}${endpoint}`);
-      requestUrl.searchParams.set('access_token', auth.token);
-      return `${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
-    } else {
-      throw new Error('OAuth bearer method not supported by server');
-    }
-  } else {
-    headers['Authorization'] = `Bearer ${auth.token}`;
+  const base = normalizeApiBase(apiBase) || getApiBase();
+
+  // Back-compat: a commander `command` may be passed as `options` (the old
+  // signature). Detect it and resolve `--api-key` from the parent options.
+  const resolved = isCommand(options)
+    ? { apiKey: getParentOptions(options).apiKey }
+    : options || {};
+
+  const token = await getAuth(base, { apiKey: resolved.apiKey });
+  if (!token) {
+    throw new Error("Not authenticated. Please run 'spark login' first.");
   }
 
-  return endpoint;
-}
+  const mode = getMode(base, { apiKey: resolved.apiKey });
 
-/**
- * Attempt token refresh and retry the request on 401.
- * Returns the retried response, or throws if refresh fails.
- */
-export async function retryWithRefresh(base, endpoint, options, deps = {}) {
-  const { loadCreds = loadCredentials, refresh = refreshToken, doFetch = fetch } = deps;
-
-  const loaded = loadCreds(base, { withSource: true });
-  try {
-    const newCredentials = await refresh(loaded.credentials, base, loaded.local);
-    const auth = { type: 'oauth', token: newCredentials.accessToken };
-    // Clear stale Authorization header before re-applying auth
-    delete options.headers['Authorization'];
-    const retryEndpoint = await applyAuth(auth, options.headers, base, endpoint, deps);
-    return await doFetch(`${base}${retryEndpoint}`, options);
-  } catch {
-    throw new Error("Session expired. Please run 'spark login' again.");
-  }
-}
-
-/**
- * Make an API request to the Spark backend
- */
-export async function apiRequest(
-  endpoint,
-  apiBase,
-  method = 'GET',
-  body = null,
-  command = null,
-  deps = {},
-) {
-  const { getAuth = getAuthToken, doFetch = fetch, schema = toolResponseSchema } = deps;
-
-  const base = (typeof apiBase === 'string' ? apiBase.replace(/\/+$/, '') : null) || getApiBase();
-  const parentOpts = command ? getParentOptions(command) : {};
-  const auth = await getAuth(base, { apiKey: parentOpts.apiKey });
-
-  const headers = {
+  const url = `${base}/api/internal/v1/user`;
+  const baseHeaders = () => ({
     'Content-Type': 'application/json',
     'User-Agent': `spark-cli/${pkg.version}`,
     'X-CLI-VERSION': pkg.version,
-  };
+  });
+  const doGet = (bearer) =>
+    doFetch(url, {
+      method: 'GET',
+      headers: { ...baseHeaders(), Authorization: `Bearer ${bearer}` },
+    });
 
-  const requestEndpoint = await applyAuth(auth, headers, base, endpoint, deps);
+  let response = await doGet(token);
 
-  const options = { method, headers };
-  if (body) {
-    options.body = JSON.stringify(body);
-  }
-
-  const url = `${base}${requestEndpoint}`;
-  let response = await doFetch(url, options);
-
-  if (response.status === 401 && auth?.type === 'oauth') {
-    response = await retryWithRefresh(base, endpoint, options, deps);
+  // OAuth-only reactive refresh: on 401, run auth() once (refreshes via the
+  // provider's stored refresh token), re-read the token, retry once. API-key auth
+  // is never retried.
+  //
+  // The refresh provider must write the new token back to the SAME settings file
+  // the credentials were loaded from (local vs global), so thread `{ local }` from
+  // the credential source rather than letting saveCredentials auto-detect.
+  if (response.status === 401 && mode === 'oauth') {
+    const { local } = loadCreds(base, { withSource: true });
+    const provider = makeProvider(base, { local });
+    try {
+      // The non-interactive provider THROWS rather than opening a browser if the
+      // refresh token is also dead, so a stale-token retry can never happen.
+      const result = await runAuth(provider, { serverUrl: `${base}/mcp` });
+      if (result !== 'AUTHORIZED') {
+        throw new Error('refresh did not authorize');
+      }
+      const fresh = provider.tokens();
+      if (!fresh?.access_token) {
+        throw new Error('no token');
+      }
+      response = await doGet(fresh.access_token);
+    } catch {
+      throw new Error(SESSION_EXPIRED_MESSAGE);
+    }
   }
 
   if (!response.ok) {
@@ -190,50 +200,20 @@ export async function apiRequest(
       })
       .join('; ');
     throw new Error(
-      `API response validation failed for ${method} ${url} (${response.status}): ${issues}`,
+      `API response validation failed for GET ${url} (${response.status}): ${issues}`,
     );
   }
   return result.data;
 }
 
 /**
- * Call a Spark API tool (mirrors MCP tool interface)
+ * Heuristic: is `value` a commander Command instance (back-compat for the old
+ * `getCurrentUser(apiBase, command)` signature) rather than a plain options bag?
+ *
+ * Gate on `opts` being a function: a plain options bag can legitimately carry
+ * `parent: null` (e.g. `{ apiKey, parent: null }`), which the older
+ * `parent !== undefined` check misrouted as a command and dropped `--api-key`.
  */
-export async function callTool(toolName, params, command = null) {
-  return apiRequest(`/api/internal/v1/tools/${toolName}`, undefined, 'POST', params, command);
-}
-
-/**
- * Query for recommendations
- */
-export async function getRecommendation(query, tags = [], command = null) {
-  return callTool('search', { query, tags }, command);
-}
-
-/**
- * Share an insight/solution
- */
-export async function shareInsight(params, command = null) {
-  return callTool('enrich_memory', params, command);
-}
-
-/**
- * Share a task with insights
- */
-export async function shareTask(params, command = null) {
-  return callTool('create_memory', params, command);
-}
-
-/**
- * Share feedback on recommendations
- */
-export async function shareFeedback(sessionId, feedback, command = null) {
-  return callTool('share_feedback', { session_id: sessionId, feedback }, command);
-}
-
-/**
- * Get current user info
- */
-export async function getCurrentUser(apiBase, command = null) {
-  return apiRequest('/api/internal/v1/user', apiBase, 'GET', null, command);
+function isCommand(value) {
+  return !!value && typeof value.opts === 'function';
 }

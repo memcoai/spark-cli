@@ -30,7 +30,7 @@ function assertSkillsVersionNotPersisted(deps) {
   assert.strictEqual(deps.writeKey.mock.calls.length, 0);
 }
 
-describe('updateCommand', () => {
+describe('runUpdate', () => {
   const mocks = setupCommandMocks();
 
   it('shows already on latest when version is unchanged and registry matches', async () => {

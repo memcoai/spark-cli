@@ -15,16 +15,6 @@ const MEMCO_LOGO = `
 
 `;
 
-// Spark branding
-const SPARK_LOGO = `
-   ███████╗ ██████╗   █████╗  ██████╗  ██╗  ██╗
-   ██╔════╝ ██╔══██╗ ██╔══██╗ ██╔══██╗ ██║ ██╔╝
-   ███████╗ ██████╔╝ ███████║ ██████╔╝ █████╔╝
-   ╚════██║ ██╔═══╝  ██╔══██║ ██╔══██╗ ██╔═██╗
-   ███████║ ██║      ██║  ██║ ██║  ██║ ██║  ██╗
-   ╚══════╝ ╚═╝      ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝
-`;
-
 // Privacy and feature info box
 const INFO_BOX = `
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -56,20 +46,6 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
 export function colorize(code, text) {
   if (process.env.NO_COLOR) return text;
   return `${code}${text}\x1b[0m`;
-}
-
-/**
- * Print the Memco logo with colors
- */
-export function printMemcoLogo() {
-  console.log(colorize('\x1b[32m', MEMCO_LOGO));
-}
-
-/**
- * Print the Spark logo
- */
-export function printSparkLogo() {
-  console.log(colorize('\x1b[33m', SPARK_LOGO));
 }
 
 /**
@@ -129,22 +105,3 @@ export function createSpinner(message) {
     },
   };
 }
-
-/**
- * Print a styled box with content
- */
-export function printBox(title, content) {
-  const lines = content.split('\n');
-  const maxLen = Math.max(title.length, ...lines.map((l) => l.length));
-  const width = maxLen + 4;
-
-  console.log('┌' + '─'.repeat(width) + '┐');
-  console.log('│ ' + colorize('\x1b[1m', title.padEnd(width - 2)) + ' │');
-  console.log('├' + '─'.repeat(width) + '┤');
-  for (const line of lines) {
-    console.log('│ ' + line.padEnd(width - 2) + ' │');
-  }
-  console.log('└' + '─'.repeat(width) + '┘');
-}
-
-export { MEMCO_LOGO, SPARK_LOGO, INFO_BOX, SPINNER_FRAMES };

@@ -1,5 +1,11 @@
 import { existsSync } from 'node:fs';
-import { DEFAULT_API_BASE, getApiBase, SETTINGS_PATH, LOCAL_SETTINGS_PATH } from './constants.js';
+import {
+  DEFAULT_API_BASE,
+  getApiBase,
+  normalizeApiBase,
+  SETTINGS_PATH,
+  LOCAL_SETTINGS_PATH,
+} from './constants.js';
 import { readSettingsKey, writeSettingsKey } from './settings.js';
 
 const defaultDeps = {
@@ -9,19 +15,43 @@ const defaultDeps = {
   exists: existsSync,
 };
 
-function normalizeUrl(url) {
-  return typeof url === 'string' ? url.replace(/\/+$/, '') : null;
+/**
+ * Resolve the active settings.json path using the local-first write policy:
+ * local (`./.spark/settings.json`) when an explicit `local` flag says so OR when a
+ * local settings FILE exists, otherwise global (`~/.spark/settings.json`).
+ *
+ * Single home for the local-vs-global write-location decision shared by
+ * `saveCredentials` (here) and `tool-manifest.js`'s `getActiveSettingsPath`, so the
+ * manifest lands next to the credentials it depends on. The injectable `exists`
+ * dependency preserves the settings-FILE-existence DI seam both call sites rely on.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.local] - explicit override; when undefined, auto-detect.
+ * @param {(path: string) => boolean} [options.exists] - settings-file existence check.
+ * @returns {string} LOCAL_SETTINGS_PATH or SETTINGS_PATH
+ */
+export function resolveActiveSettingsPath({ local, exists = existsSync } = {}) {
+  const isLocal = local ?? exists(LOCAL_SETTINGS_PATH);
+  return isLocal ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
 }
 
 /**
- * Migrate flat credentials to per-URL format if needed.
- * If `credentials` is a flat object (has accessToken/apiKey/refreshToken at top level),
- * wraps it under the DEFAULT_API_BASE key and writes back.
+ * True when `creds` is in the legacy flat (pre-per-URL) shape: auth fields live at
+ * the top level instead of under an apiBase key. Used to decide when to migrate.
+ */
+function isFlatCredentials(creds) {
+  return !!(creds && (creds.accessToken || creds.apiKey || creds.refreshToken || creds.token));
+}
+
+/**
+ * Read all credentials from a settings path, migrating flat -> per-URL if needed.
+ * If the stored value is a flat object (auth fields at top level), wraps it under
+ * the DEFAULT_API_BASE key, writes it back, and returns the per-URL object.
  * Returns the (possibly migrated) credentials object.
  */
 function migrateCredentials(settingsPath, deps) {
   const creds = deps.readKey(settingsPath, 'credentials');
-  if (creds && (creds.accessToken || creds.apiKey || creds.refreshToken || creds.token)) {
+  if (isFlatCredentials(creds)) {
     const migrated = { [DEFAULT_API_BASE]: creds };
     deps.writeKey(settingsPath, 'credentials', migrated);
     return migrated;
@@ -30,19 +60,12 @@ function migrateCredentials(settingsPath, deps) {
 }
 
 /**
- * Read all credentials from a settings path, migrating if needed.
- */
-function readAllCredentials(settingsPath, deps) {
-  return migrateCredentials(settingsPath, deps);
-}
-
-/**
  * Load credentials from local (.spark/) only — no global fallback.
  */
 export function loadLocalCredentials(apiBase, deps = defaultDeps) {
   const d = { ...defaultDeps, ...deps };
-  const url = normalizeUrl(apiBase) || d.getBase();
-  const all = readAllCredentials(LOCAL_SETTINGS_PATH, d);
+  const url = normalizeApiBase(apiBase) || d.getBase();
+  const all = migrateCredentials(LOCAL_SETTINGS_PATH, d);
   return all?.[url] || null;
 }
 
@@ -54,12 +77,12 @@ export function loadLocalCredentials(apiBase, deps = defaultDeps) {
  */
 export function loadCredentials(apiBase, { withSource = false, ...deps } = {}) {
   const d = { ...defaultDeps, ...deps };
-  const url = normalizeUrl(apiBase) || d.getBase();
+  const url = normalizeApiBase(apiBase) || d.getBase();
   for (const [path, isLocal] of [
     [LOCAL_SETTINGS_PATH, true],
     [SETTINGS_PATH, false],
   ]) {
-    const all = readAllCredentials(path, d);
+    const all = migrateCredentials(path, d);
     if (all?.[url]) {
       return withSource ? { credentials: all[url], local: isLocal } : all[url];
     }
@@ -77,15 +100,11 @@ export function loadCredentials(apiBase, { withSource = false, ...deps } = {}) {
  */
 export function saveCredentials(credentials, { local, apiBase, ...deps } = {}) {
   const d = { ...defaultDeps, ...deps };
-  const isLocal = local ?? d.exists(LOCAL_SETTINGS_PATH);
-  const path = isLocal ? LOCAL_SETTINGS_PATH : SETTINGS_PATH;
-  const url = normalizeUrl(apiBase) || d.getBase();
+  const path = resolveActiveSettingsPath({ local, exists: d.exists });
+  const url = normalizeApiBase(apiBase) || d.getBase();
   const all = d.readKey(path, 'credentials') || {};
   // If all is in old flat format, start fresh per-URL object
-  const perUrl =
-    all.accessToken || all.apiKey || all.refreshToken || all.token
-      ? { [DEFAULT_API_BASE]: all }
-      : all;
+  const perUrl = isFlatCredentials(all) ? { [DEFAULT_API_BASE]: all } : all;
   perUrl[url] = credentials;
   d.writeKey(path, 'credentials', perUrl);
 }
@@ -95,9 +114,9 @@ export function saveCredentials(credentials, { local, apiBase, ...deps } = {}) {
  */
 export function credentialsExist(apiBase, deps = defaultDeps) {
   const d = { ...defaultDeps, ...deps };
-  const url = normalizeUrl(apiBase) || d.getBase();
+  const url = normalizeApiBase(apiBase) || d.getBase();
   for (const path of [LOCAL_SETTINGS_PATH, SETTINGS_PATH]) {
-    const all = readAllCredentials(path, d);
+    const all = migrateCredentials(path, d);
     if (all?.[url]) return true;
   }
   return false;
@@ -110,12 +129,12 @@ export function credentialsExist(apiBase, deps = defaultDeps) {
  */
 export function removeCredentials(apiBase, deps = defaultDeps) {
   const d = { ...defaultDeps, ...deps };
-  const url = normalizeUrl(apiBase) || d.getBase();
+  const url = normalizeApiBase(apiBase) || d.getBase();
   for (const [path, label] of [
     [LOCAL_SETTINGS_PATH, 'local'],
     [SETTINGS_PATH, 'global'],
   ]) {
-    const all = readAllCredentials(path, d);
+    const all = migrateCredentials(path, d);
     if (all?.[url]) {
       delete all[url];
       d.writeKey(path, 'credentials', Object.keys(all).length > 0 ? all : null);

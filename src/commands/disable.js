@@ -4,6 +4,19 @@ import { LOCAL_SETTINGS_PATH, resolveVariant } from '../constants.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 import { uninstallClaudePlugin, uninstallOtherIDEs, removeInitData } from './uninstall.js';
 import { detectVariant } from '../variant.js';
+import { IDES } from '../ides.js';
+
+/**
+ * Per-IDE project-scoped teardown handlers used by `spark disable`. Global-only IDEs
+ * (Codex) are intentionally absent — they are shared across projects and removed only by
+ * `spark uninstall`, so a project-scoped disable must never tear them down.
+ */
+const DISABLE_BY_KEY = {
+  claude: ({ execAsync, variant }) =>
+    uninstallClaudePlugin('project', { exec: execAsync, variant }),
+  other: ({ spawnInteractive, variant }) =>
+    uninstallOtherIDEs('project', { spawnInteractive, variant }),
+};
 
 /**
  * Core disable logic — removes Spark from the current project.
@@ -36,16 +49,13 @@ export async function runDisable({
     }
   }
 
-  const scope = 'project';
-
   // Codex is global-only (tracked in globalInit, never in per-project init), so a project-scoped
   // disable never removes it — it is shared across projects and removed only by `spark uninstall`.
-  if (initData.ides.includes('claude')) {
-    await uninstallClaudePlugin(scope, { exec: execAsync, variant });
-  }
-
-  if (initData.ides.includes('other')) {
-    await uninstallOtherIDEs(scope, { spawnInteractive, variant });
+  // The table drives the iteration; global-only descriptors have no DISABLE_BY_KEY handler.
+  for (const ide of IDES) {
+    if (ide.globalOnly) continue;
+    if (!initData.ides.includes(ide.key)) continue;
+    await DISABLE_BY_KEY[ide.key]({ execAsync, spawnInteractive, variant });
   }
 
   removeInitData(LOCAL_SETTINGS_PATH, 'init', { readKey, writeKey });

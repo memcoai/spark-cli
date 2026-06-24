@@ -1,8 +1,7 @@
 {
   "name": "@memco/spark",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "CLI for Spark - Collective knowledge network for AI coding agents",
-  "main": "src/index.js",
   "bin": {
     "spark": "./bin/spark.js"
   },
@@ -39,6 +38,7 @@
     "node": ">=20.17.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
     "commander": "^12.0.0",
     "open": "^11.0.0",
     "semver": "^7.7.4",
