@@ -381,6 +381,135 @@ describe('tool-commands', () => {
   });
 
   // =========================================================================
+  // Stale-schema self-heal: a SERVER validation error force-refreshes the manifest
+  // =========================================================================
+  describe('schema-validation refresh', () => {
+    const mocks = setupCommandMocks();
+    const API = 'https://spark.memco.ai';
+
+    it('isError with a validation message → refresh(apiBase) then exit 1', async () => {
+      const refresh = mock.fn(async () => ({}));
+      const callTool = mock.fn(async () => ({
+        isError: true,
+        content: [{ type: 'text', text: 'invalid argument: query must be a string' }],
+      }));
+      const action = makeToolAction(queryTool, {
+        callTool,
+        validate: okValidate,
+        getBase: () => API,
+        refresh,
+      });
+
+      await action({ query: 'q' }, null);
+
+      assert.strictEqual(refresh.mock.calls.length, 1, 'refresh called once on validation error');
+      assert.strictEqual(refresh.mock.calls[0].arguments[0], API, 'refresh called with apiBase');
+      assert.strictEqual(mocks.exitMock.mock.calls.length, 1, 'still exits 1');
+      const out = getErrorOutput(mocks.logMock);
+      assert.match(out.message, /invalid argument/);
+    });
+
+    it('isError with a NON-validation message → refresh NOT called, exit 1', async () => {
+      const refresh = mock.fn(async () => ({}));
+      const callTool = mock.fn(async () => ({
+        isError: true,
+        content: [{ type: 'text', text: 'memory not found' }],
+      }));
+      const action = makeToolAction(queryTool, {
+        callTool,
+        validate: okValidate,
+        getBase: () => API,
+        refresh,
+      });
+
+      await action({ query: 'q' }, null);
+
+      assert.strictEqual(refresh.mock.calls.length, 0, 'no refresh on a non-schema error');
+      assert.strictEqual(mocks.exitMock.mock.calls.length, 1, 'still exits 1');
+      const out = getErrorOutput(mocks.logMock);
+      assert.match(out.message, /memory not found/);
+    });
+
+    it('callTool throws with code -32602 (InvalidParams) → refresh(apiBase) called', async () => {
+      const refresh = mock.fn(async () => ({}));
+      const callTool = mock.fn(async () => {
+        const err = new Error('Invalid params');
+        err.code = -32602;
+        throw err;
+      });
+      const action = makeToolAction(queryTool, {
+        callTool,
+        validate: okValidate,
+        getBase: () => API,
+        refresh,
+      });
+
+      await action({ query: 'q' }, null);
+
+      assert.strictEqual(refresh.mock.calls.length, 1, 'refresh called on -32602');
+      assert.strictEqual(refresh.mock.calls[0].arguments[0], API);
+      assert.strictEqual(mocks.exitMock.mock.calls.length, 1, 'still exits 1');
+    });
+
+    it('callTool throws a non-validation (network) error → refresh NOT called', async () => {
+      const refresh = mock.fn(async () => ({}));
+      const callTool = mock.fn(async () => {
+        throw new Error('network down');
+      });
+      const action = makeToolAction(queryTool, {
+        callTool,
+        validate: okValidate,
+        getBase: () => API,
+        refresh,
+      });
+
+      await action({ query: 'q' }, null);
+
+      assert.strictEqual(refresh.mock.calls.length, 0, 'no refresh on a network error');
+      assert.strictEqual(mocks.exitMock.mock.calls.length, 1);
+      const out = getErrorOutput(mocks.logMock);
+      assert.match(out.message, /network down/);
+    });
+
+    it('a successful call does NOT refresh', async () => {
+      const refresh = mock.fn(async () => ({}));
+      const callTool = mock.fn(async () => ({ results: [] }));
+      const action = makeToolAction(queryTool, {
+        callTool,
+        validate: okValidate,
+        getBase: () => API,
+        refresh,
+      });
+
+      await action({ query: 'q' }, { parent: null, opts: () => ({}) });
+
+      assert.strictEqual(refresh.mock.calls.length, 0, 'no refresh on success');
+      assert.strictEqual(mocks.exitMock.mock.calls.length, 0, 'no error exit on success');
+    });
+
+    it('a client-side invalid-args rejection does NOT refresh (never reaches callTool)', async () => {
+      const refresh = mock.fn(async () => ({}));
+      const callTool = mock.fn(async () => ({ ok: true }));
+      const validate = mock.fn(() => ({
+        valid: false,
+        errors: ['must have required property query'],
+      }));
+      const action = makeToolAction(queryTool, {
+        callTool,
+        validate,
+        getBase: () => API,
+        refresh,
+      });
+
+      await action({}, null);
+
+      assert.strictEqual(callTool.mock.calls.length, 0, 'callTool never reached');
+      assert.strictEqual(refresh.mock.calls.length, 0, 'no refresh on a client-side rejection');
+      assert.strictEqual(mocks.exitMock.mock.calls.length, 1, 'exit 1');
+    });
+  });
+
+  // =========================================================================
   // Happy path (AC5/AC12/AC14): valid args reach callTool once + output prints
   // =========================================================================
   describe('happy path', () => {

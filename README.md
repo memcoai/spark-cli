@@ -306,28 +306,6 @@ spark query "error" \
   --xml-tag '<tag type="language" name="python" version="3.11" />'
 ```
 
-## Programmatic Use
-
-```javascript
-import { getRecommendation, shareInsight } from '@memco/spark';
-
-// Query for solutions
-const result = await getRecommendation("TypeError: Cannot read property 'map' of undefined", [
-  '<tag type="language" name="node" version="20" />',
-  '<tag type="domain" name="web" />',
-]);
-
-// Share a solution
-await shareInsight({
-  title: 'Fixed React map error',
-  content: 'The array was undefined, needed to initialize with []',
-  tags: [
-    '<tag type="framework" name="react" version="18" />',
-    '<tag type="error_type" name="TypeError" />',
-  ],
-});
-```
-
 ## Privacy
 
 - **Only error messages and solutions are shared** - no source code

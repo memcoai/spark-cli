@@ -28,7 +28,6 @@ import { fetchToolManifest } from '../tool-manifest.js';
 import {
   loadCredentials,
   loadLocalCredentials,
-  credentialsExist,
   removeCredentials,
   isTokenExpired,
 } from '../credentials.js';
@@ -496,6 +495,23 @@ export async function logoutCommand() {
 }
 
 /**
+ * Detect a network/connectivity failure (as opposed to an auth failure).
+ *
+ * `getCurrentUser` propagates the raw `fetch` rejection on connectivity
+ * failures — it only wraps non-2xx HTTP responses as `API error (status)` — so
+ * `cause.code` detection is reliable here.
+ */
+function isNetworkError(err) {
+  const code = err?.cause?.code ?? err?.code;
+  if (typeof code === 'string') {
+    return /^(ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|EHOSTUNREACH|ENETUNREACH|EPIPE|UND_ERR)/.test(
+      code,
+    );
+  }
+  return /fetch failed|network|getaddrinfo|socket hang up|dns/i.test(err?.message ?? '');
+}
+
+/**
  * Whoami command handler
  */
 export async function whoamiCommand(_options, command) {
@@ -503,27 +519,29 @@ export async function whoamiCommand(_options, command) {
     const user = await getCurrentUser(undefined, command);
     output(user, command);
   } catch (err) {
-    const apiKey = process.env.SPARK_API_KEY;
-    if (apiKey) {
+    // Connectivity failure: surface it on its own branch, distinct from auth.
+    // Do NOT emit an `authenticated` verdict — we never reached the server.
+    if (isNetworkError(err)) {
       output(
         {
-          authenticated: true,
-          method: 'environment_variable',
-          message: 'Authenticated via SPARK_API_KEY, but could not fetch user info',
+          reachable: false,
+          message: 'Could not reach Spark — check your network connection.',
           error: err.message,
         },
         command,
       );
-    } else if (credentialsExist()) {
-      // Derive the session type from the stored credentials rather than assuming
-      // OAuth — a legacy stored api key would otherwise be mislabeled 'oauth'.
-      const apiKeyFlag = getParentOptions(command).apiKey;
-      const method = getAuthMode(getApiBase(), { apiKey: apiKeyFlag }) ?? 'oauth';
+      return;
+    }
+
+    // Server was reachable: derive the configured auth mode. This covers the
+    // global `--api-key` flag, SPARK_API_KEY, a stored key, and OAuth.
+    const mode = getAuthMode(getApiBase(), { apiKey: getParentOptions(command).apiKey });
+    if (mode) {
       output(
         {
           authenticated: true,
-          method,
-          message: 'Credentials file exists, but could not fetch user info',
+          method: mode,
+          message: 'Authenticated, but could not fetch user info',
           error: err.message,
         },
         command,

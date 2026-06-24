@@ -9,13 +9,13 @@ import { toolManifestCacheSchema } from './schemas.js';
  * Tool manifest TTL cache. Mirrors the `update-check.js` cache shape
  * (`getCached*` / `fetch*` / `check*`) — the manifest snapshot of the MCP
  * server's `tools/list` is stored under the `toolManifest` settings key,
- * keyed/validated by `apiBase`, with a 24h TTL. It is populated eagerly at
+ * keyed/validated by `apiBase`, with a 1h TTL. It is populated eagerly at
  * login/init and read offline (zero network) for `--help` / command
  * registration. All reads fail open: a missing or corrupt cache yields `null`
  * (callers print the existing `spark login` guidance), never a throw.
  */
 
-export const TOOL_MANIFEST_TTL_MS = 24 * 60 * 60 * 1000;
+export const TOOL_MANIFEST_TTL_MS = 60 * 60 * 1000;
 
 const defaultDeps = {
   readKey: readSettingsKey,

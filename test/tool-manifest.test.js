@@ -59,8 +59,8 @@ const serverTools = [
 
 describe('tool-manifest', () => {
   describe('constants', () => {
-    it('TTL is 24h', () => {
-      assert.strictEqual(TOOL_MANIFEST_TTL_MS, 24 * 60 * 60 * 1000);
+    it('TTL is 1h', () => {
+      assert.strictEqual(TOOL_MANIFEST_TTL_MS, 60 * 60 * 1000);
     });
   });
 

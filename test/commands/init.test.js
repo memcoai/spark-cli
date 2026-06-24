@@ -312,11 +312,26 @@ describe('runSetupFlow', () => {
     ]);
   });
 
-  it('populates the tool manifest cache after successful setup', async () => {
+  it('populates the tool manifest cache after successful setup (project scope writes locally)', async () => {
     const fetchManifest = mock.fn(async () => ({ tools: [], checkedAt: 0, apiBase: '' }));
     await runSetupFlow(defaultDeps({ fetchManifest }));
 
     assert.strictEqual(fetchManifest.mock.calls.length, 1);
+    // Project scope must force a local manifest write rather than auto-detecting.
+    assert.deepStrictEqual(fetchManifest.mock.calls[0].arguments[1], { local: true });
+  });
+
+  it('writes the tool manifest globally when global scope is chosen', async () => {
+    const fetchManifest = mock.fn(async () => ({ tools: [], checkedAt: 0, apiBase: '' }));
+    await runSetupFlow(
+      defaultDeps({
+        fetchManifest,
+        promptChoice: mock.fn(async () => 'Global (all projects)'),
+      }),
+    );
+
+    assert.strictEqual(fetchManifest.mock.calls.length, 1);
+    assert.deepStrictEqual(fetchManifest.mock.calls[0].arguments[1], { local: false });
   });
 
   it('does not abort init when the tool manifest fetch fails (fail-open)', async () => {

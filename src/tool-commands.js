@@ -2,16 +2,23 @@ import { collectTags, parseSources, parseFeedbackEntries } from './parse-tags.js
 import { output, outputError } from './output.js';
 import { callMcpTool, validateArgs } from './mcp-client.js';
 import { getApiBase } from './constants.js';
+import { fetchToolManifest } from './tool-manifest.js';
 
 /**
  * Default dependencies for the generic tool action. Injectable for tests so the
  * dynamic command layer can be exercised with no live server (mirrors the `deps`
  * pattern used by `apiRequest`/`mcp-client`/`tool-manifest`).
+ *
+ * `refresh` force-fetches + writes the manifest (ignoring TTL) and is itself
+ * fail-open — used to self-heal a stale cached `inputSchema` when the server
+ * rejects `tools/call` args as invalid. No import cycle: tool-manifest does not
+ * import tool-commands.
  */
 const defaultDeps = {
   callTool: callMcpTool,
   validate: validateArgs,
   getBase: getApiBase,
+  refresh: fetchToolManifest,
 };
 
 const TAGS_FLAGS_DESCRIPTION =
@@ -253,6 +260,35 @@ function toolErrorMessage(result) {
 }
 
 /**
+ * Heuristic for "the server rejected our args because the schema is wrong/stale".
+ * A precise JSON-RPC InvalidParams (-32602) is the strongest signal; otherwise we
+ * sniff the error text for validation/schema language. Used to decide whether to
+ * force-refresh the cached manifest so the NEXT invocation registers the tool with
+ * the server's current schema (stale-schema self-heal).
+ */
+const VALIDATION_HINT =
+  /\b(validation|schema)\b|invalid (argument|parameter|param|input|value|propert)|required (propert|field|argument|parameter)|must (be|have|match)|does ?n['’]?t match|unexpected (propert|field)/i;
+
+function isSchemaValidationError(errOrResult) {
+  if (errOrResult?.code === -32602) return true; // JSON-RPC InvalidParams (precise signal)
+  const text =
+    typeof errOrResult?.message === 'string' ? errOrResult.message : toolErrorMessage(errOrResult);
+  return VALIDATION_HINT.test(text || '');
+}
+
+/**
+ * When the server rejects args as invalid, our cached `inputSchema` is likely
+ * stale — force a manifest refresh (ignoring TTL) so the NEXT invocation registers
+ * the tool with the server's current schema. Fail-open: a refresh failure must not
+ * mask the original error. Awaited BEFORE outputError (which calls process.exit).
+ */
+async function maybeRefreshOnInvalidSchema(d, apiBase, errOrResult) {
+  if (isSchemaValidationError(errOrResult)) {
+    await d.refresh(apiBase).catch(() => {});
+  }
+}
+
+/**
  * Build the generic async action handler for a single tool. The handler:
  *   1. assembles the `arguments` object purely from flags (special cases applied),
  *   2. validates client-side against the cached `tool.inputSchema` and, on failure,
@@ -276,9 +312,10 @@ export function makeToolAction(tool, deps = {}) {
     // commander passes: (options, command) — no positional arguments.
     const command = handlerArgs.at(-1);
     const options = handlerArgs.at(-2) ?? {};
+    // Hoisted above the try so it is available in the catch for a refresh.
+    const apiBase = d.getBase();
 
     try {
-      const apiBase = d.getBase();
       const argsObject = buildArgs(tool, options);
 
       // Validate against the cached schema captured at registration. The server
@@ -296,12 +333,14 @@ export function makeToolAction(tool, deps = {}) {
       // The SDK signals tool-level failures as { isError: true } over HTTP 200
       // (it does NOT throw), so route those through outputError for exit 1.
       if (result?.isError === true) {
+        await maybeRefreshOnInvalidSchema(d, apiBase, result);
         outputError(new Error(toolErrorMessage(result)), command);
         return;
       }
 
       output(result, command);
     } catch (err) {
+      await maybeRefreshOnInvalidSchema(d, apiBase, err);
       outputError(err, command);
     }
   };

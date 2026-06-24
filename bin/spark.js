@@ -26,7 +26,7 @@ import {
 } from '../src/update-check.js';
 import { setVersionNotification, printVersionNotification } from '../src/output.js';
 import { VARIANTS, resolveVariant, getVariantKey, getApiBase } from '../src/constants.js';
-import { getManifestForRegistration } from '../src/tool-manifest.js';
+import { getManifestForRegistration, checkToolManifest } from '../src/tool-manifest.js';
 import { registerToolCommands } from '../src/tool-commands.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -129,7 +129,7 @@ program.hook('preAction', (thisCommand, actionCommand) => {
   });
 });
 
-program.hook('postAction', async () => {
+program.hook('postAction', async (thisCommand, actionCommand) => {
   if (compatCheckPromise) {
     await compatCheckPromise;
   }
@@ -140,6 +140,14 @@ program.hook('postAction', async () => {
     await skillsCheckPromise;
   }
   printVersionNotification();
+
+  // Refresh the manifest cache only after a DYNAMIC tool command, and only when
+  // the TTL has lapsed: checkToolManifest is a no-op cache read when fresh (no
+  // network). Fail-open. Lifecycle commands and offline `--help`/`--version`
+  // (no action → no postAction hook) never trigger an MCP connect.
+  if (actionCommand && !STATIC_COMMAND_NAMES.has(actionCommand.name())) {
+    await checkToolManifest(getApiBase()).catch(() => null);
+  }
 });
 
 // Auth commands
@@ -177,6 +185,13 @@ program
   .command('status')
   .description('Verify Spark setup and authentication')
   .action(statusCommand);
+
+// Snapshot the static (lifecycle) command names BEFORE registering dynamic tool
+// commands so the postAction hook can distinguish lifecycle commands from dynamic
+// tool commands. STATIC_COMMAND_NAMES is declared after the hook, but the hook only
+// runs during program.parse() (after this declaration executes), so the closure
+// reference is safe — keep program.parse() last.
+const STATIC_COMMAND_NAMES = new Set(program.commands.map((c) => c.name()));
 
 // Dynamic tool commands derived from the cached MCP tool manifest (offline, no network).
 // Empty/foreign cache => no dynamic commands are registered (a login hint is shown instead).

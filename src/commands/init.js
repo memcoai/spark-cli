@@ -451,7 +451,7 @@ export async function runSetupFlow({
 
   // Step 4b: Populate the tool manifest cache so offline --help is fresh (best-effort, fail-open).
   try {
-    await fetchManifest(getApiBase());
+    await fetchManifest(getApiBase(), { local: scope === 'project' });
   } catch {
     // Non-blocking — a manifest fetch failure must never abort init
   }
