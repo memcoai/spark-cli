@@ -89,8 +89,8 @@ export function getVersionNotification(latestInfo) {
   const current = getLocalVersion();
   const latest = latestInfo.version;
 
-  const cur = semver.valid(semver.coerce(current));
-  const lat = semver.valid(semver.coerce(latest));
+  const cur = coerceVersion(current);
+  const lat = coerceVersion(latest);
   if (!cur || !lat || !semver.lt(cur, lat)) return null;
 
   return {
@@ -115,7 +115,7 @@ export function getCachedCompatibility() {
  * Fetch compatibility info from the backend and cache it.
  * Returns { data, checkedAt } or null on failure. Never rejects.
  */
-export async function fetchCompatibility() {
+async function fetchCompatibility() {
   try {
     const response = await fetch(`${getApiBase()}/api/cli/compatibility`, {
       signal: AbortSignal.timeout(3000),
@@ -153,7 +153,7 @@ export async function checkCompatibility() {
 /**
  * Coerce and validate a version string. Returns a valid semver string or null.
  */
-function coerceVersion(version) {
+export function coerceVersion(version) {
   return semver.valid(semver.coerce(version));
 }
 
@@ -178,15 +178,6 @@ function findDeprecation(local, deprecations) {
   return null;
 }
 
-/**
- * Evaluate the compatibility response against the local version.
- *
- * Returns {
- *   blocked: boolean,        — true if localVersion < minimum_version
- *   deprecation: object|null — matching deprecation entry, if any
- *   messages: string[]       — message strings to display
- * }
- */
 // ──────────────────────────────────────────────
 // Skills version check (is the installed skill outdated?)
 // ──────────────────────────────────────────────
@@ -273,8 +264,8 @@ export function getInitData(readKey = readSettingsKey) {
 export function getSkillsNotification(latestInfo, initData, variant = VARIANTS.public) {
   if (!latestInfo?.version || !initData?.skillsVersion || !initData?.ides?.length) return null;
 
-  const installed = semver.valid(semver.coerce(initData.skillsVersion));
-  const latest = semver.valid(semver.coerce(latestInfo.version));
+  const installed = coerceVersion(initData.skillsVersion);
+  const latest = coerceVersion(latestInfo.version);
   if (!installed || !latest || !semver.lt(installed, latest)) return null;
 
   const lines = [
@@ -295,6 +286,15 @@ export function getSkillsNotification(latestInfo, initData, variant = VARIANTS.p
   return { type: 'skills-update', message: lines.join('\n') };
 }
 
+/**
+ * Evaluate the compatibility response against the local version.
+ *
+ * Returns {
+ *   blocked: boolean,        — true if localVersion < minimum_version
+ *   deprecation: object|null — matching deprecation entry, if any
+ *   messages: string[]       — message strings to display
+ * }
+ */
 export function evaluateCompatibility(localVersion, compatibility) {
   const result = { blocked: false, deprecation: null, messages: [] };
 

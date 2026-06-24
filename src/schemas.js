@@ -1,12 +1,6 @@
 import { z } from 'zod';
 
 // ──────────────────────────────────────────────
-// Shared primitives
-// ──────────────────────────────────────────────
-
-const nonEmptyString = z.string().min(1);
-
-// ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────
 
@@ -245,97 +239,6 @@ export const feedbackEntrySchema = z.string().transform((raw, ctx) => {
 });
 
 // ──────────────────────────────────────────────
-// Command Input Schemas
-// ──────────────────────────────────────────────
-
-/**
- * Schema for query command input.
- */
-export const queryInputSchema = z.object({
-  query: nonEmptyString,
-});
-
-/**
- * Schema for share command input.
- */
-export const shareInputSchema = z.object({
-  sessionId: nonEmptyString,
-  title: nonEmptyString,
-  content: nonEmptyString,
-  taskIndex: nonEmptyString,
-  sources: z.string().optional(),
-});
-
-/**
- * Schema for share-task command input.
- */
-export const shareTaskInputSchema = z.object({
-  query: nonEmptyString,
-  title: nonEmptyString,
-  content: nonEmptyString,
-});
-
-// ──────────────────────────────────────────────
-// OAuth Schemas
-// ──────────────────────────────────────────────
-
-/**
- * Normalize snake_case OAuth token response fields to camelCase.
- */
-function normalizeTokenResponse(data) {
-  if (!data || typeof data !== 'object') return data;
-  return {
-    accessToken: data.accessToken || data.access_token,
-    refreshToken: data.refreshToken || data.refresh_token,
-    expiresIn: data.expiresIn || data.expires_in,
-    tokenType: data.tokenType || data.token_type || 'Bearer',
-  };
-}
-
-export const tokenResponseSchema = z.preprocess(
-  normalizeTokenResponse,
-  z.object({
-    accessToken: z.string().min(1),
-    refreshToken: z.string().optional(),
-    expiresIn: z.number().positive().optional(),
-    tokenType: z.string().default('Bearer'),
-  }),
-);
-
-export const protectedResourceSchema = z.looseObject({
-  authorization_servers: z.array(z.string()).optional(),
-  bearer_methods_supported: z.array(z.string()).optional(),
-});
-
-export const authorizationServerSchema = z
-  .looseObject({
-    authorization_endpoint: z.string().optional(),
-    authorizationEndpoint: z.string().optional(),
-    token_endpoint: z.string().optional(),
-    tokenEndpoint: z.string().optional(),
-    registration_endpoint: z.string().optional(),
-    registrationEndpoint: z.string().optional(),
-    bearer_methods_supported: z.array(z.string()).optional(),
-  })
-  .refine((d) => d.authorization_endpoint || d.authorizationEndpoint, {
-    message: 'OAuth discovery missing authorization_endpoint',
-  })
-  .refine((d) => d.token_endpoint || d.tokenEndpoint, {
-    message: 'OAuth discovery missing token_endpoint',
-  })
-  .transform((d) => ({
-    ...d,
-    authorizationEndpoint: d.authorizationEndpoint || d.authorization_endpoint,
-    tokenEndpoint: d.tokenEndpoint || d.token_endpoint,
-    registrationEndpoint: d.registrationEndpoint || d.registration_endpoint,
-    bearerMethodsSupported: d.bearer_methods_supported,
-  }));
-
-export const clientRegistrationResponseSchema = z.looseObject({
-  client_id: z.string().min(1),
-});
-
-// ──────────────────────────────────────────────
 // Settings Schemas
 // ──────────────────────────────────────────────
 
@@ -385,6 +288,26 @@ export const compatibilityCacheSchema = z.looseObject({
   checkedAt: z.number(),
 });
 
+/**
+ * Cache schema for the tool manifest fetched from the MCP server's tools/list.
+ * Stored under the `toolManifest` settings key, keyed/validated by apiBase, TTL 24h.
+ * The command surface is a pure reflection of the server: `serverName` is the
+ * verbatim, authoritative tool name used for both registration and tools/call
+ * (there is no friendly CLI-side remapping, so no `name` field).
+ */
+export const toolManifestCacheSchema = z.looseObject({
+  tools: z.array(
+    z.looseObject({
+      serverName: z.string().min(1),
+      description: z.string().optional(),
+      inputSchema: z.looseObject({}).optional(),
+      outputSchema: z.looseObject({}).optional(),
+    }),
+  ),
+  checkedAt: z.number(),
+  apiBase: z.string(),
+});
+
 export const settingsSchema = z.looseObject({
   apiBase: z.string().optional(),
   credentials: z.union([credentialsMapSchema, credentialSchema]).optional(),
@@ -393,6 +316,11 @@ export const settingsSchema = z.looseObject({
   latestVersion: versionCacheSchema.nullable().optional(),
   compatibility: compatibilityCacheSchema.nullable().optional(),
   skillsVersion: versionCacheSchema.nullable().optional(),
+  // Fail open: a corrupt/legacy `toolManifest` must never reject the whole settings
+  // parse and hide unrelated keys (credentials, init). `.catch(null)` coerces any
+  // value that does not match `toolManifestCacheSchema` to null, matching how the
+  // peer caches above stay permissive (one bad cache key never nukes the rest).
+  toolManifest: toolManifestCacheSchema.nullable().optional().catch(null),
   init: initDataSchema.optional(),
   globalInit: initDataSchema.optional(),
   projects: z.array(z.any()).optional(),

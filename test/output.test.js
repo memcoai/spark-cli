@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
   getParentOptions,
   output,
-  outputSuccess,
   setVersionNotification,
   printVersionNotification,
 } from '../src/output.js';
@@ -76,38 +75,6 @@ describe('output', () => {
   it('serializes arrays', () => {
     output([1, 2, 3]);
     assert.strictEqual(logMock.mock.calls[0].arguments[0], '[1,2,3]');
-  });
-});
-
-describe('outputSuccess', () => {
-  let logMock;
-
-  beforeEach(() => {
-    logMock = mock.method(console, 'log');
-  });
-
-  afterEach(() => {
-    logMock.mock.restore();
-  });
-
-  it('outputs success with message', () => {
-    outputSuccess('Done');
-    const parsed = JSON.parse(logMock.mock.calls[0].arguments[0]);
-    assert.deepStrictEqual(parsed, { success: true, message: 'Done' });
-  });
-
-  it('merges additional data', () => {
-    outputSuccess('Created', { id: 42, name: 'test' });
-    const parsed = JSON.parse(logMock.mock.calls[0].arguments[0]);
-    assert.deepStrictEqual(parsed, { success: true, message: 'Created', id: 42, name: 'test' });
-  });
-
-  it('defaults data to empty object', () => {
-    outputSuccess('OK');
-    const parsed = JSON.parse(logMock.mock.calls[0].arguments[0]);
-    assert.strictEqual(parsed.success, true);
-    assert.strictEqual(parsed.message, 'OK');
-    assert.strictEqual(Object.keys(parsed).length, 2);
   });
 });
 

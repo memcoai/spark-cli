@@ -1,5 +1,5 @@
 import { prettyPrint } from './pretty-print.js';
-import { printSuccess, printError } from './banner.js';
+import { printError } from './banner.js';
 
 let pendingVersionNotification = null;
 
@@ -63,22 +63,4 @@ export function outputError(error, command = null) {
   }
   printVersionNotification();
   process.exit(1);
-}
-
-/**
- * Output a success message.
- * Pretty mode uses styled terminal output; default mode outputs JSON.
- */
-export function outputSuccess(message, data = {}, command = null) {
-  const opts = getParentOptions(command);
-  const pretty = opts.pretty || false;
-
-  if (pretty) {
-    printSuccess(message);
-    if (Object.keys(data).length > 0) {
-      console.log(prettyPrint(data));
-    }
-  } else {
-    output({ success: true, message, ...data }, command);
-  }
 }

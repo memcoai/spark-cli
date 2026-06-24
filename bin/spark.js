@@ -1,13 +1,9 @@
 #!/usr/bin/env node
 
 import { program } from 'commander';
-import { queryCommand } from '../src/commands/query.js';
-import { shareCommand } from '../src/commands/share.js';
-import { shareTaskCommand } from '../src/commands/share-task.js';
-import { feedbackCommand } from '../src/commands/feedback.js';
 import { loginCommand, logoutCommand, whoamiCommand } from '../src/commands/auth.js';
-import { updateCommand } from '../src/commands/update.js';
-import { uninstallCommand } from '../src/commands/uninstall.js';
+import { runUpdate } from '../src/commands/update.js';
+import { runUninstall } from '../src/commands/uninstall.js';
 import { initCommand } from '../src/commands/init.js';
 import { enableCommand } from '../src/commands/enable.js';
 import { disableCommand } from '../src/commands/disable.js';
@@ -29,7 +25,9 @@ import {
   getInitData,
 } from '../src/update-check.js';
 import { setVersionNotification, printVersionNotification } from '../src/output.js';
-import { VARIANTS, resolveVariant, getVariantKey } from '../src/constants.js';
+import { VARIANTS, resolveVariant, getVariantKey, getApiBase } from '../src/constants.js';
+import { getManifestForRegistration } from '../src/tool-manifest.js';
+import { registerToolCommands } from '../src/tool-commands.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -144,75 +142,6 @@ program.hook('postAction', async () => {
   printVersionNotification();
 });
 
-// Query command
-program
-  .command('query <query>')
-  .description('Query the knowledge network for proven solutions and community insights')
-  .option(
-    '--tag <tag>',
-    'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
-    (val, prev) => (prev ? [...prev, val] : [val]),
-  )
-  .option(
-    '--xml-tag <tag>',
-    'Pre-formed XML tag (can be repeated, e.g., --xml-tag \'<tag type="language" name="python" />\')',
-    (val, prev) => (prev ? [...prev, val] : [val]),
-  )
-  .action(queryCommand);
-
-// Share command
-program
-  .command('share <session-id>')
-  .description('Share an insight or solution with the knowledge network')
-  .requiredOption('--title <title>', 'Short title describing the insight')
-  .requiredOption('--content <content>', 'The insight content (supports markdown)')
-  .requiredOption(
-    '--task-index <index>',
-    'Task index to attach insight to (use "new" for a new task)',
-  )
-  .option(
-    '--tag <tag>',
-    'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
-    (val, prev) => (prev ? [...prev, val] : [val]),
-  )
-  .option(
-    '--xml-tag <tag>',
-    'Pre-formed XML tag (can be repeated, e.g., --xml-tag \'<tag type="language" name="python" />\')',
-    (val, prev) => (prev ? [...prev, val] : [val]),
-  )
-  .option('--sources <items>', 'Source insight/document IDs from Spark (comma-separated)')
-  .action(shareCommand);
-
-// Share-task command
-program
-  .command('share-task <query>')
-  .description('Share task insights with the knowledge network')
-  .requiredOption('--title <title>', 'Short title describing the task')
-  .requiredOption('--content <content>', 'The task content')
-  .option(
-    '--tag <tag>',
-    'Tag describing your context (can be repeated, e.g., --tag language:python:3.11 --tag task_type:bug_fix)',
-    (val, prev) => (prev ? [...prev, val] : [val]),
-  )
-  .option(
-    '--xml-tag <tag>',
-    'Pre-formed XML tag (can be repeated, e.g., --xml-tag \'<tag type="language" name="python" />\')',
-    (val, prev) => (prev ? [...prev, val] : [val]),
-  )
-  .action(shareTaskCommand);
-
-// Feedback command
-program
-  .command('feedback <session-id>')
-  .description('Provide feedback on recommendations from a previous query session')
-  .option(
-    '--feedback <xml>',
-    "Feedback entry: <feedback idx='TYPE-IDX' relevant='true|false' correct='true|false'>optional comment</feedback>",
-    (val, prev) => prev.concat(val),
-    [],
-  )
-  .action(feedbackCommand);
-
 // Auth commands
 program
   .command('login')
@@ -228,12 +157,12 @@ program.command('whoami').description('Show current authenticated user').action(
 program
   .command('update')
   .description('Update Spark CLI to the latest version')
-  .action(updateCommand);
+  .action(() => runUpdate());
 
 program
   .command('uninstall')
   .description('Uninstall Spark CLI from this system')
-  .action(uninstallCommand);
+  .action(() => runUninstall());
 
 program.command('init').description('Set up Spark for your IDE').action(initCommand);
 
@@ -248,5 +177,9 @@ program
   .command('status')
   .description('Verify Spark setup and authentication')
   .action(statusCommand);
+
+// Dynamic tool commands derived from the cached MCP tool manifest (offline, no network).
+// Empty/foreign cache => no dynamic commands are registered (a login hint is shown instead).
+registerToolCommands(program, getManifestForRegistration(getApiBase()));
 
 program.parse();

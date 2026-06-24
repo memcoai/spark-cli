@@ -17,8 +17,10 @@ import {
   getVariantKey,
 } from '../constants.js';
 import { fetchSkillsVersion } from '../update-check.js';
+import { fetchToolManifest } from '../tool-manifest.js';
 import { runCommand, runInteractiveCommand } from '../exec.js';
 import { detectVariant, ensureCorrectVariant } from '../variant.js';
+import { IDE_LABELS, IDE_BY_LABEL, labelToKey } from '../ides.js';
 
 /**
  * Prompt a multi-select checklist. Users toggle with space, navigate with arrows, confirm with enter.
@@ -249,15 +251,6 @@ export async function setupOtherIDEs(
 }
 
 /**
- * Map IDE selection labels to short keys.
- */
-export const IDE_KEY_MAP = {
-  'Claude Code': 'claude',
-  Codex: 'codex',
-  'Other (Cursor, Windsurf, etc.)': 'other',
-};
-
-/**
  * Save init choices to settings.
  * Global scope: writes everything to globalInit in global settings.
  * Project scope: writes genuinely project-scoped IDEs to local + the global projects array;
@@ -274,7 +267,7 @@ export async function saveInitChoices(
     variant = VARIANTS.public,
   } = {},
 ) {
-  const ideKeys = ides.map((ide) => IDE_KEY_MAP[ide] || ide);
+  const ideKeys = ides.map((ide) => labelToKey(ide));
 
   // Fetch the current skills version to record what was installed
   const versionInfo = await fetchVersion(getVariantKey(variant));
@@ -326,7 +319,7 @@ export async function saveInitChoices(
 /**
  * Print auth instructions after IDE setup.
  */
-export function printAuthInstructions() {
+function printAuthInstructions() {
   console.log('');
   console.log(colorize('\x1b[1m', 'Next: Authenticate with Spark'));
   console.log('');
@@ -362,22 +355,30 @@ async function promptWithCancel(promptFn, ...args) {
 }
 
 /**
- * Execute IDE setup for the given selections.
+ * Per-IDE install handlers, keyed by canonical IDE key. Each owns its own spinner UX
+ * and manual-fallback hints (in the setup* functions above); the table in ides.js drives
+ * which handler runs for a given selection.
+ */
+const SETUP_BY_KEY = {
+  claude: (scope, { exec, variant }) => setupClaudeCode(scope, { exec, variant }),
+  codex: (scope, { exec, variant }) => {
+    if (scope === 'project') {
+      printInfo('Codex plugins are installed globally; the project scope does not apply to Codex.');
+    }
+    return setupCodex({ exec, variant });
+  },
+  other: (scope, { spawnInteractive, variant }) =>
+    setupOtherIDEs(scope, { spawnInteractive, variant }),
+};
+
+/**
+ * Execute IDE setup for the given selections (display labels from the checklist).
  */
 async function executeSetup(selectedIDEs, scope, { exec, spawnInteractive, variant }) {
-  for (const ide of selectedIDEs) {
-    if (ide === 'Claude Code') {
-      await setupClaudeCode(scope, { exec, variant });
-    } else if (ide === 'Codex') {
-      if (scope === 'project') {
-        printInfo(
-          'Codex plugins are installed globally; the project scope does not apply to Codex.',
-        );
-      }
-      await setupCodex({ exec, variant });
-    } else {
-      await setupOtherIDEs(scope, { spawnInteractive, variant });
-    }
+  for (const label of selectedIDEs) {
+    const ide = IDE_BY_LABEL[label];
+    const setup = ide ? SETUP_BY_KEY[ide.key] : SETUP_BY_KEY.other;
+    await setup(scope, { exec, spawnInteractive, variant });
   }
 }
 
@@ -392,6 +393,7 @@ export async function runSetupFlow({
   exec = runCommand,
   spawnInteractive = runInteractiveCommand,
   fetchVersion = fetchSkillsVersion,
+  fetchManifest = fetchToolManifest,
   writeKey = writeSettingsKey,
   readKey = readSettingsKey,
   detect = detectVariant,
@@ -413,11 +415,7 @@ export async function runSetupFlow({
   }
 
   // Step 1: IDE selection
-  const selectedIDEs = await promptWithCancel(promptChecklistFn, 'Select your IDE(s):', [
-    'Claude Code',
-    'Codex',
-    'Other (Cursor, Windsurf, etc.)',
-  ]);
+  const selectedIDEs = await promptWithCancel(promptChecklistFn, 'Select your IDE(s):', IDE_LABELS);
   if (!selectedIDEs) return;
 
   if (selectedIDEs.length === 0) {
@@ -451,15 +449,15 @@ export async function runSetupFlow({
     // Non-blocking — don't fail if we can't save preferences
   }
 
+  // Step 4b: Populate the tool manifest cache so offline --help is fresh (best-effort, fail-open).
+  try {
+    await fetchManifest(getApiBase());
+  } catch {
+    // Non-blocking — a manifest fetch failure must never abort init
+  }
+
   // Step 5: Auth instructions
   printAuthInstructions();
-}
-
-/**
- * Core init logic, accepts dependencies for testability.
- */
-export async function runInit(deps = {}) {
-  return runSetupFlow(deps);
 }
 
 /**
@@ -467,7 +465,7 @@ export async function runInit(deps = {}) {
  */
 export async function initCommand() {
   try {
-    await runInit();
+    await runSetupFlow();
   } catch (err) {
     printError(err.message);
     process.exit(1);

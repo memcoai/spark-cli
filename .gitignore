@@ -8,3 +8,4 @@ dist/
 .claude
 .idea/
 .spark
+.planner

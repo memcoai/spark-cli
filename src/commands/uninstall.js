@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
-import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
+import { printInfo, printWarning, createSpinner } from '../banner.js';
 import { readSettingsKey, writeSettingsKey } from '../settings.js';
 import {
   SETTINGS_PATH,
@@ -10,7 +10,8 @@ import {
   VARIANTS,
   resolveVariant,
 } from '../constants.js';
-import { runCommand, runInteractiveCommand } from '../exec.js';
+import { runCommand, runInteractiveCommand, printNpmError } from '../exec.js';
+import { IDES } from '../ides.js';
 
 /**
  * Collect all init targets to clean up during uninstall.
@@ -172,6 +173,17 @@ export async function uninstallOtherIDEs(
 }
 
 /**
+ * Per-IDE uninstall handlers, keyed by canonical IDE key. Each owns its own spinner UX
+ * and manual-fallback hints; the table in ides.js drives which keys an init target covers.
+ */
+const UNINSTALL_BY_KEY = {
+  claude: (scope, { exec, cwd, variant }) => uninstallClaudePlugin(scope, { exec, cwd, variant }),
+  codex: (scope, { exec, cwd, variant }) => uninstallCodexPlugin({ exec, cwd, variant }),
+  other: (scope, { spawnInteractive, cwd, variant }) =>
+    uninstallOtherIDEs(scope, { spawnInteractive, cwd, variant }),
+};
+
+/**
  * Uninstall IDE plugins/skills for a single init target.
  */
 async function uninstallTarget(target, { execAsync, spawnInteractive, writeKey }) {
@@ -185,21 +197,15 @@ async function uninstallTarget(target, { execAsync, spawnInteractive, writeKey }
     printInfo(`Cleaning up project: ${targetCwd}`);
   }
 
-  if (initData.ides.includes('claude')) {
+  for (const ide of IDES) {
+    if (!initData.ides.includes(ide.key)) continue;
     for (const variant of variants) {
-      await uninstallClaudePlugin(scope, { exec: execAsync, cwd: targetCwd, variant });
-    }
-  }
-
-  if (initData.ides.includes('codex')) {
-    for (const variant of variants) {
-      await uninstallCodexPlugin({ exec: execAsync, cwd: targetCwd, variant });
-    }
-  }
-
-  if (initData.ides.includes('other')) {
-    for (const variant of variants) {
-      await uninstallOtherIDEs(scope, { spawnInteractive, cwd: targetCwd, variant });
+      await UNINSTALL_BY_KEY[ide.key](scope, {
+        exec: execAsync,
+        spawnInteractive,
+        cwd: targetCwd,
+        variant,
+      });
     }
   }
 
@@ -250,15 +256,7 @@ function uninstallCli({ exec, rm }) {
   } catch (err) {
     spinner.fail('Uninstall failed');
 
-    if (err.code === 'ENOENT') {
-      printError('npm is not installed or not in PATH');
-    } else if (err.code === 'EACCES') {
-      printError('Permission denied. Try running with sudo: sudo spark uninstall');
-    } else if (err.stderr?.trim()) {
-      printError(err.stderr.trim());
-    } else {
-      printError(err.message);
-    }
+    printNpmError(err, 'uninstall');
 
     process.exit(1);
   }
@@ -278,11 +276,4 @@ export async function runUninstall({
 } = {}) {
   await uninstallAllTargets({ execAsync, spawnInteractive, readKey, writeKey, exists });
   uninstallCli({ exec, rm });
-}
-
-/**
- * spark uninstall — remove Spark CLI from this system.
- */
-export async function uninstallCommand() {
-  return runUninstall();
 }

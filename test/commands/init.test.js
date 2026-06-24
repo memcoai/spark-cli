@@ -1,6 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { runInit, saveInitChoices } from '../../src/commands/init.js';
+import { runSetupFlow, saveInitChoices } from '../../src/commands/init.js';
 import { VARIANTS, SETTINGS_PATH, LOCAL_SETTINGS_PATH } from '../../src/constants.js';
 import { setupCommandMocks, getLogOutput, getStdoutOutput, buildSetupDeps } from '../helpers.js';
 
@@ -18,7 +18,7 @@ const alreadyExistsThenSucceed = () => {
   });
 };
 
-describe('runInit', () => {
+describe('runSetupFlow', () => {
   const mocks = setupCommandMocks();
 
   const defaultDeps = (overrides = {}) =>
@@ -27,17 +27,18 @@ describe('runInit', () => {
       promptChoice: mock.fn(async () => 'This project (current directory)'),
       detect: mock.fn(async () => VARIANTS.public),
       ensureVariant: mock.fn(async () => null),
+      fetchManifest: mock.fn(async () => ({ tools: [], checkedAt: 0, apiBase: '' })),
       ...overrides,
     });
 
   it('shows warning when no IDE is selected', async () => {
-    await runInit(defaultDeps({ promptChecklist: mock.fn(async () => []) }));
+    await runSetupFlow(defaultDeps({ promptChecklist: mock.fn(async () => []) }));
 
     assert.ok(getLogOutput(mocks.logMock).includes('No IDE selected'));
   });
 
   it('prints cancellation message on user cancel during IDE selection', async () => {
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         promptChecklist: mock.fn(async () => {
           throw new Error('User cancelled');
@@ -50,7 +51,7 @@ describe('runInit', () => {
 
   it('runs Claude Code setup with project scope', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
-    await runInit(defaultDeps({ exec }));
+    await runSetupFlow(defaultDeps({ exec }));
 
     assert.strictEqual(exec.mock.calls.length, 2);
 
@@ -71,7 +72,7 @@ describe('runInit', () => {
 
   it('runs Claude Code setup with global (user) scope', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         exec,
         promptChoice: mock.fn(async () => 'Global (all projects)'),
@@ -89,7 +90,7 @@ describe('runInit', () => {
 
   it('runs Codex setup (marketplace add + plugin add, no scope)', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
-    await runInit(defaultDeps({ exec, promptChecklist: mock.fn(async () => ['Codex']) }));
+    await runSetupFlow(defaultDeps({ exec, promptChecklist: mock.fn(async () => ['Codex']) }));
 
     assert.strictEqual(exec.mock.calls.length, 2);
 
@@ -108,7 +109,7 @@ describe('runInit', () => {
 
   it('installs teams plugin for Codex when variant is teams', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         exec,
         promptChecklist: mock.fn(async () => ['Codex']),
@@ -124,14 +125,14 @@ describe('runInit', () => {
   });
 
   it('notes Codex is global-only when project scope is chosen', async () => {
-    await runInit(defaultDeps({ promptChecklist: mock.fn(async () => ['Codex']) }));
+    await runSetupFlow(defaultDeps({ promptChecklist: mock.fn(async () => ['Codex']) }));
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Codex plugins are installed globally'));
   });
 
   it('does not print the Codex global-only note for global scope', async () => {
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         promptChecklist: mock.fn(async () => ['Codex']),
         promptChoice: mock.fn(async () => 'Global (all projects)'),
@@ -145,7 +146,7 @@ describe('runInit', () => {
   it('treats Codex marketplace already-exists error as success', async () => {
     const exec = alreadyExistsThenSucceed();
 
-    await runInit(defaultDeps({ exec, promptChecklist: mock.fn(async () => ['Codex']) }));
+    await runSetupFlow(defaultDeps({ exec, promptChecklist: mock.fn(async () => ['Codex']) }));
 
     const output = getStdoutOutput(mocks.stdoutMock);
     assert.ok(output.includes('already configured'));
@@ -154,7 +155,7 @@ describe('runInit', () => {
   });
 
   it('shows manual Codex fallback commands when setup fails', async () => {
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         promptChecklist: mock.fn(async () => ['Codex']),
         exec: mock.fn(async () => {
@@ -172,7 +173,7 @@ describe('runInit', () => {
 
   it('runs Other IDEs setup with project scope via interactive spawn', async () => {
     const spawnInteractive = mock.fn(async () => {});
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         promptChecklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
         spawnInteractive,
@@ -190,7 +191,7 @@ describe('runInit', () => {
 
   it('runs Other IDEs setup with global scope via interactive spawn', async () => {
     const spawnInteractive = mock.fn(async () => {});
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         promptChecklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
         promptChoice: mock.fn(async () => 'Global (all projects)'),
@@ -209,7 +210,7 @@ describe('runInit', () => {
   it('runs both IDE setups when both selected', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
     const spawnInteractive = mock.fn(async () => {});
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         promptChecklist: mock.fn(async () => ['Claude Code', 'Other (Cursor, Windsurf, etc.)']),
         exec,
@@ -224,7 +225,7 @@ describe('runInit', () => {
   });
 
   it('prints auth instructions after successful setup', async () => {
-    await runInit(defaultDeps());
+    await runSetupFlow(defaultDeps());
 
     const output = getLogOutput(mocks.logMock);
     assert.ok(output.includes('Next: Authenticate with Spark'));
@@ -235,7 +236,7 @@ describe('runInit', () => {
   it('treats marketplace already-exists error as success', async () => {
     const exec = alreadyExistsThenSucceed();
 
-    await runInit(defaultDeps({ exec }));
+    await runSetupFlow(defaultDeps({ exec }));
 
     const output = getStdoutOutput(mocks.stdoutMock);
     // Should show success-style message, not a failure
@@ -245,7 +246,7 @@ describe('runInit', () => {
   });
 
   it('shows warning when Other IDEs interactive spawn fails', async () => {
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         promptChecklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
         spawnInteractive: mock.fn(async () => {
@@ -262,7 +263,7 @@ describe('runInit', () => {
   });
 
   it('continues with warning when a command fails', async () => {
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         exec: mock.fn(async () => {
           throw Object.assign(new Error('command not found'), { stderr: 'claude: not found' });
@@ -277,7 +278,7 @@ describe('runInit', () => {
 
   it('installs teams plugin when variant is teams', async () => {
     const exec = mock.fn(async () => ({ stdout: '', stderr: '' }));
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         exec,
         detect: mock.fn(async () => VARIANTS.teams),
@@ -296,7 +297,7 @@ describe('runInit', () => {
 
   it('installs teams skills when variant is teams for Other IDEs', async () => {
     const spawnInteractive = mock.fn(async () => {});
-    await runInit(
+    await runSetupFlow(
       defaultDeps({
         promptChecklist: mock.fn(async () => ['Other (Cursor, Windsurf, etc.)']),
         spawnInteractive,
@@ -309,6 +310,24 @@ describe('runInit', () => {
       'add',
       VARIANTS.teams.skillsRepo,
     ]);
+  });
+
+  it('populates the tool manifest cache after successful setup', async () => {
+    const fetchManifest = mock.fn(async () => ({ tools: [], checkedAt: 0, apiBase: '' }));
+    await runSetupFlow(defaultDeps({ fetchManifest }));
+
+    assert.strictEqual(fetchManifest.mock.calls.length, 1);
+  });
+
+  it('does not abort init when the tool manifest fetch fails (fail-open)', async () => {
+    const fetchManifest = mock.fn(async () => {
+      throw new Error('network down');
+    });
+    await runSetupFlow(defaultDeps({ fetchManifest }));
+
+    // Manifest fetch was attempted but the failure was swallowed — setup still completes.
+    assert.strictEqual(fetchManifest.mock.calls.length, 1);
+    assert.ok(getLogOutput(mocks.logMock).includes('Next: Authenticate with Spark'));
   });
 });
 

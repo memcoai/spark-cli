@@ -5,18 +5,14 @@ import {
   getInitData,
   fetchSkillsVersion,
   fetchLatestVersion,
+  coerceVersion,
 } from '../update-check.js';
 import { printError, printInfo, printWarning, createSpinner } from '../banner.js';
-import {
-  SETTINGS_PATH,
-  LOCAL_SETTINGS_PATH,
-  getVariantKey,
-  resolveVariant,
-  getMarketplaceName,
-} from '../constants.js';
+import { SETTINGS_PATH, LOCAL_SETTINGS_PATH, getVariantKey, resolveVariant } from '../constants.js';
 import { writeSettingsKey, readSettingsKey } from '../settings.js';
-import { runCommand, runInteractiveCommand } from '../exec.js';
+import { runCommand, runInteractiveCommand, printNpmError } from '../exec.js';
 import { detectVariant, ensureCorrectVariant } from '../variant.js';
+import { IDES } from '../ides.js';
 
 /**
  * Resolve the variant to use for skills updates.
@@ -88,39 +84,20 @@ export async function updateSkills({
   const ides = initData.ides;
   let allSucceeded = true;
 
-  if (ides.includes('claude')) {
-    const spinner = createSpinner('Updating Spark plugin for Claude Code...');
-    try {
-      await exec('claude', ['plugin', 'update', variant.claudePlugin]);
-      spinner.stop('Spark plugin updated for Claude Code');
-    } catch (err) {
-      allSucceeded = false;
-      spinner.fail('Failed to update Spark plugin for Claude Code');
-      printWarning(err.stderr?.trim() || err.message);
-    }
-  }
-
-  if (ides.includes('codex')) {
-    const spinner = createSpinner('Updating Spark plugin for Codex...');
-    try {
-      await exec('codex', ['plugin', 'marketplace', 'upgrade', getMarketplaceName(variant)]);
-      spinner.stop('Spark plugin updated for Codex');
-    } catch (err) {
-      allSucceeded = false;
-      spinner.fail('Failed to update Spark plugin for Codex');
-      printWarning(err.stderr?.trim() || err.message);
-    }
-  }
-
-  if (ides.includes('other')) {
-    printInfo('Updating Spark skills for Cursor/Windsurf...');
-    try {
-      await spawnInteractive('npx', ['skills', 'update', variant.skillsRepo]);
-      printInfo('Spark skills updated for Cursor/Windsurf');
-    } catch (err) {
-      allSucceeded = false;
-      printWarning(`Failed to update skills: ${err.message}`);
-    }
+  // Each descriptor's `update` hook owns its IDE-specific spinner/info copy and command
+  // (Codex upgrades via `plugin marketplace upgrade`, others via a plain update). The hooks
+  // share these UI primitives and report success so the allSucceeded gate stays accurate.
+  for (const ide of IDES) {
+    if (!ides.includes(ide.key)) continue;
+    const ok = await ide.update({
+      exec,
+      spawnInteractive,
+      variant,
+      spinner: createSpinner,
+      info: printInfo,
+      warn: printWarning,
+    });
+    if (!ok) allSucceeded = false;
   }
 
   // Only update stored skills version when all updates succeeded,
@@ -144,8 +121,8 @@ export async function updateSkills({
 async function getHeldBackVersion(installedVersion, fetchLatest) {
   try {
     const latestInfo = await fetchLatest();
-    const latest = semver.valid(semver.coerce(latestInfo?.version));
-    const installed = semver.valid(semver.coerce(installedVersion));
+    const latest = coerceVersion(latestInfo?.version);
+    const installed = coerceVersion(installedVersion);
     if (latest && installed && semver.gt(latest, installed)) {
       return latestInfo.version;
     }
@@ -208,15 +185,7 @@ export async function runUpdate({
   } catch (err) {
     spinner.fail('Update failed');
 
-    if (err.code === 'ENOENT') {
-      printError('npm is not installed or not in PATH');
-    } else if (err.code === 'EACCES') {
-      printError('Permission denied. Try running with sudo: sudo spark update');
-    } else if (err.stderr?.trim()) {
-      printError(err.stderr.trim());
-    } else {
-      printError(err.message);
-    }
+    printNpmError(err, 'update');
 
     process.exit(1);
     return;
@@ -224,11 +193,4 @@ export async function runUpdate({
 
   // Update skills after successful CLI update
   await skills();
-}
-
-/**
- * spark update — self-update to the latest version and update skills.
- */
-export async function updateCommand() {
-  return runUpdate();
 }

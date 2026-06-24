@@ -29,31 +29,6 @@ export function getErrorOutput(logMock) {
 }
 
 /**
- * Sets up fetch mock and SPARK_API_KEY env var for API call tests.
- * Must be called inside a describe() block.
- * Returns an object whose fetchMock property updates each beforeEach.
- */
-export function setupFetchMock() {
-  const ctx = {};
-
-  beforeEach(() => {
-    ctx.originalKey = process.env.SPARK_API_KEY;
-    process.env.SPARK_API_KEY = 'test-key';
-    ctx.fetchMock = mock.method(globalThis, 'fetch', () =>
-      Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
-    );
-  });
-
-  afterEach(() => {
-    ctx.fetchMock.mock.restore();
-    if (ctx.originalKey === undefined) delete process.env.SPARK_API_KEY;
-    else process.env.SPARK_API_KEY = ctx.originalKey;
-  });
-
-  return ctx;
-}
-
-/**
  * Generates standard tag validation tests for a command.
  * Must be called inside a describe() block that uses setupCommandMocks().
  * @param {object} mocks - The mocks object from setupCommandMocks()
@@ -145,41 +120,6 @@ export function mockFetchSequence(responses) {
   return fn;
 }
 
-/**
- * Builds the deps object for apiRequest() tests.
- * @param {object} overrides - Override specific deps (getAuth, loadCreds, refresh, bearerMethods, doFetch)
- */
-export function buildApiRequestDeps(overrides = {}) {
-  return {
-    getAuth: overrides.getAuth ?? (async () => ({ type: 'oauth', token: 'test-token' })),
-    loadCreds:
-      overrides.loadCreds ??
-      (() => ({
-        credentials: { accessToken: 'test-token', refreshToken: 'refresh-token' },
-        local: false,
-      })),
-    refresh:
-      overrides.refresh ??
-      (async () => ({
-        accessToken: 'new-token',
-        refreshToken: 'refresh-token',
-      })),
-    bearerMethods: overrides.bearerMethods ?? (async () => ['header']),
-    doFetch:
-      overrides.doFetch ??
-      (async () => ({
-        status: 200,
-        ok: true,
-        json: () => Promise.resolve({}),
-        text: () => Promise.resolve(''),
-      })),
-  };
-}
-
-/**
- * Shared npm exec error cases for update/uninstall command tests.
- * Each entry has a name, error object, and expected output substring.
- */
 /**
  * Builds common mock dependencies shared by setup-related command tests (init, enable, variant).
  * Pass overrides to customize or add command-specific deps.

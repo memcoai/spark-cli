@@ -17,6 +17,29 @@ import {
   uninstallOtherIDEs,
 } from './commands/uninstall.js';
 import { printInfo, printWarning } from './banner.js';
+import { IDES } from './ides.js';
+
+/**
+ * Per-IDE variant-swap handlers, keyed by canonical IDE key. The swap removes the old
+ * variant's plugin/skills then installs the new variant's; both halves route through the
+ * table so the per-IDE command + scope rules live in one place.
+ */
+const SWAP_BY_KEY = {
+  claude: {
+    uninstall: (scope, { exec, variant }) => uninstallClaudePlugin(scope, { exec, variant }),
+    install: (scope, { exec, variant }) => setupClaudeCode(scope, { exec, variant }),
+  },
+  codex: {
+    uninstall: (scope, { exec, variant }) => uninstallCodexPlugin({ exec, variant }),
+    install: (scope, { exec, variant }) => setupCodex({ exec, variant }),
+  },
+  other: {
+    uninstall: (scope, { spawnInteractive, variant }) =>
+      uninstallOtherIDEs(scope, { spawnInteractive, variant }),
+    install: (scope, { spawnInteractive, variant }) =>
+      setupOtherIDEs(scope, { spawnInteractive, variant }),
+  },
+};
 
 /**
  * Detect the variant (public or teams) by fetching the current user.
@@ -82,25 +105,15 @@ export async function ensureCorrectVariant({
   console.log('');
 
   // Uninstall old variant
-  if (initData.ides.includes('claude')) {
-    await uninstallClaudePlugin(scope, { exec, variant: oldVariant });
-  }
-  if (initData.ides.includes('codex')) {
-    await uninstallCodexPlugin({ exec, variant: oldVariant });
-  }
-  if (initData.ides.includes('other')) {
-    await uninstallOtherIDEs(scope, { spawnInteractive, variant: oldVariant });
+  for (const ide of IDES) {
+    if (!initData.ides.includes(ide.key)) continue;
+    await SWAP_BY_KEY[ide.key].uninstall(scope, { exec, spawnInteractive, variant: oldVariant });
   }
 
   // Install new variant
-  if (initData.ides.includes('claude')) {
-    await setupClaudeCode(scope, { exec, variant });
-  }
-  if (initData.ides.includes('codex')) {
-    await setupCodex({ exec, variant });
-  }
-  if (initData.ides.includes('other')) {
-    await setupOtherIDEs(scope, { spawnInteractive, variant });
+  for (const ide of IDES) {
+    if (!initData.ides.includes(ide.key)) continue;
+    await SWAP_BY_KEY[ide.key].install(scope, { exec, spawnInteractive, variant });
   }
 
   // Persist the new variant. `initData` may be the merged view from getInitData() (project IDEs
