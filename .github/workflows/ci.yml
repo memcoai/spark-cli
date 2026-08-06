@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, dev]
 
+# Least privilege: both jobs only check out the repo and run npm.
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
