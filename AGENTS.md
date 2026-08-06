@@ -94,7 +94,7 @@ npm run lint          # eslint src/
 npm run format        # eslint --fix src/
 ```
 
-- Runtime dependency: `@modelcontextprotocol/sdk` (pinned `1.29.0`, the v1.x line) — the only new top-level dep for the MCP refactor; all SDK usage is isolated to `src/mcp-client.js`. Client-side tool-argument validation reuses the SDK's bundled ajv (no extra dep). v2 of the SDK is pre-alpha (split packages); a future migration is a one-file change to `mcp-client.js`.
+- Runtime dependency: `@modelcontextprotocol/sdk` (pinned `1.30.0`, the v1.x line) — the only new top-level dep for the MCP refactor; all SDK usage is isolated to `src/mcp-client.js`. `1.30.0` is the **security floor**: it widened its `@hono/node-server` range to `^1.19.9 || ^2.0.5`, which is what lets the patched `@hono/node-server` 2.x (and with it a non-vulnerable `hono`) resolve. Staying on `1.29.0` pins the vulnerable 1.x line, and `npm audit fix --force` "resolves" that by _downgrading_ the SDK to `1.24.3` — never accept that path; bump the SDK forward instead. Client-side tool-argument validation reuses the SDK's bundled ajv (no extra dep). v2 of the SDK is pre-alpha (split packages); a future migration is a one-file change to `mcp-client.js`.
 - Test framework: `node:test` built-in runner with `node:assert/strict`
 - Mocking: `mock.method()` from `node:test` for `console.log` and `process.exit` in command tests
 - Test helpers: `test/helpers.js` provides `setupCommandMocks()` and `getErrorOutput()`
