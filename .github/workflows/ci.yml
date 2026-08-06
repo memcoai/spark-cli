@@ -9,6 +9,7 @@ on:
 # Least privilege: both jobs only check out the repo and run npm.
 permissions:
   contents: read
+  actions: read
 
 jobs:
   lint:
